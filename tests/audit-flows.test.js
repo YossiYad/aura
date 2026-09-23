@@ -178,6 +178,23 @@ test('a nightly recommendations rebuild that finds nothing keeps the row on scre
  await c.buildHomeRecs(true);
  assert.equal(c.homeRecs.items,kept);assert.equal(c.homeRecs.busy,false);assert(painted>0);
 });
+// When a channel cannot be read the artist page is built from search results, which put
+// the best match first. The follow check took that as the newest upload and announced it.
+test('a follow check answered from search results announces nothing and waits its turn',async()=>{
+ const follow={id:'UC1',name:'Singer',thumb:'',kind:'artist',checkedAt:1,latestId:'newest',lastSeenId:'newest'};
+ let page={fromSearch:true,videos:[{id:'best-match',title:'Old hit'}]},asked=0;const refreshed=[],toasts=[];
+ const c=functions('src/views.js',['notifyNewRelease','checkFollowsForNew'],{Date,Map,Math,FOLLOWS_CHECK_TTL:30*60*1000,
+  followsChecking:false,followsAsked:new Map(),currentTab:'library',toast:t=>toasts.push(t),window:{},
+  Api:{getArtist:async()=>{asked++;return page;}},
+  Store:{followsList:()=>[follow],settings:()=>({}),refreshFollowLatest:(id,latest)=>{refreshed.push(latest);return latest!==follow.latestId;}}});
+ await c.checkFollowsForNew();
+ assert.equal(asked,1);assert.deepEqual(refreshed,[]);assert.deepEqual(toasts,[]);
+ await c.checkFollowsForNew();
+ assert.equal(asked,1,'not asked again before its time');
+ c.followsAsked.clear();page={videos:[{id:'newest',title:'Newest'}]};
+ await c.checkFollowsForNew();
+ assert.deepEqual(refreshed,['newest']);assert.deepEqual(toasts,[]);
+});
 test('home long press uses the visible filtered song',()=>{
  const a={id:'a'},b={id:'b'};const c=functions('src/views.js',['trackForElement'],{homeFeeds:{x:{sections:[{tracks:[a,b]}]}},homeFeedRenderedKey:'x',unblocked:xs=>xs.filter(t=>t.id!=='a')});
  const el={dataset:{homeFeedSection:'0',homeFeedTrack:'0'},closest:()=>el};assert.equal(c.trackForElement(el),b);

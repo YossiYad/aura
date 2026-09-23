@@ -33,6 +33,9 @@
   // dozen rounds of Invidious lookups for the same handful of artists.
   const FOLLOWS_CHECK_TTL = 30 * 60 * 1000;
   let followsChecking = false;
+  // When each channel was last asked about this session, answered or not. A check that
+  // learns nothing leaves checkedAt alone, and must not be repeated on every Home render.
+  const followsAsked = new Map();
 
   function notifyNewRelease(f, item) {
     const title = f.kind === "podcast" ? "New episode from " + f.name : "New from " + f.name;
@@ -43,13 +46,19 @@
 
   async function checkFollowsForNew() {
     if (followsChecking) return;
-    const stale = Store.followsList().filter(f => Date.now() - (f.checkedAt || 0) > FOLLOWS_CHECK_TTL);
+    const stale = Store.followsList().filter(f =>
+      Date.now() - Math.max(f.checkedAt || 0, followsAsked.get(f.id) || 0) > FOLLOWS_CHECK_TTL);
     if (!stale.length) return;
     followsChecking = true;
     try {
       for (const f of stale.slice(0, 6)) {
+        followsAsked.set(f.id, Date.now());
         try {
           const data = await Api.getArtist(f.id, { name: f.name, thumb: f.thumb });
+          // A page put together from search results lists the best match first, not the
+          // newest upload; taken as the newest, it announced an old song as a new release
+          // and the channel's real newest as another one on the next check.
+          if (data.fromSearch) continue;
           const latest = (data.videos || [])[0];
           if (!latest) continue;
           const isNew = Store.refreshFollowLatest(f.id, latest.id);

@@ -43,7 +43,8 @@
         videos,
         songPage: { kind: "invidious", base, channelId, nextpage: "__first" },
         albums: [],
-        playlists: []
+        playlists: [],
+        fromSearch: true
       };
     }
     throw new Error("artist search fallback empty");
