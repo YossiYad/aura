@@ -709,7 +709,9 @@
           if (out.length >= 12) break;
         }
       }
-      homeRecs.items = out;
+      // A rebuild that found nothing - every lookup failed - leaves the row it came to
+      // replace, rather than emptying it.
+      if (out.length || !force) homeRecs.items = out;
       if (out.length) {
         try { localStorage.setItem("aura.homeRecs", JSON.stringify({ at: Date.now(), seed, items: out })); } catch (e) {}
       }
