@@ -32,6 +32,7 @@ const server = http.createServer((req, res) => {
       await page.route(origin + '/api/queue/qr.svg?*', route => route.fulfill({
         contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240"/>'
       }));
+      await page.addInitScript(() => localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'en' })));
       await page.goto(origin);
       await page.waitForFunction(() => window.Views && window.Player);
       await page.evaluate(() => {

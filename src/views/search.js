@@ -226,6 +226,13 @@
     "language-not-supported": "השפה הזו לא נתמכת בזיהוי הדיבור כאן."
   };
 
+  // Spoken answers are part of the interface: in English they are always English, even
+  // when the request itself was spoken in Hebrew. Hebrew keeps following the speech setting.
+  function replyLanguage() {
+    if (window.I18n && I18n.language() === "en") return "en-US";
+    return window.I18n ? I18n.speechLanguage() : Store.settings().voiceLanguage || "he-IL";
+  }
+
   function voiceOrbState() {
     return !voice ? "breathing" : voice.busy ? "searching" : voice.finishing ? "working"
       : voice.hearing ? "listening" : voice.recording ? "connecting" : "breathing";
@@ -368,7 +375,7 @@
   // A note that is also read out: the paused song waits for the reading to finish, and in
   // driving mode the layer does not wait for a hand to dismiss it.
   function voiceAfterNote(me, messages) {
-    Promise.resolve(Voice.reply(messages, (window.I18n ? I18n.speechLanguage() : Store.settings().voiceLanguage || "he-IL"))).then(() => {
+    Promise.resolve(Voice.reply(messages, replyLanguage())).then(() => {
       if (voice !== me || me.recording || me.busy) return;
       voiceResume();
       if (me.surface === "drive") setTimeout(() => { if (voice === me && !me.recording && !me.busy) voiceEnd(); }, 6000);
@@ -398,7 +405,7 @@
     me.busy = true;
     voiceSay(tr("מחפש…"));
     const live = () => voice === me;
-    const language = (window.I18n ? I18n.speechLanguage() : Store.settings().voiceLanguage || "he-IL");
+    const language = replyLanguage();
     try {
       const result = await Voice.resolve(request, text => { if (live()) voiceSay(text); }, live);
       if (!live()) return;

@@ -15,7 +15,7 @@
     voiceOpen: () => !!V.voice,
     initServerMix,
     render: V.render, markNowPlaying: V.markNowPlaying, refreshIfStale: V.refreshIfStale, toast: V.toast, syncPrivateButton: V.syncPrivateButton, openQueueSheet: V.openQueueSheet, openSettings: V.openSettings, openTrackMenu: V.openTrackMenu, openPlaylistPicker: V.openPlaylistPicker, openCreateSheet: V.openCreateSheet, openSleepTimerSheet: V.openSleepTimerSheet, openSpeedSheet: V.openSpeedSheet,
-    applyAppearance: V.applyAppearance, artSrc: V.artSrc,
+    applyAppearance: V.applyAppearance, askLanguage: V.askLanguage, artSrc: V.artSrc,
     addBackLayer(layer) { V.backLayers.push(layer); },
     focusLibrarySearch() {
       let input = document.getElementById("library-query");

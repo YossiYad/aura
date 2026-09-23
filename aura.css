@@ -479,8 +479,13 @@ button { font: inherit; color: inherit; }
 .btn.lg { height: 48px; padding: 0 24px; font-size: var(--text-md); }
 .btn svg { width: 16px; height: 16px; }
 
-/* Focus rings */
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+/* Focus rings. Controls reached from the keyboard get a solid ring in the accent, which
+   stays visible on artwork and on the accent's own glow; fields keep their soft glow. */
+button:focus-visible, a:focus-visible, [role="slider"]:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: none;
   box-shadow: 0 0 0 3px var(--accent-glow);
 }

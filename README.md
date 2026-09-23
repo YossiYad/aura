@@ -87,12 +87,27 @@ on the device that saved them, even when library sync is enabled.
 
 ### Language choice
 
-Choose **English** or **Hebrew** in **Settings > Look > Interface language**. English
-translates the interface text that otherwise appears in Hebrew; Hebrew preserves the
-existing mix of Hebrew and English. The choice is saved, and the initial language
-follows your browser. Song titles, artist names and your own text stay unchanged.
-Speech recognition has its own language setting. Guests can choose their language on
-the invitation page too.
+Aura starts in **English**. On the first launch it asks which language you want, with
+each option written in its own language, and remembers your answer. You can change it
+at any time in **Settings > Look > Language · שפה**. English translates the interface
+text that otherwise appears in Hebrew; Hebrew preserves the existing mix of Hebrew and
+English. AI playlist names, questions from voice requests and spoken replies follow the
+same choice. Song titles, artist names and your own text stay unchanged. Speech
+recognition has its own language setting. Guests can choose their language on the
+invitation page too; until they do, it follows their browser.
+
+### Accessibility
+
+**Settings > Look** also has:
+
+- **Text size** (Default, Large or Larger) enlarges lists, menus, sheets, dialogs and
+  toasts.
+- **High contrast** brightens secondary text and outlines. It also turns on automatically
+  when your device asks for more contrast.
+- **Animations** can be turned off, and motion is reduced when your device asks for it.
+
+Keyboard users get visible focus rings, and Escape closes dialogs and sheets. Screen
+readers announce toasts and are told which page of the tab bar is showing.
 
 ### Shared listening
 

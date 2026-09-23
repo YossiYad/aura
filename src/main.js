@@ -24,6 +24,14 @@
     if (tab.dataset.tab === "create") { Views.openCreateSheet(); return; }
     Views.showTab(tab.dataset.tab);
   });
+  // The bar is navigation between pages, so the page on show is marked aria-current for a
+  // screen reader. Several places light a tab by its class; the mark follows the class.
+  const markCurrentTab = () => document.querySelectorAll("#tabs .bn-tab").forEach(b => {
+    if (b.classList.contains("active")) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+  if (window.MutationObserver) new MutationObserver(markCurrentTab).observe($("tabs"), { subtree: true, attributes: true, attributeFilter: ["class"] });
+  markCurrentTab();
   $("btn-goto-discover").onclick = () => {
     if (Views.currentTab() === "library") Views.focusLibrarySearch();
     else Views.showTab("search");

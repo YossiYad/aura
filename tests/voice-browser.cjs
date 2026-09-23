@@ -26,6 +26,7 @@ const server = http.createServer((req, res) => {
       serviceWorkers: 'block', locale: 'he-IL', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15' });
     await voicePage.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
     await voicePage.addInitScript(() => {
+      localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'he' }));
       window.captures = [];
       window.captureStarts = 0;
       window.microphones = [];

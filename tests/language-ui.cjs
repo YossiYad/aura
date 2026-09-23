@@ -35,6 +35,14 @@ const server = http.createServer((req, res) => {
       });
       await page.goto(origin);
       await page.waitForFunction(() => window.Views && window.I18n && window.SharedQueue && SharedQueue.available());
+      // The first launch asks, in both languages, with English already on screen behind it.
+      await page.locator('.lang-welcome').waitFor();
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.langPick), 'en');
+      assert.equal(await page.evaluate(() => Store.settings().interfaceLanguage), undefined);
+      await page.locator('[data-lang-pick="en"]').click();
+      await page.locator('.lang-welcome').waitFor({ state: 'detached' });
+      assert.equal(await page.evaluate(() => Store.settings().interfaceLanguage), 'en');
+      assert.equal(await page.locator('#tabs [aria-current="page"]').getAttribute('data-tab'), 'home');
       await page.evaluate(() => Views.showTab('ai'));
       assert.equal(await page.locator('#ask-note').textContent(), 'Tap to speak');
       assert.equal(await page.locator('#ask-voice').getAttribute('aria-label'), 'Voice request, tap to speak');
@@ -58,6 +66,35 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#shared-queue-panel').getAttribute('dir'), 'ltr');
       assert.equal(await page.locator('#sq-title').inputValue(), 'Our music');
       assert.equal(await page.locator('#sq-create button').textContent(), 'Create invitation QR');
+      assert.deepEqual(errors, []);
+      await page.close();
+    }
+    {
+      // A Hebrew browser still starts in English, and is offered Hebrew first. The choice
+      // is remembered, so the next launch goes straight to the app in Hebrew.
+      const page = await browser.newPage({ viewport: { width: 393, height: 850 }, locale: 'he-IL', serviceWorkers: 'block' });
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+      await page.goto(origin);
+      await page.locator('.lang-welcome').waitFor();
+      assert.equal(await page.evaluate(() => I18n.language()), 'en');
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.langPick), 'he');
+      await page.locator('[data-lang-pick="he"]').click();
+      await page.evaluate(() => Views.showTab('ai'));
+      assert.equal(await page.locator('#ask-note').textContent(), 'לחצו ודברו');
+      await page.reload();
+      await page.waitForFunction(() => window.Views && window.I18n);
+      await page.waitForTimeout(300);
+      assert.equal(await page.locator('.lang-welcome').count(), 0, 'asked only once');
+      assert.equal(await page.evaluate(() => I18n.language()), 'he');
+      // Closing the card without choosing keeps English and does not ask again.
+      await page.evaluate(() => { localStorage.setItem('aura.settings', '{}'); });
+      await page.reload();
+      await page.locator('.lang-welcome').waitFor();
+      await page.keyboard.press('Escape');
+      await page.locator('.lang-welcome').waitFor({ state: 'detached' });
+      assert.equal(await page.evaluate(() => Store.settings().interfaceLanguage), 'en');
       assert.deepEqual(errors, []);
       await page.close();
     }

@@ -25,7 +25,7 @@
   }
 
   let swipeRow = null, swipeTrack = null, swipePlate = null, swipeActions = null;
-  let swipeStartX = 0, swipeStartY = 0, swipeDx = 0, swipeDir = 0, swipeStage = 0;
+  let swipeStartX = 0, swipeStartY = 0, swipeDx = 0, swipeDir = 0, swipeStage = 0, swipeZoom = 1;
   let swipeLive = false, swipeFrame = 0;
 
   function paintSwipe() {
@@ -99,12 +99,14 @@
     swipeTrack = track;
     swipeStartX = e.touches[0].clientX;
     swipeStartY = e.touches[0].clientY;
+    swipeZoom = V.textZoom();
   }, { passive: true });
 
   V.view.addEventListener("touchmove", e => {
     if (!swipeRow || e.touches.length !== 1) return;
-    const dx = e.touches[0].clientX - swipeStartX;
-    const dy = e.touches[0].clientY - swipeStartY;
+    // In the row's own pixels, which Text size may have made larger than the screen's.
+    const dx = (e.touches[0].clientX - swipeStartX) / swipeZoom;
+    const dy = (e.touches[0].clientY - swipeStartY) / swipeZoom;
     if (!swipeLive) {
       // A list is scrolled far more often than a row is swiped, so the sideways reading
       // has to win clearly before the row moves at all - and a vertical one ends the
