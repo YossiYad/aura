@@ -18,9 +18,12 @@
   // Words that mark a different recording of the same song. Only counted against a
   // candidate when the request did not ask for them - searching for a live version
   // should still find one.
+  // Hebrew titles mark them in Hebrew; kept to the voice path alone, a Hebrew cover with
+  // more views than the original won every playlist import.
   const OTHER_VERSION = ["live", "cover", "remix", "karaoke", "instrumental", "reaction",
     "nightcore", "mashup", "sped up", "slowed", "reverb", "8d", "loop", "tutorial",
-    "teaser", "trailer", "acapella", "concert", "shorts"];
+    "teaser", "trailer", "acapella", "concert", "shorts",
+    "קאבר", "קריוקי", "רמיקס", "בהופעה", "הופעה חיה", "חידוש"];
   // "ft" and "feat" mean the same thing, and neither says anything about which
   // recording this is, so they should not decide a match either way.
   const MATCH_STOPWORDS = ["official", "video", "audio", "music", "hd", "hq", "lyric",
@@ -73,7 +76,7 @@
 
   function voiceMatchCandidates(items, title, artist) {
     const asked = " " + normMatch(title) + " ";
-    const versions = OTHER_VERSION.concat(["קאבר", "קריוקי", "רמיקס", "בהופעה", "הופעה חיה", "חידוש"]);
+    const versions = OTHER_VERSION;
     const contains = (text, word) => (" " + normMatch(text) + " ").includes(" " + word + " ");
     const hasCover = t => ["cover", "קאבר", "חידוש"].some(w => contains(t.title, w));
     const wanted = matchTokens(artist);
