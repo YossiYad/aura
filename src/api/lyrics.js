@@ -25,6 +25,7 @@
       .replace(/\s*[([]\s*[)\]]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
+    const topic = /\s*-\s*topic\s*$/i.test(String((track && track.artist) || ""));
     let artist = String((track && track.artist) || "")
       .replace(/\s*-\s*topic\s*$/i, "")
       .replace(/\s*vevo\s*$/i, "")
@@ -32,7 +33,11 @@
       .trim();
     // "Artist - Title" is how nearly every music upload is named, and the name in the
     // title is the real one - the channel is often a label or a reuploader.
-    const split = /^(.{1,60}?)\s+[-–—]\s+(.+)$/.exec(title);
+    // Except on a "- Topic" channel, which is the performer's own: there the part after the
+    // dash says which release it is ("Song - Remastered 2011", "Song - Live"), and read as
+    // "Artist - Title" it asked for lyrics to "Remastered 2011" by "Song".
+    if (topic) title = title.replace(/\s+[-–—]\s+(?:(?:\d{4}\s+)?(?:digital(?:ly)?\s+)?remaster(?:ed)?\b.*|live\b.*|mono\b.*|stereo\b.*|demo\b.*|acoustic\b.*|bonus track\b.*|.*\b(?:edit|version|mix)\s*)$/i, "");
+    const split = topic ? null : /^(.{1,60}?)\s+[-–—]\s+(.+)$/.exec(title);
     if (split) {
       artist = split[1].trim() || artist;
       title = split[2].trim();

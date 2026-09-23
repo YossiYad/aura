@@ -119,3 +119,19 @@ test('retrying lyrics preserves the timing adjustment for the current song', asy
   await h.load();
   assert.equal(vm.runInContext('lyricsOffset', h.context), 0);
 });
+
+// A "- Topic" channel is the performer's own, and its titles say which release they are
+// after the dash. Read as "Artist - Title", the lookup asked for "Remastered 2011" by
+// "Bohemian Rhapsody".
+test('lyrics lookups read a Topic channel title as the song and its release, not artist and title', () => {
+  const context = vm.createContext({ window: {}, URL, AbortController, setTimeout, clearTimeout,
+    localStorage: { getItem: () => null, setItem() {} } });
+  vm.runInContext(readModule('api'), context);
+  const query = track => JSON.parse(JSON.stringify(context.window.Api.lyricsQuery(track)));
+  assert.deepEqual(query({ title: 'Bohemian Rhapsody - Remastered 2011', artist: 'Queen - Topic' }), { title: 'Bohemian Rhapsody', artist: 'Queen' });
+  assert.deepEqual(query({ title: 'Hey Jude - Live', artist: 'The Beatles - Topic' }), { title: 'Hey Jude', artist: 'The Beatles' });
+  assert.deepEqual(query({ title: 'Song - Radio Edit', artist: 'Singer - Topic' }), { title: 'Song', artist: 'Singer' });
+  assert.deepEqual(query({ title: 'Part 1 - The Beginning', artist: 'Singer - Topic' }), { title: 'Part 1 - The Beginning', artist: 'Singer' });
+  // Everywhere else the title still names the artist.
+  assert.deepEqual(query({ title: 'Daft Punk - Get Lucky (feat. Pharrell)', artist: 'DaftPunkVEVO' }), { title: 'Get Lucky', artist: 'Daft Punk' });
+});
