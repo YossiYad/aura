@@ -171,3 +171,15 @@ test('a channel name cannot override evidence that an upload is not music', () =
     assert.equal(Api.looksLikeMusic({ title: 'A clip', artist, duration: 15 }), false);
   }
 });
+
+// A playlist import asks without a spoken request, so it never went through the voice
+// path's Hebrew version words: a Hebrew cover with more views beat the original.
+test('an import passes over a Hebrew cover, karaoke or remix by someone else', async () => {
+  const original = { type: 'video', videoId: 'orig1111111', title: 'תגידי', author: 'עומר אדם', lengthSeconds: 200, viewCount: 1000 };
+  const versions = [['קאבר', 'זמר אחר'], ['קריוקי', 'ערוץ קריוקי'], ['רמיקס', 'DJ Someone']].map(([word, author], i) =>
+    ({ type: 'video', videoId: 'other' + i + '000000', title: 'עומר אדם - תגידי (' + word + ')', author, lengthSeconds: 200, viewCount: 5000000 }));
+  for (const version of versions) {
+    assert.equal(await harness([version]).Api.matchTrack('תגידי', 'עומר אדם'), null, version.title);
+    assert.equal((await harness([version, original]).Api.matchTrack('תגידי', 'עומר אדם')).id, original.videoId, version.title);
+  }
+});
