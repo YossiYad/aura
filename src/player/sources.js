@@ -82,6 +82,7 @@
     // Assign ownership before src: Safari can announce a remembered AirPlay
     // route as soon as this source is attached, while its first play is pending.
     V.attachedAudioSourceToken = V.loadingToken;
+    V.attachedTrackId = (track || V.current() || {}).id || null;
     V.setPlaybackSource(V.audio, src);
     V.audio.volume = V.levelled();
     V.applyRate(V.audio);

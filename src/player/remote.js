@@ -4,9 +4,11 @@
   Object.defineProperties(V, {
     airPlaySourceChange: { get: () => airPlaySourceChange },
     airPlaySourceChangeActive: { get: () => airPlaySourceChangeActive },
+    attachedTrackId: { get: () => attachedTrackId, set: value => { attachedTrackId = value; } },
     bindRemotePlayback: { get: () => bindRemotePlayback },
     clearAirPlaySourceChange: { get: () => clearAirPlaySourceChange },
     configureRemoteElements: { get: () => configureRemoteElements },
+    currentTrackTime: { get: () => currentTrackTime },
     localBeforeCast: { get: () => localBeforeCast, set: value => { localBeforeCast = value; } },
     nativeRemotePlaybackState: { get: () => nativeRemotePlaybackState },
     prepareRemotePlayback: { get: () => prepareRemotePlayback },
@@ -30,6 +32,8 @@
   // A wireless route belongs to a media element. Keep that element and give the
   // receiver an HTTP source: device-local blob URLs cannot be fetched by a TV.
   let remoteState = "disconnected";
+  // The track whose source the active element holds, and so whose clock it runs.
+  let attachedTrackId = null;
   let remoteSource = false;
   let remotePreparation = null;
   let localBeforeCast = V.audioA;
@@ -184,6 +188,18 @@
     });
   }
 
+  // Where the current track stands, for a handoff that has to carry its place across. While
+  // the next song is still resolving, the element holds the song before it, and its clock is
+  // that song's: read as the new one's place, the TV started the next song where the previous
+  // one had got to. The new track has no place yet but a saved episode position.
+  function currentTrackTime() {
+    const track = V.current();
+    if (V.backend === "audio" && track && attachedTrackId && attachedTrackId !== track.id) {
+      return V.savedResumePosition(track);
+    }
+    return V.getTime().cur || 0;
+  }
+
   function prepareRemotePlayback(reuseSource = false) {
     if (remotePreparation && remotePreparation.token === V.loadingToken) return remotePreparation.promise;
     V.commitInterruptedPreparedStart("wireless connection");
@@ -191,7 +207,7 @@
     if (!track) return Promise.resolve(false);
     // A pause during the handoff removed the source, and with it the position; the
     // one kept from that moment is where the TV picks up.
-    const resumeAt = V.getTime().cur || resumeAfterCastAt || 0;
+    const resumeAt = currentTrackTime() || resumeAfterCastAt || 0;
     resumeAfterCastAt = 0;
     const source = V.audio.src;
     stopRouteRecovery();
@@ -218,6 +234,7 @@
         if (V.audio.isCast) { V.audio.mediaTrack = track; V.audio.mediaMime = info.mime || "audio/mpeg"; }
         V.rememberStreamDuration(track, info);
         V.attachedAudioSourceToken = token;
+        attachedTrackId = track.id;
         setPlaybackSource(V.audio, info.url);
         if (V.audio.isCast) V.audio.currentTime = resumeAt;
         V.audio.volume = V.levelled();

@@ -255,6 +255,7 @@
     // A Media Session pause can arrive while a source or fallback is still resolving.
     // Always invalidate that work so it cannot restore playback intent afterward.
     const cancelledLoad = V.loadingInProgress;
+    const trackTime = cancelledLoad && V.remotePlaybackActive() ? V.currentTrackTime() : 0;
     V.loadingToken++;
     V.loadingInProgress = false;
     V.wantsPlayback = false;
@@ -272,7 +273,7 @@
       // The queue already points at the requested track while the attached source may
       // still belong to the previous one. Detach both backends so the next Play resolves
       // the current queue entry instead of reviving stale audio under new metadata.
-      if (V.remotePlaybackActive()) V.resumeAfterCastAt = getTime().cur || V.resumeAfterCastAt;
+      if (V.remotePlaybackActive()) V.resumeAfterCastAt = trackTime || V.resumeAfterCastAt;
       V.stopAudio();
       V.stopYt();
       V.backend = "audio";
