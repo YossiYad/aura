@@ -250,7 +250,17 @@
         if (token !== V.loadingToken) return false;
         V.audio.pause();
         if (V.playbackPermissionDenied(e)) V.holdPlaybackPermission(track, resumeAt);
-        else V.emit({ type: "remote-error", message: "Could not load a stream for the TV. Check your connection and try again." });
+        else {
+          // Stopped here until the listener retries with Play, like the other TV failures.
+          // Left wanting playback, the player read as playing while silent: the audio
+          // session stayed held, reloads waited on it, and a later route change could
+          // start the sound on its own.
+          V.wantsPlayback = false;
+          V.platformPaused = false;
+          V.focusResumePending = false;
+          V.focusResumeConfirmed = false;
+          V.emit({ type: "remote-error", message: "Could not load a stream for the TV. Check your connection and try again." });
+        }
         return false;
       } finally {
         if (token === V.loadingToken) {

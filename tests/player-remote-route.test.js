@@ -721,3 +721,38 @@ for (const platform of ['AirPlay', 'Remote Playback']) {
     h.window.Player.dismiss();
   });
 }
+
+// A receiver stream that cannot be had stops playback until Play is pressed again. The
+// failed handoff used to pause the element but keep the intent to play, so the player read
+// as playing while silent and held the audio session for nothing.
+for (const failure of ['lookup', 'timeout']) test('a failed TV handoff (' + failure + ') stops wanting playback, and Play retries it', async () => {
+  const h = createHarness({ withAirPlay: true, withAudioContext: true, withAudioSession: false,
+    navigator: { userAgent: 'iPhone' }, tracks: ['one', 'two'].map(id => ({ id, title: id, duration: 180 })),
+    settings: { autoplay: false, noYtFallback: true } });
+  h.Api.invalidate = () => {};
+  h.Api.getSkipSegments = async () => [];
+  h.Api.resolve = async id => ({ url: 'https://test/' + id });
+  h.audio.src = 'blob:download-one';
+  const player = h.window.Player;
+  const errors = [];
+  player.onChange(event => { if (event.type === 'remote-error') errors.push(event); });
+  h.play();
+  await flushMicrotasks(40);
+  const play = h.audio.play;
+  if (failure === 'lookup') h.Api.resolve = async () => { throw new Error('offline'); };
+  else h.audio.play = () => { h.audio.playCalls++; return new Promise(() => {}); };
+  h.audio.webkitCurrentPlaybackTargetIsWireless = true;
+  h.audio.dispatch('webkitcurrentplaybacktargetiswirelesschanged');
+  await flushMicrotasks(40);
+  if (failure === 'timeout') { h.runTimers(9000); await flushMicrotasks(40); }
+  assert.equal(errors.length, 1);
+  assert.equal(player.isPaused(), true);
+  assert.equal(player.playbackRequested(), false);
+  h.Api.resolve = async id => ({ url: 'https://test/' + id });
+  h.audio.play = play;
+  h.play();
+  await flushMicrotasks(60);
+  assert.equal(h.audio.src, 'https://test/one');
+  assert.equal(player.isPaused(), false);
+  assert.equal(player.playbackRequested(), true);
+});
