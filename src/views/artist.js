@@ -178,7 +178,9 @@
         Store.unfollow(a.id);
         V.toast("Unfollowed " + a.name);
       } else {
-        const latest = (a.videos || [])[0];
+        // A page built from search results is not in upload order: seed nothing, and the
+        // first real check takes the baseline instead of announcing the newest as new.
+        const latest = a.fromSearch ? null : (a.videos || [])[0];
         Store.follow({ id: a.id, name: a.name, thumb: a.thumb, kind: podcastish ? "podcast" : "artist", latestId: latest ? latest.id : null });
         V.toast("Following " + a.name + " - you'll hear about new " + (podcastish ? "episodes" : "releases"));
       }

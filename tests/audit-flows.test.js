@@ -195,6 +195,21 @@ test('a follow check answered from search results announces nothing and waits it
  await c.checkFollowsForNew();
  assert.deepEqual(refreshed,['newest']);assert.deepEqual(toasts,[]);
 });
+test('following an artist whose page came from search results seeds no newest upload',()=>{
+ const nodes={};const node=id=>nodes[id]||(nodes[id]={});let followed=null;
+ const page={id:'UC1',name:'Singer',thumb:'',subscribers:0,albums:[],playlists:[],fromSearch:true,videos:[{id:'best-match',title:'Old hit'}]};
+ const c=functions('src/views.js',['renderYtArtist'],{
+  view:{},document:{getElementById:node},sortedSongs:()=>[],unblocked:x=>x,podcastChannel:()=>false,
+  stickyBarHtml:()=>'',cssUrl:x=>x,esc:x=>x,fmtSubs:()=>'',drRow:()=>'',render(){},toast(){},watchLoadMore(){},
+  Store:{isFollowing:()=>!!followed,follow:entry=>{followed=entry;return true;}}});
+ c.renderYtArtist({data:page,songs:{items:[]}});
+ nodes['artist-follow'].onclick();
+ assert.equal(followed.latestId,null);
+ followed=null;page.fromSearch=false;
+ c.renderYtArtist({data:page,songs:{items:[]}});
+ nodes['artist-follow'].onclick();
+ assert.equal(followed.latestId,'best-match');
+});
 test('home long press uses the visible filtered song',()=>{
  const a={id:'a'},b={id:'b'};const c=functions('src/views.js',['trackForElement'],{homeFeeds:{x:{sections:[{tracks:[a,b]}]}},homeFeedRenderedKey:'x',unblocked:xs=>xs.filter(t=>t.id!=='a')});
  const el={dataset:{homeFeedSection:'0',homeFeedTrack:'0'},closest:()=>el};assert.equal(c.trackForElement(el),b);
