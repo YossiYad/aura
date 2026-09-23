@@ -45,6 +45,7 @@
     PLAY_ICON: { get: () => PLAY_ICON },
     playlistPlaybackOptions: { get: () => playlistPlaybackOptions },
     playSelection: { get: () => playSelection },
+    shuffleSelection: { get: () => shuffleSelection },
     popSubView: { get: () => popSubView },
     promptModal: { get: () => promptModal },
     pushSubView: { get: () => pushSubView },
@@ -105,6 +106,24 @@
     if (Player.shareSession && Player.shareSession()) {
       toast(Player.addToQueue(tracks[index]) ? "Added to AuraShare" : "Already in AuraShare");
     } else Player.playQueue(tracks, index, options);
+  }
+
+  // Shuffle is a queue-wide setting a shared queue does not take, and a shared queue
+  // takes a list from its start index on: there the whole list goes in, in a random
+  // order, rather than the random tail of it that starting at a random index gave.
+  function shuffleSelection(tracks) {
+    if (!tracks.length) return;
+    if (Player.shareSession && Player.shareSession()) {
+      const order = tracks.slice();
+      for (let i = order.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const swap = order[i]; order[i] = order[j]; order[j] = swap;
+      }
+      Player.playQueue(order, 0);
+      return;
+    }
+    Player.setShuffle(true);
+    Player.playQueue(tracks, Math.floor(Math.random() * tracks.length));
   }
 
   function setViewMotion(animate) {

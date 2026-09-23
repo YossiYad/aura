@@ -177,11 +177,7 @@
     const playAll = document.getElementById("ask-play-all");
     if (playAll) playAll.onclick = () => { if (V.askState.tracks.length) Player.playQueue(V.askState.tracks.slice(), 0); };
     const shuffle = document.getElementById("ask-shuffle");
-    if (shuffle) shuffle.onclick = () => {
-      if (!V.askState.tracks.length) return;
-      Player.setShuffle(true);
-      Player.playQueue(V.askState.tracks.slice(), Math.floor(Math.random() * V.askState.tracks.length));
-    };
+    if (shuffle) shuffle.onclick = () => V.shuffleSelection(V.askState.tracks.slice());
     const save = document.getElementById("ask-save");
     if (save) save.onclick = () => { if (V.askState.tracks.length) V.openPlaylistPickerBulk(V.askState.tracks, V.askState.name); };
     const retry = document.getElementById("ask-retry");

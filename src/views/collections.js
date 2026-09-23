@@ -342,24 +342,7 @@
     // Play and shuffle follow what is on screen, so filtering then playing does what it looks like.
     if (playBtn) playBtn.onclick = () => { const shown = collectionView(tracks); if (shown.length) Player.playQueue(shown, 0, V.playlistPlaybackOptions(ctx)); };
     const shufBtn = document.getElementById("hero-shuffle");
-    if (shufBtn) shufBtn.onclick = () => {
-      const shown = collectionView(tracks);
-      if (!shown.length) return;
-      if (Player.shareSession()) {
-        // Shuffle is a queue-wide setting a shared queue does not take, and a shared
-        // queue takes the list from the start index on: contribute the whole list in
-        // a random order rather than a random tail of it.
-        const order = shown.slice();
-        for (let i = order.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          const swap = order[i]; order[i] = order[j]; order[j] = swap;
-        }
-        Player.playQueue(order, 0);
-        return;
-      }
-      Player.setShuffle(true);
-      Player.playQueue(shown, Math.floor(Math.random() * shown.length));
-    };
+    if (shufBtn) shufBtn.onclick = () => V.shuffleSelection(collectionView(tracks));
     const dlAll = document.getElementById("hero-download");
     if (dlAll) dlAll.onclick = () => V.downloadAll(collectionView(tracks));
   }

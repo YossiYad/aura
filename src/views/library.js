@@ -258,10 +258,7 @@
     const playAll = document.getElementById("play-all");
     if (playAll) playAll.onclick = () => Player.playQueue(tracks, 0);
     const shuffleAll = document.getElementById("shuffle-all");
-    if (shuffleAll) shuffleAll.onclick = () => {
-      Player.setShuffle(true);
-      Player.playQueue(tracks, Math.floor(Math.random() * tracks.length));
-    };
+    if (shuffleAll) shuffleAll.onclick = () => V.shuffleSelection(tracks);
     const dlAll = document.getElementById("download-all");
     if (dlAll) dlAll.onclick = () => V.downloadAll(tracks);
     const sortBtn = document.getElementById("sort-btn");
