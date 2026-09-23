@@ -167,6 +167,17 @@ test('shuffling a list into a shared queue contributes all of it',()=>{
  c.Player.shareSession=()=>'';c.shuffleSelection(tracks);
  assert.equal(shuffled,true);assert.equal(played,tracks);
 });
+// The nightly run rebuilds "Made for you" in place. A run whose lookups all failed used
+// to replace the row on screen with nothing.
+test('a nightly recommendations rebuild that finds nothing keeps the row on screen',async()=>{
+ const kept=[{id:'kept',duration:200}];let painted=0;
+ const c=functions('src/views.js',['buildHomeRecs'],{homeRecs:{items:kept,busy:false},fillHomeRecs:()=>painted++,
+  navigator:{onLine:true},localStorage:{setItem(){}},
+  Store:{recents:()=>[{id:'r'}],mediaKind:()=>'music',topListeningTracks:()=>[{id:'s'}],library:()=>[],settings:()=>({}),isBlocked:()=>false},
+  Api:{resolve:()=>Promise.reject(new Error('down')),looksLikeMusic:()=>true}});
+ await c.buildHomeRecs(true);
+ assert.equal(c.homeRecs.items,kept);assert.equal(c.homeRecs.busy,false);assert(painted>0);
+});
 test('home long press uses the visible filtered song',()=>{
  const a={id:'a'},b={id:'b'};const c=functions('src/views.js',['trackForElement'],{homeFeeds:{x:{sections:[{tracks:[a,b]}]}},homeFeedRenderedKey:'x',unblocked:xs=>xs.filter(t=>t.id!=='a')});
  const el={dataset:{homeFeedSection:'0',homeFeedTrack:'0'},closest:()=>el};assert.equal(c.trackForElement(el),b);
