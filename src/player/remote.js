@@ -66,7 +66,10 @@
     if (el === V.audio) clearAirPlaySourceChange();
     if (changingAirPlaySource) {
       stopRouteRecovery();
-      const change = { el, source, until: Date.now() + 9000, disconnected: false, timer: null };
+      // A change made while the last one is still waiting finds the flag already down, and
+      // Safari will not report it dropping again: only its return is still to come.
+      const change = { el, source, until: Date.now() + 9000,
+        disconnected: el.webkitCurrentPlaybackTargetIsWireless !== true, timer: null };
       airPlaySourceChange = change;
       change.timer = setTimeout(() => {
         if (airPlaySourceChange !== change) return;
