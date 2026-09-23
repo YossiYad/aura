@@ -217,6 +217,17 @@ test('overlapping passes over saved artwork make one object URL per cover',async
  await Promise.all([c.warmLocalArt(),c.warmLocalArt(),c.warmLocalArt()]);
  assert.equal(made,2);assert.equal(c.localArt.size,2);
 });
+// A voice request empties the Ask field once it plays, and a failed one leaves its own
+// words there. Ask again then retried nothing, or built a playlist from the voice command.
+test('Ask again repeats the request its results answer, not what the field holds now',()=>{
+ const nodes={'ask-retry':{}};let retried;
+ const c=functions('src/views.js',['wireAsk'],{document:{getElementById:id=>nodes[id]||null},
+  askState:{prompt:'',asked:'songs for a rainy day',tracks:[{id:'a'}]},runAsk:(text,retry)=>{retried=[text,retry];}});
+ c.wireAsk();nodes['ask-retry'].onclick();
+ assert.deepEqual(retried,['songs for a rainy day',true]);
+ c.askState.prompt='תשים לי שיר';nodes['ask-retry'].onclick();
+ assert.deepEqual(retried,['songs for a rainy day',true]);
+});
 test('home long press uses the visible filtered song',()=>{
  const a={id:'a'},b={id:'b'};const c=functions('src/views.js',['trackForElement'],{homeFeeds:{x:{sections:[{tracks:[a,b]}]}},homeFeedRenderedKey:'x',unblocked:xs=>xs.filter(t=>t.id!=='a')});
  const el={dataset:{homeFeedSection:'0',homeFeedTrack:'0'},closest:()=>el};assert.equal(c.trackForElement(el),b);

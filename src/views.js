@@ -94,7 +94,7 @@
   let libraryQuery = "";
   let libraryTimer = null;
   let homeFilter = "all";
-  let askState = { prompt: "", spoken: false, status: "idle", step: "", error: "", name: "", tracks: [], notFound: 0 };
+  let askState = { prompt: "", asked: "", spoken: false, status: "idle", step: "", error: "", name: "", tracks: [], notFound: 0 };
   const tabScroll = { home: 0, search: 0, library: 0, ai: 0 };
   let viewEnterTimer = null;
 
