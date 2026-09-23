@@ -36,4 +36,6 @@
   V.syncProgressLoop();
   Views.render();
   openLaunchShortcut();
+  // The first launch asks which language to use; English is on screen until then.
+  if (Views.askLanguage) Views.askLanguage();
 })();

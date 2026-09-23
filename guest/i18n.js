@@ -273,10 +273,17 @@
 };
   const valid = value => value === 'he' || value === 'en';
   let guestLanguage = null;
-  function language() {
-    if (guestLanguage) return guestLanguage;
+  function saved() {
     const settings = window.Store ? window.Store.settings() : {};
-    if (valid(settings.interfaceLanguage)) return settings.interfaceLanguage;
+    return valid(settings.interfaceLanguage) ? settings.interfaceLanguage : null;
+  }
+  // The app starts in English until the listener picks a language, which the first launch
+  // asks for. Guests arrive from a QR code with no settings of their own, so their page
+  // follows the browser instead.
+  function language() {
+    return guestLanguage || saved() || 'en';
+  }
+  function browserLanguage() {
     const preferred = (navigator.languages && navigator.languages[0]) || navigator.language || 'en';
     return /^he(?:-|$)/i.test(preferred) ? 'he' : 'en';
   }
@@ -302,7 +309,7 @@
   }
   function initGuest() {
     const chosen = new URL(location.href).searchParams.get('lang');
-    guestLanguage = valid(chosen) ? chosen : language();
+    guestLanguage = valid(chosen) ? chosen : saved() || browserLanguage();
     document.documentElement.lang = guestLanguage;
     document.documentElement.dir = guestLanguage === 'he' ? 'rtl' : 'ltr';
     // Called once on the static guest shell, before any participant or track is rendered.
@@ -318,6 +325,10 @@
     });
   }
   window.I18n = { language, t, speechLanguage, setLanguage, initGuest,
+    chosen: () => !!saved(),
+    suggested: browserLanguage,
+    // The language AI replies are written in, named the way a model understands it.
+    aiLanguage: () => language() === 'he' ? 'Hebrew' : 'English',
     direction: () => language() === 'he' ? 'rtl' : 'ltr',
     locale: () => language() === 'he' ? 'he-IL' : 'en-US' };
 })();

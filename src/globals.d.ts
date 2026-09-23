@@ -395,6 +395,12 @@ interface AuraI18n {
   /** Saves the choice and fires "aura-language". @returns False for an unknown language. */
   setLanguage(value: string): boolean;
   initGuest(): void;
+  /** Whether the listener has picked a language, rather than getting the English default. */
+  chosen(): boolean;
+  /** "he" or "en", from the browser: what to offer first when asking. */
+  suggested(): string;
+  /** "English" or "Hebrew": the language AI replies are written in. */
+  aiLanguage(): string;
   direction(): "rtl" | "ltr";
   locale(): string;
 }
@@ -421,6 +427,8 @@ interface AuraViews {
   openSleepTimerSheet(): void;
   openSpeedSheet(): void;
   applyAppearance(): void;
+  /** Asks which interface language to use, unless one has been chosen. */
+  askLanguage(): void;
   artSrc(track: Track): string;
   /** Something Back should close before it leaves the screen. */
   addBackLayer(layer: { open: () => boolean, close: () => void }): void;

@@ -28,7 +28,7 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
       await page.addInitScript(() => {
-        localStorage.setItem('aura.settings', JSON.stringify({ autoplay: false, noYtFallback: true, aiHomeSection: false }));
+        localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'en', autoplay: false, noYtFallback: true, aiHomeSection: false }));
         const titles = ['לשוב הביתה', 'ואיך בשמיים', 'בזמן האחרון', 'שני משוגעים', 'עוד יום', 'בדרך אלייך', 'רגע של שקט', 'לילה טוב'];
         const colors = ['#a15f41', '#436882', '#6f5789', '#566c4d'];
         localStorage.setItem('aura.queue', JSON.stringify({
