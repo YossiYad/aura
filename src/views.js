@@ -756,7 +756,10 @@
     for (const id of ids) {
       if (localArt.has(id)) continue;
       const blob = await Player.getArt(id);
-      if (!blob) continue;
+      // Every downloads event starts a pass, several a second while a download runs; a
+      // pass that got here first has made this one's URL already, and a second would
+      // hold its picture in memory with nothing left to release it.
+      if (!blob || localArt.has(id)) continue;
       localArt.set(id, URL.createObjectURL(blob));
       added++;
     }

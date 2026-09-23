@@ -210,6 +210,13 @@ test('following an artist whose page came from search results seeds no newest up
  nodes['artist-follow'].onclick();
  assert.equal(followed.latestId,'best-match');
 });
+test('overlapping passes over saved artwork make one object URL per cover',async()=>{
+ let made=0;const c=functions('src/views.js',['warmLocalArt'],{localArt:new Map(),artWarmed:false,markStale(){},window:{dispatchEvent(){}},Event:class{},
+  URL:{createObjectURL:()=>'blob:'+(++made)},
+  Player:{artIds:async()=>new Set(['a','b']),getArt:async id=>({id}),current:()=>null}});
+ await Promise.all([c.warmLocalArt(),c.warmLocalArt(),c.warmLocalArt()]);
+ assert.equal(made,2);assert.equal(c.localArt.size,2);
+});
 test('home long press uses the visible filtered song',()=>{
  const a={id:'a'},b={id:'b'};const c=functions('src/views.js',['trackForElement'],{homeFeeds:{x:{sections:[{tracks:[a,b]}]}},homeFeedRenderedKey:'x',unblocked:xs=>xs.filter(t=>t.id!=='a')});
  const el={dataset:{homeFeedSection:'0',homeFeedTrack:'0'},closest:()=>el};assert.equal(c.trackForElement(el),b);
