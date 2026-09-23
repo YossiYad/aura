@@ -923,3 +923,39 @@ test("a list asked for next goes in whole, in order, while an ambiguous song sti
   assert.equal(result.action, "next");
   assert.deepEqual(Array.from(result.tracks, track => track.id).sort(), [another.id, song.id].sort());
 });
+
+// The placement wording had its own shorter verb lists, so a feminine "put it at the end"
+// and "turn on as the next song" were read as plain play requests that replace the queue.
+test("every play verb can put a song next or at the end of the queue", () => {
+  const { Voice } = harness();
+  for (const [request, action] of [
+    ["תפעיל בתור השיר הבא את Bohemian Rhapsody של Queen", "next"],
+    ["תפעילי בתור השיר הבא את Bohemian Rhapsody של Queen", "next"],
+    ["put on next song Bohemian Rhapsody by Queen", "next"],
+    ["תשימי לסוף התור את Bohemian Rhapsody של Queen", "append"],
+    ["שימי לסוף התור את Bohemian Rhapsody של Queen", "append"]
+  ]) {
+    const intent = Voice.basicIntent(request);
+    assert.equal(intent.action, action, request);
+    assert.equal(intent.query, song.title, request);
+    assert.equal(intent.artist, "Queen", request);
+  }
+});
+
+test("a title with its own by or של keeps it, and the performer is what follows the last one", () => {
+  const { Voice } = harness();
+  const hebrew = Voice.basicIntent("תשים את השיר ילדה של אבא של עומר אדם");
+  assert.equal(hebrew.query, "ילדה של אבא"); assert.equal(hebrew.artist, "עומר אדם");
+  const english = Voice.basicIntent("play Stand by Me by Ben E. King");
+  assert.equal(english.query, "Stand by Me"); assert.equal(english.artist, "Ben E. King");
+});
+
+test("a verb with nothing after it asks what to play without searching", async () => {
+  let searched = 0;
+  const { Voice } = harness({ seed: { "aura.library": [{ id: "nameless", title: "Song", artist: "" }] },
+    Api: { matchTrack: async () => { searched++; return song; }, search: async () => { searched++; return { items: [] }; } } });
+  for (const request of ["תשים לי", "play", "put on"]) {
+    await assert.rejects(Voice.resolve(request), /איזה שיר, אמן או פלייליסט/, request);
+  }
+  assert.equal(searched, 0);
+});

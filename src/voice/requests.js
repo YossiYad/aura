@@ -20,13 +20,13 @@
     let action = /^(?:(?:בבקשה|אפשר|please|can you|could you)\s+)?(?:תוסיף|תוסיפי|הוסף|הוסיפי|תצרף|תצרפי|צרף|צרפי|add|append|queue|enqueue)\s/i.test(text) ? "append" : "play";
     const appendSuffix = /\s+(?:(?:לסוף|בסוף|אל\s+סוף)\s+(?:ה?תור|רשימת\s+ההשמעה)|ל(?:ה?תור)|(?:to|at)\s+the\s+end\s+of\s+(?:the\s+|my\s+)?queue|to\s+(?:the\s+|my\s+)?queue)[.!?…]*$/i;
     if (appendSuffix.test(text)) { text = text.replace(appendSuffix, "").trim(); action = "append"; }
-    const appendPrefix = /^((?:(?:בבקשה|אפשר|please|can you|could you)\s+)?(?:תוסיף|תוסיפי|הוסף|הוסיפי|תצרף|תצרפי|צרף|צרפי|תשים|שים|add|append)(?:\s+לי)?\s+)(?:(?:לסוף|בסוף)\s+ה?תור|ל(?:ה?תור)|to\s+(?:the\s+)?(?:end\s+of\s+the\s+)?queue)\s+/i;
+    const appendPrefix = /^((?:(?:בבקשה|אפשר|please|can you|could you)\s+)?(?:תוסיף|תוסיפי|הוסף|הוסיפי|תצרף|תצרפי|צרף|צרפי|תשים|תשימי|שים|שימי|add|append)(?:\s+לי)?\s+)(?:(?:לסוף|בסוף)\s+ה?תור|ל(?:ה?תור)|to\s+(?:the\s+)?(?:end\s+of\s+the\s+)?queue)\s+/i;
     if (appendPrefix.test(text)) { text = text.replace(appendPrefix, "$1").trim(); action = "append"; }
     // Match placement at the edges of a request, so titles like Next to Me
     // and The Next Episode keep their names. Song lookup receives only the title.
     const suffix = /\s+(?:(?:שיהיה\s+)?(?:בתור\s+(?:ה?שיר\s+)?|כ(?:ה?שיר\s+)?|לשיר\s+)הבא|שיהיה\s+(?:ה?שיר\s+)?הבא|אחרי\s+השיר\s+(?:הזה|הנוכחי)|(?:up\s+)?next|as\s+the\s+next\s+song)[.!?…]*$/i;
     if (suffix.test(text)) { text = text.replace(suffix, "").trim(); action = "next"; }
-    const prefix = /^((?:(?:בבקשה|אפשר|please|can you|could you)\s+)?(?:תשים|תשימי|שים|שימי|תנגן|תנגני|נגן|תשמיע|תשמיעי|תוסיף|תוסיפי|הוסף|הוסיפי|play|queue|enqueue)(?:\s+לי)?\s+)(?:את\s+)?(?:(?:בתור\s+(?:ה?שיר\s+)?|כ(?:ה?שיר\s+)?)הבא|ה?שיר\s+הבא|next(?=\s+(?:the\s+)?song\s))(?:\s+|$)/i;
+    const prefix = /^((?:(?:בבקשה|אפשר|please|can you|could you)\s+)?(?:תשים|תשימי|שים|שימי|תפעיל|תפעילי|הפעל|תנגן|תנגני|נגן|תשמיע|תשמיעי|השמע|תוסיף|תוסיפי|הוסף|הוסיפי|play|put on|queue|enqueue)(?:\s+לי)?\s+)(?:את\s+)?(?:(?:בתור\s+(?:ה?שיר\s+)?|כ(?:ה?שיר\s+)?)הבא|ה?שיר\s+הבא|next(?=\s+(?:the\s+)?song\s))(?:\s+|$)/i;
     if (prefix.test(text)) { text = text.replace(prefix, "$1").trim(); action = "next"; }
     const namedNext = /^(?:ה?שיר\s+הבא\s+(?:יהיה|הוא)|next\s+song\s+is)\s+/i;
     if (namedNext.test(text)) { text = text.replace(namedNext, ""); action = "next"; }
@@ -78,7 +78,9 @@
         (m = /^(.+?)'?s\s+(?:new|newest|latest|last|most\s+recent)\s+(?:song|single|track|release)$/i.exec(q)))
       return { kind: "latest", query: clean(m[1]), artist: "" };
     q = q.replace(/^(?:ה?שיר|(?:the )?song)\s+/i, "");
-    if ((m = /^(.+?)\s+(?:של|by)\s+(.+)$/i.exec(q))) return { kind: "song", query: clean(m[1]), artist: clean(m[2]) };
+    // The last "by", not the first: titles carry one of their own ("Stand by Me", "ילדה של
+    // אבא"), and a performer's name almost never does.
+    if ((m = /^(.+)\s+(?:של|by)\s+(.+)$/i.exec(q))) return { kind: "song", query: clean(m[1]), artist: clean(m[2]) };
     return { kind: "song", query: q, artist: "" };
   }
   function named(items, query, name) {
@@ -189,6 +191,10 @@
       const placed = musicIntent(raw);
       if (placed.kind !== "liked" && !placed.query) throw new Error(tr("איזה שיר להוסיף לתור? ציינו את שם השיר והאמן."));
     }
+    // A verb and nothing after it - a pause right after "תשים לי" - names nothing to look
+    // for. Searching for the empty string only failed slowly, or matched an artist with no
+    // name in the library.
+    if (!interpreted && intent.kind !== "liked" && !intent.query) throw new Error("איזה שיר, אמן או פלייליסט לנגן?");
     const cacheKey = raw + JSON.stringify(Store.playlists().map(p => p.name));
     async function understand() {
       if (onstatus) onstatus(tr("מבין את הבקשה…"));
