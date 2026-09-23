@@ -147,13 +147,25 @@ test('library bulk playback and downloads use the same visible unblocked tracks'
  const {Store}=require('./store-harness').createStore({'aura.library':[{id:'a',title:'Song A'},{id:'b',title:'Song B'},{id:'c',title:'Different'}]});
  Store.blockTrack(Store.findTrack('a'));
  const nodes={'play-all':{},'shuffle-all':{},'download-all':{}};
- let played,downloaded;const c=functions('src/views.js',['wireSongsHandlers'],{
+ let played,downloaded;const c=functions('src/views.js',['wireSongsHandlers','shuffleSelection'],{
   Store,libraryQuery:'Song',document:{getElementById:id=>nodes[id]},
-  Player:{playQueue:tracks=>played=tracks,setShuffle(){}},downloadAll:tracks=>downloaded=tracks
+  Player:{playQueue:tracks=>played=tracks,setShuffle(){},shareSession:()=>''},downloadAll:tracks=>downloaded=tracks
  });
  c.wireSongsHandlers();nodes['play-all'].onclick();assert.deepEqual(Array.from(played,t=>t.id),['b']);
  nodes['shuffle-all'].onclick();assert.deepEqual(Array.from(played,t=>t.id),['b']);
  nodes['download-all'].onclick();assert.deepEqual(Array.from(downloaded,t=>t.id),['b']);
+});
+// A shared queue takes a list from its start index on and has no shuffle of its own, so
+// starting at a random index contributed only a random tail of the list.
+test('shuffling a list into a shared queue contributes all of it',()=>{
+ const tracks=['a','b','c','d','e'].map(id=>({id}));let shuffled=false,played,start;
+ const c=functions('src/views.js',['shuffleSelection'],{Math,
+  Player:{shareSession:()=>'room',setShuffle(){shuffled=true;},playQueue:(list,at)=>{played=list;start=at;}}});
+ c.shuffleSelection(tracks);
+ assert.equal(start,0);assert.equal(shuffled,false);
+ assert.deepEqual(Array.from(played,t=>t.id).sort(),['a','b','c','d','e']);
+ c.Player.shareSession=()=>'';c.shuffleSelection(tracks);
+ assert.equal(shuffled,true);assert.equal(played,tracks);
 });
 test('home long press uses the visible filtered song',()=>{
  const a={id:'a'},b={id:'b'};const c=functions('src/views.js',['trackForElement'],{homeFeeds:{x:{sections:[{tracks:[a,b]}]}},homeFeedRenderedKey:'x',unblocked:xs=>xs.filter(t=>t.id!=='a')});
