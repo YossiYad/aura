@@ -217,3 +217,21 @@ test('the nightly rebuild replaces rows held under a key that moved while it loa
   assert.equal(h.context.homeFeeds[key], h.context.homeFeeds['all:new:Show A|Show B']);
   assert(h.context.homeFeeds[key].sections.every(section => section.status === 'ready'));
 });
+
+// Each new set of top artists or shows is a new key; the saved copy kept every one.
+test('the saved Home rows keep only the newest keys that can still be shown', () => {
+  const views = readModule('views');
+  const match = /^  function homeFeedCacheSave\(/m.exec(views);
+  const stored = new Map();
+  let now = 10 * 24 * 3600 * 1000;
+  const context = vm.createContext(moduleScope({
+    STALE_MAX: 3 * 24 * 3600 * 1000, HOME_FEED_CACHE_KEYS: 6, JSON,
+    Date: { now: () => now },
+    localStorage: { getItem: key => stored.get(key) || null, setItem: (key, value) => stored.set(key, value) }
+  }));
+  vm.runInContext(views.slice(match.index, views.indexOf('\n  }', match.index) + 4), context);
+  stored.set('aura.homeFeeds', JSON.stringify({ old: { at: now - 4 * 24 * 3600 * 1000, sections: [] } }));
+  for (let i = 0; i < 10; i++) { now += 1000; context.homeFeedCacheSave('key' + i, []); }
+  const cache = JSON.parse(stored.get('aura.homeFeeds'));
+  assert.deepEqual(Object.keys(cache).sort(), ['key4', 'key5', 'key6', 'key7', 'key8', 'key9']);
+});
