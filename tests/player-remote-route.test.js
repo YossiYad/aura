@@ -756,3 +756,60 @@ for (const failure of ['lookup', 'timeout']) test('a failed TV handoff (' + fail
   assert.equal(player.isPaused(), false);
   assert.equal(player.playbackRequested(), true);
 });
+
+// While the next song resolves the element still holds the one before it, and its clock is
+// that song's. A TV connected in that moment used to start the new song where the old one
+// had got to.
+test('a TV connected while the next song loads starts it from the top, not at the previous song\'s place', async () => {
+  const h = createHarness({ withAirPlay: true, withAudioSession: false,
+    tracks: ['one', 'two', 'three'].map(id => ({ id, title: id, duration: 180 })),
+    settings: { autoplay: false, noYtFallback: true } });
+  const player = h.window.Player;
+  h.Api.invalidate = () => {};
+  h.Api.getSkipSegments = async () => [];
+  const resolve = async (id, options) => ({ url: 'https://test/' + id + (options && options.remote ? '.mp3' : '.webm') });
+  h.Api.resolve = resolve;
+  player.playQueue(['one', 'two', 'three'].map(id => ({ id, title: id, duration: 180 })), 0);
+  await flushMicrotasks(40);
+  h.audio.currentTime = 100;
+  let src = h.audio.src;
+  Object.defineProperty(h.audio, 'src', { configurable: true, get: () => src,
+    set: value => { src = value; h.audio.currentTime = 0; h.audio.readyState = 0; } });
+  h.Api.resolve = (id, options) => options && options.remote ? resolve(id, options) : new Promise(() => {});
+  player.jumpTo(2);
+  await flushMicrotasks(20);
+  h.audio.webkitCurrentPlaybackTargetIsWireless = true;
+  h.audio.dispatch('webkitcurrentplaybacktargetiswirelesschanged');
+  await flushMicrotasks(40);
+  h.audio.readyState = 1;
+  h.audio.dispatch('loadedmetadata');
+  assert.equal(player.current().id, 'three');
+  assert.equal(h.audio.src, 'https://test/three.mp3');
+  assert.equal(h.audio.currentTime, 0);
+  player.dismiss();
+});
+
+test('Cast connected while the next song loads starts it from the top', async () => {
+  const { castSdk } = require('./cast-sdk-harness');
+  const receiver = castSdk();
+  const h = createHarness({ castSdk: receiver.sdk,
+    tracks: ['one', 'two', 'three'].map(id => ({ id, title: id, artist: 'a', duration: 180 })),
+    settings: { autoplay: false } });
+  const player = h.window.Player;
+  const resolve = async id => ({ url: 'https://test/' + id + '.m4a', mime: 'audio/mp4' });
+  h.Api.resolve = resolve;
+  h.Api.invalidate = () => {};
+  h.Api.getSkipSegments = async () => [];
+  player.playQueue(['one', 'two', 'three'].map(id => ({ id, title: id, artist: 'a', duration: 180 })), 0);
+  await flushMicrotasks(20);
+  await player.requestRemotePlayback();
+  h.audio.currentTime = 100;
+  h.Api.resolve = (id, options) => options && options.remote ? resolve(id) : new Promise(() => {});
+  player.jumpTo(2);
+  await flushMicrotasks(20);
+  await player.requestRemotePlayback();
+  await flushMicrotasks(80);
+  const load = receiver.loads.at(-1);
+  assert.equal(load.media.customData.auraTrackId, 'three');
+  assert.equal(load.currentTime, 0);
+});

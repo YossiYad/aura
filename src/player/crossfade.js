@@ -314,6 +314,7 @@
     V.audio.volume = V.levelled();
     V.history.push(V.pos);
     V.pos = ni;
+    V.attachedTrackId = V.queue[ni] ? V.queue[ni].id : null;
     V.playbackGeneration++;
     V.handledEndGeneration = -1;
     V.stallRecoveries = 0;
@@ -352,6 +353,7 @@
     V.audio.volume = V.levelled();
     V.history.push(V.pos);
     V.pos = prep.ni;
+    V.attachedTrackId = prep.id;
     V.playbackGeneration++;
     V.handledEndGeneration = -1;
     V.stallRecoveries = 0;

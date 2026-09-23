@@ -307,9 +307,9 @@
     bindAudioEvents(CastPlayback.audio);
     CastPlayback.onChange(event => {
       if (event.type === "connected") {
+        const at = V.currentTrackTime();
         V.loadingToken++;
         V.remotePreparation = null;
-        const at = V.getTime().cur;
         V.loadingInProgress = true;
         V.cancelCrossfade();
         V.commitInterruptedPreparedStart("Cast connection");
@@ -318,6 +318,7 @@
         V.audio.pause();
         V.audio = CastPlayback.audio;
         V.audio.currentTime = at;
+        V.attachedTrackId = V.current() ? V.current().id : null;
         V.remoteState = "connected";
         V.platformPaused = false;
         V.audioSessionInterrupted = false;
