@@ -345,3 +345,44 @@ test('host suggestions carry a role flag without confusing a guest using the hos
   assert.equal(state.requests.find(item => item.track.id === tracks[1].videoId).fromHost, false);
   assert.equal(JSON.stringify(state).includes('owner@example.test'), false);
 });
+
+// The list is capped, and a full one used to make room by deleting its first entry
+// whatever it was - including a guest's song approved and still waiting for the host.
+test('a full suggestion list refuses a new one rather than dropping songs still waiting', async t => {
+  let batch = 0;
+  const h = await harness(t, { fetch: async () => {
+    const start = batch++ * 20;
+    return new Response(JSON.stringify(Array.from({ length: 20 }, (_, i) => ({ type: 'video',
+      videoId: 'flood' + String(start + i).padStart(6, '0'), title: 'Song ' + (start + i), author: 'Artist', lengthSeconds: 180 }))));
+  } });
+  const room = await h.create('direct');
+  const alice = await h.join(room, 'Alice');
+  const first = (await h.guest(room, alice, 'search', { query: 'Artist' })).data.tracks[0].id;
+  assert.equal((await h.guest(room, alice, 'suggest', { trackId: first })).status, 201);
+  const bob = await h.join(room, 'Bob');
+  let added = 1, refused = null;
+  while (added < 200 && !refused) {
+    const found = await h.guest(room, bob, 'search', { query: 'Artist' });
+    if (found.status === 429) { h.advance(61000); continue; }
+    for (const track of found.data.tracks) {
+      const result = await h.guest(room, bob, 'suggest', { trackId: track.id });
+      if (result.status === 429 && added < 200) { h.advance(61000); continue; }
+      assert.equal(result.status, 201);
+      if (++added === 200) break;
+    }
+  }
+  const more = (await h.guest(room, bob, 'search', { query: 'Artist' })).data.tracks[0].id;
+  const over = await h.guest(room, bob, 'suggest', { trackId: more });
+  assert.equal(over.status, 429);
+  const state = (await h.host()).data.room;
+  assert.equal(state.requests.length, 200);
+  assert(state.requests.some(item => item.track.id === first && item.deliver), 'the approved song is still waiting for the host');
+});
+
+test('a view-and-vote guest cannot search, and so cannot spend the room\'s searches', async t => {
+  const h = await harness(t), room = await h.create('vote'), alice = await h.join(room, 'Alice');
+  assert.equal((await h.guest(room, alice, 'search', { query: 'Artist' })).status, 403);
+  const aliceId = (await h.host()).data.room.guests[0].id;
+  await h.host(room.id + '/permissions', 'POST', { guestId: aliceId, permission: 'approval' });
+  assert.equal((await h.guest(room, alice, 'search', { query: 'Artist' })).status, 200);
+});

@@ -274,6 +274,9 @@ function createQueueService(options = {}) {
         if (path === '/guest/api/search' && method === 'POST') {
           // The guest's own cap first: searches it refuses must not be charged to the
           // room, or one guest typing could shut search for everyone, hosts included.
+          // Searching is for suggesting, which a view-and-vote guest cannot do; letting it
+          // search anyway spent the room's shared search budget, hosts' included.
+          if (guest.permission === 'vote') fail(403, 'ההרשאה שלך מאפשרת צפייה והצבעה בלבד.');
           limit('search:' + guest.id, 12); limit('search:' + room.id, 60);
           const body = await readBody(req); const query = text(body.query, 160);
           if (query.length < 2) fail(400, 'הקלידו לפחות שני תווים.');
@@ -288,14 +291,17 @@ function createQueueService(options = {}) {
           if (room.requests.some(item => item.track.id === body.trackId && item.status === 'rejected' && now() - (item.decidedAt || item.createdAt) < 600000)) {
             fail(409, 'השיר נדחה לפני זמן קצר. נסו שוב מאוחר יותר.');
           }
+          // Every poll serialises the whole list, so it is capped; the oldest settled entries
+          // make way. A suggestion still waiting for a decision, or approved and not yet on the
+          // queue, is never one of them: a full list of those refuses the new one instead.
+          while (room.requests.length >= MAX_REQUESTS) {
+            const settled = room.requests.findIndex(item => item.status === 'rejected' || (item.status === 'approved' && item.delivered));
+            if (settled === -1) fail(429, 'יש כבר הרבה הצעות שממתינות. נסו שוב אחרי שיטופלו.');
+            room.requests.splice(settled, 1);
+          }
           room.requests.push({ id: token(), guest: guest.id, track: found.track, status: guest.permission === 'direct' ? 'approved' : 'pending',
             device: guest.permission === 'direct' ? room.controller : '',
             votes: new Set(), createdAt: now(), queueOrder: guest.permission === 'direct' ? ++room.nextQueueOrder : undefined });
-          // Every poll serialises the whole list; the oldest settled entries go first.
-          while (room.requests.length > MAX_REQUESTS) {
-            const settled = room.requests.findIndex(item => item.status === 'rejected' || (item.status === 'approved' && item.delivered));
-            room.requests.splice(settled === -1 ? 0 : settled, 1);
-          }
           return send(res, 201, { room: snapshot(room, guest) });
         }
         if (path === '/guest/api/vote' && method === 'POST') {
