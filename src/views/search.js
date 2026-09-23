@@ -423,8 +423,14 @@
         const tracks = result.tracks.filter(track => !Store.isBlocked(track));
         if (!tracks.length) throw new Error(tr("לא ניתן להוסיף את השיר הזה לתור."));
         // Each goes in right after the current song, so inserting them last-first
-        // keeps the list's own order.
-        tracks.slice().reverse().forEach(track => Player.playNext(track));
+        // keeps the list's own order. With nothing playing there is no current song to
+        // insert after: the first playNext starts a queue of one and the rest landed
+        // behind it out of order. A shared queue files each contribution after the
+        // earlier ones, so there the list goes in first-first.
+        if (!queued) {
+          if (!Player.playQueue(tracks, 0)) throw new Error("לא ניתן לנגן את השירים האלה.");
+        } else if (Player.shareSession && Player.shareSession()) tracks.forEach(track => Player.playNext(track));
+        else tracks.slice().reverse().forEach(track => Player.playNext(track));
       } else if (append) {
         const tracks = result.tracks.filter(track => !Store.isBlocked(track));
         if (!tracks.length) throw new Error(tr("לא ניתן להוסיף את השירים האלה לתור."));
