@@ -1,0 +1,45 @@
+/* The wavy song timeline, drawn by src/progress.js. Every size follows --wave-h, so the
+   mini bar, the players and the TV carry the same wave at their own scale, and the colour
+   is the accent picked in Settings wherever the surface does not say otherwise. */
+.song-progress {
+  --wave-h: 20px;
+  position: relative;
+  color: var(--progress-color, var(--accent, #1ed760));
+  direction: ltr;
+  -webkit-tap-highlight-color: transparent;
+}
+.song-progress svg {
+  display: block; width: 100%; height: var(--wave-h);
+  overflow: visible; pointer-events: none;
+}
+.song-progress-track {
+  stroke: currentColor; stroke-width: calc(var(--wave-h) * .1);
+  stroke-linecap: round; opacity: .25;
+}
+.song-progress-wave {
+  fill: none; stroke: currentColor; stroke-width: calc(var(--wave-h) * .15);
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.song-progress-end { fill: currentColor; }
+/* The handle only shows while a finger or the keyboard is actually moving it. */
+.song-progress-thumb {
+  fill: currentColor; opacity: 0;
+  transform-box: fill-box; transform-origin: center; transform: scale(.4);
+  transition: opacity var(--dur-fast, 120ms) ease, transform var(--dur-fast, 120ms) ease;
+}
+.song-progress.scrubbing .song-progress-thumb,
+.song-progress:focus-visible .song-progress-thumb { opacity: 1; transform: none; }
+/* The straight timeline is the same drawing pressed flat: a fuller line, and a handle that
+   stays out where a finger can find it, since a line has no moving crest to show the end. */
+.song-progress.line .song-progress-wave,
+.song-progress.line .song-progress-track { stroke-width: calc(var(--wave-h) * .2); }
+.song-progress.line.touch .song-progress-thumb { opacity: 1; transform: none; }
+.song-progress.seekable { cursor: pointer; outline: none; }
+.song-progress.seekable:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 4px; }
+/* A finger gets a band it can actually land on. Up and down stays with the page, so a
+   scroll that happens to start here is handed back instead of becoming a seek. */
+.song-progress.touch { padding: 12px 0; touch-action: pan-y; }
+.song-progress[aria-disabled="true"] { opacity: .4; cursor: default; }
+@media (prefers-reduced-motion: reduce) {
+  .song-progress-thumb { transition: none; }
+}

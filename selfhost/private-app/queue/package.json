@@ -1,0 +1,6 @@
+{
+  "name": "aura-shared-queue",
+  "private": true,
+  "version": "1.0.0",
+  "dependencies": { "qrcode": "1.5.4" }
+}

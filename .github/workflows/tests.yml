@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # The shared queue server draws its invite QR code with the qrcode package, and its
+      # tests load the server itself, so they need its locked dependencies installed.
+      - run: npm ci --prefix selfhost/private-app/queue --no-audit --no-fund
+      - run: node --test tests/*.test.js
+      # The client is plain JavaScript typed with JSDoc and src/*.d.ts. TypeScript checks
+      # those types without building anything (jsconfig.json), and a type error fails the
+      # run the way a failing test does. Third-party code in src/vendor/ is not checked.
+      - run: npx --yes --package typescript@5.9.3 tsc -p jsconfig.json

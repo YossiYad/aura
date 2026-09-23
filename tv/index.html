@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Aura · TV</title>
+  <link rel="icon" href="../icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="../src/progress.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <video class="castMediaElement" playsinline aria-hidden="true"></video>
+  <main class="screen">
+    <header>
+      <div class="brand"><img src="../icon.svg" alt=""><span>Aura</span></div>
+      <span class="heading">Now playing</span>
+      <span class="connection" id="connection">Ready to connect</span>
+    </header>
+    <section class="player" aria-label="Now playing">
+      <div class="track">
+        <div class="cover"><img id="art" alt="" src="../icon.svg"></div>
+        <div class="metadata"><p id="album">AURA ON TV</p><h1 id="title" dir="auto">Your music. A bigger stage.</h1><p id="artist" dir="auto">Choose a song in Aura to get started</p></div>
+      </div>
+      <div class="transport">
+        <button id="play" class="round primary" aria-label="Play" disabled><svg viewBox="0 0 24 24"><path id="play-icon" d="M8 5v14l11-7z"/></svg></button>
+        <div class="timeline"><div class="song-progress" id="progress"><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Playback position" disabled></div><div class="times"><span id="elapsed">0:00</span><span id="remaining">−0:00</span></div></div>
+      </div>
+      <div class="actions">
+        <div class="skip-controls">
+          <button id="previous" class="round" aria-label="Previous track" disabled><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zm12 0v14L8 12z"/></svg></button>
+          <button id="next" class="round" aria-label="Next track" disabled><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM6 5l10 7-10 7z"/></svg></button>
+        </div>
+        <div class="view-controls">
+          <button id="queue-toggle" aria-expanded="false" aria-controls="queue-panel"><svg viewBox="0 0 24 24"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h11v2H4z"/></svg>Queue</button>
+          <button id="theme" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11z"/></svg>Dark mode</button>
+        </div>
+      </div>
+      <p id="status" role="status">Connect from the three-dot menu on your phone</p>
+    </section>
+    <aside id="queue-panel" hidden aria-label="Play queue"><div class="queue-heading"><h2>Queue</h2><button id="queue-close" aria-label="Close queue">×</button></div><ol id="queue"></ol><p id="queue-empty">Upcoming songs will appear here</p></aside>
+  </main>
+  <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+  <script src="../src/progress.js"></script>
+  <script src="receiver.js"></script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  // Third-party code, kept exactly as upstream publishes it (see THIRD-PARTY-NOTICES.md).
+  // The editor opens it read-only so it is not changed by accident.
+  "files.readonlyInclude": {
+    "src/vendor/**": true
+  }
+}

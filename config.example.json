@@ -1,0 +1,9 @@
+{
+  "castReceiverAppId": "",
+  "invidiousInstances": [
+    "https://invidious.example.com"
+  ],
+  "pipedInstances": [],
+  "cobaltInstances": [],
+  "textRelay": "/relay?url="
+}

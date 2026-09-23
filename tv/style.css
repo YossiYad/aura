@@ -1,0 +1,52 @@
+:root { color-scheme: dark; font-family: Arial, Helvetica, sans-serif; color: #fff; background: #634352; }
+* { box-sizing: border-box; }
+body { margin: 0; background: radial-gradient(ellipse at 85% 5%, #936479 0, transparent 70%), linear-gradient(130deg, #533b50, #805566); transition: background .3s; }
+body.dark { background: radial-gradient(ellipse at 80% 5%, #322633, #151319 75%); }
+[hidden] { display: none !important; }
+.castMediaElement { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.screen { position: relative; min-height: 100vh; padding: 8vh 8vw; display: flex; flex-direction: column; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 3vw; font-size: clamp(16px, 1.65vw, 34px); }
+.brand { display: flex; align-items: center; gap: .8em; font-weight: 750; }
+.brand img { width: 2.2em; height: 2.2em; border-radius: .4em; }
+.heading { font-weight: 600; }
+.connection { font-size: .72em; color: #eadde5; }
+.connection::before { content: ''; display: inline-block; width: .5em; height: .5em; border-radius: 50%; background: #b6a5b0; margin-right: .55em; }
+body.connected .connection::before { background: #5be0b2; }
+.player { margin-top: auto; padding-top: 28vh; }
+.track { display: flex; align-items: flex-end; gap: 1.7vw; }
+.cover { width: 10vw; height: 10vw; flex-shrink: 0; border-radius: .35vw; overflow: hidden; background: #3f2b3c; box-shadow: 0 .5vw 2vw #1d152326; }
+.cover img { width: 100%; height: 100%; object-fit: cover; }
+.metadata { min-width: 0; }
+h1 { font-size: clamp(28px, 3.5vw, 76px); line-height: 1.1; letter-spacing: -.055em; margin: .2em 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+#album { font-size: clamp(10px, .8vw, 18px); letter-spacing: .16em; opacity: .7; margin: 0 0 .7em; }
+#artist { font-size: clamp(16px, 1.4vw, 32px); margin: .5em 0 .1em; opacity: .9; }
+button { display: inline-flex; align-items: center; justify-content: center; gap: .6em; border: 0; border-radius: 5em; padding: .9em 1.2em; background: #33283850; color: inherit; font: inherit; font-weight: 600; cursor: pointer; }
+button svg { width: 1.25em; height: 1.25em; fill: currentColor; }
+button:focus-visible, input:focus-visible { outline: 3px solid white; outline-offset: 5px; }
+button:hover { background: #21182485; }
+button:disabled { opacity: .35; cursor: default; }
+button.round { font-size: clamp(20px, 1.8vw, 44px); width: 3.5vw; height: 3.5vw; min-width: 42px; min-height: 42px; padding: .75em; }
+button.primary { background: white; color: #51354c; width: 4.4vw; height: 4.4vw; min-width: 52px; min-height: 52px; }
+.transport { display: flex; gap: 1.5vw; align-items: center; margin-top: 2.2vw; }
+.timeline { flex: 1; min-width: 0; }
+/* The wave is the picture; the range input lies over it unseen and keeps the remote's
+   left, right and focus handling exactly as it was. */
+.timeline .song-progress { --wave-h: clamp(18px, 1.5vw, 40px); --progress-color: #fff; margin: .9em 0 .6em; border-radius: 4px; }
+.timeline .song-progress:focus-within { outline: 3px solid white; outline-offset: 5px; }
+.timeline .song-progress:focus-within .song-progress-thumb { opacity: 1; transform: none; }
+#seek { position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+#seek:disabled { cursor: default; }
+.times { display: flex; justify-content: space-between; font-size: clamp(13px, 1.25vw, 28px); font-variant-numeric: tabular-nums; }
+.actions, .skip-controls, .view-controls { display: flex; align-items: center; gap: .7vw; }
+.actions { justify-content: space-between; margin-top: 1.5vw; font-size: clamp(14px, 1.3vw, 28px); }
+#status { min-height: 1.2em; font-size: clamp(12px, 1vw, 22px); opacity: .65; margin: 1.6vw 0 0; }
+#queue-panel { position: absolute; top: 19vh; right: 8vw; width: 42vw; max-height: 66vh; padding: 1.8vw; overflow: auto; background: #261e2cf5; border-radius: 1vw; box-shadow: 0 1vw 4vw #0004; font-size: clamp(16px, 1.4vw, 30px); }
+.queue-heading { display: flex; align-items: center; justify-content: space-between; }
+h2 { margin: 0; font-size: 1.5em; }
+#queue { list-style: none; padding: 0; margin: 1em 0 0; }
+#queue li { display: flex; gap: 1em; align-items: center; padding: .8em 0; border-bottom: 1px solid #ffffff12; }
+#queue li.current { color: #71e2bb; }
+#queue img { width: 2.8em; height: 2.8em; object-fit: cover; border-radius: .2em; }
+#queue span { display: block; }
+#queue small { display: block; opacity: .65; margin-top: .25em; }
+@media (max-aspect-ratio: 1/1) { .screen { padding: 6vh 6vw; } .player { padding-top: 20vh; } .cover { width: 20vw; height: 20vw; } #queue-panel { left: 6vw; right: 6vw; width: auto; } .heading { display: none; } }

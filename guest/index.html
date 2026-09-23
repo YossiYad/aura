@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#121212">
+  <title>AuraShare | Aura</title>
+  <link rel="stylesheet" href="/guest/style.css">
+  <script src="/guest/i18n.js" defer></script>
+  <script src="/guest/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header><div class="header-brand"><button id="menu-toggle" class="icon-button" type="button" aria-label="פתיחת תפריט" aria-controls="navigation" aria-expanded="false" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button><span class="brand" dir="ltr">aura<span> ●</span></span></div><span class="eyebrow" dir="ltr">AuraShare</span></header>
+    <label class="language-picker">Language <select id="guest-language" aria-label="Language"><option value="en">English</option><option value="he">עברית</option></select></label>
+    <section class="intro"><p class="eyebrow" dir="ltr">AuraShare</p><h1 id="title">המוזיקה הבאה מתחילה כאן.</h1>
+      <p id="description">מציעים שירים, מצביעים ומשאירים למארחים את הבחירה מה לנגן.</p>
+      <p id="expiry" class="muted"></p>
+    </section>
+    <p id="message" role="status" aria-live="polite">מתחברים לתור…</p>
+    <form id="join" class="card" hidden>
+      <label for="name">איך לקרוא לך?</label>
+      <input id="name" autocomplete="nickname" maxlength="40" placeholder="השם שיופיע ליד ההצעות" required>
+      <button class="primary" type="submit">בקשת הצטרפות</button>
+      <p class="muted">אין צורך בחשבון. המארחים יאשרו את ההצטרפות ויבחרו את ההרשאה שלך. לאחר האישור, השם וההצעות יוצגו למשתתפים.</p>
+    </form>
+    <section id="waiting" class="card" role="status" aria-live="polite" hidden>
+      <h2 id="waiting-title"></h2><p id="waiting-description" class="muted"></p>
+    </section>
+    <section id="joined" hidden>
+      <div class="welcome"><span id="welcome"></span><span id="permission" class="badge"></span></div>
+      <div id="search-area">
+        <h2 id="search-heading" class="search-heading" tabindex="-1">חיפוש והוספה</h2>
+        <form id="search" role="search" class="search-wrap">
+          <label for="query" class="sr-only">חיפוש שיר או אמן</label>
+          <div class="search-input">
+            <button id="search-submit" type="submit" aria-label="חיפוש"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.35-3.35"/></svg></button>
+            <input id="query" type="search" maxlength="160" minlength="2" required autocomplete="off" enterkeyhint="search" placeholder="איזה שיר בא לך לשמוע?" dir="auto" aria-describedby="search-hint">
+            <button id="search-clear" type="button" aria-label="ניקוי החיפוש" hidden>×</button>
+          </div>
+        </form>
+        <p id="search-hint" class="muted"></p>
+        <p id="search-status" class="muted" role="status" aria-live="polite"></p>
+        <section id="results-section" hidden><div class="section-head"><h2>שירים</h2><span id="results-count" class="muted"></span></div><ul id="results" class="song-list"></ul></section>
+        <div id="search-empty" class="search-empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.35-3.35"/></svg><h3>מה נשמע יחד?</h3><p class="muted">חפשו שיר או אמן ובחרו את השיר הבא.</p></div>
+      </div>
+      <section id="page-home" hidden>
+        <h2 id="home-heading" class="search-heading" tabindex="-1">בית</h2>
+        <div class="home-summary"><p id="home-hint" class="muted"></p><button id="home-search" type="button" class="quick-tile"><span class="quick-art"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><span>מה השיר הבא?<small>חיפוש והוספת שירים</small></span></button></div>
+        <section id="approved-section" class="home-section" hidden><div class="section-head"><h2>נבחרו להשמעה</h2><span id="approved-count" class="muted"></span></div><ul id="approved-tracks" class="rail"></ul></section>
+        <section class="requests-section"><div class="section-head"><h2>ההצעות שלנו</h2><span id="pending-count" class="muted"></span></div>
+        <p class="muted">הצביעו לשירים שתרצו לשמוע. המארחים מנהלים את סדר הנגינה.</p>
+        <ul id="requests"></ul><p id="empty" class="card muted">התור מחכה להצעה הראשונה שלך.</p>
+        </section>
+      </section>
+    </section>
+    <footer>המוזיקה מתנגנת אצל המארחים. כאן בוחרים יחד.</footer>
+  </main>
+  <dialog id="navigation" aria-labelledby="navigation-title">
+    <div class="drawer-head"><h2 id="navigation-title" dir="ltr">AuraShare</h2><button id="menu-close" class="icon-button" type="button" aria-label="סגירת התפריט">×</button></div>
+    <p id="navigation-room" class="muted" dir="auto"></p>
+    <nav aria-label="ניווט לאורחים">
+      <button id="nav-home" type="button" data-page="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 10 9-7 9 7v10H3zM9 20v-7h6v7"/></svg>בית</button>
+      <button id="nav-search" type="button" data-page="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.35-3.35"/></svg>חיפוש והוספה</button>
+    </nav>
+    <p class="drawer-note muted">המוזיקה מתנגנת אצל המארחים.<br>כאן בוחרים יחד.</p>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,203 @@
+/* ============================================================
+   Aura - Design Tokens
+   src/styles/tokens.css
+   Dark-only. All values WCAG AA verified for body text.
+   ============================================================ */
+
+:root {
+  color-scheme: dark;
+
+  /* ---------- COLOR ---------- */
+  /* Palette ported 1:1 from the Spotify-clone reference (config/colors.ts):
+     PRIMARY #121212, SECONDARY #282828, NAV #191414, TINT #1ed760,
+     WHITE #ffffff, LIGHTER_GREY #d5d5d5, LIGHT_GREY #b3b3b3, GREY #777777. */
+
+  --sc-primary:      #121212;
+  --sc-secondary:    #282828;
+  --sc-nav:          #191414;
+  --sc-tint:         #1ed760;
+  --sc-white:        #ffffff;
+  --sc-lighter-grey: #d5d5d5;
+  --sc-light-grey:   #b3b3b3;
+  --sc-grey:         #777777;
+  --sc-album-fallback-gradient: #2e335a;
+
+  /* Layered backgrounds */
+  --bg-0: var(--sc-primary);    /* app shell, screens */
+  --bg-1: #181818;              /* row hover, list bands */
+  --bg-2: var(--sc-secondary);  /* cards, sheets, inputs at rest */
+  --bg-3: #3e3e3e;              /* raised - modal headers, popovers */
+
+  /* Foregrounds */
+  --fg-strong:  var(--sc-white);
+  --fg:         var(--sc-lighter-grey);
+  --fg-muted:   var(--sc-light-grey);
+  --fg-faint:   var(--sc-grey);
+
+  /* Accent */
+  --accent:         var(--sc-tint);
+  --accent-hover:   #3be579;
+  --accent-pressed: #1ab954;
+  --accent-on:      var(--sc-primary);
+  --accent-soft:    rgba(30, 215, 96, 0.14);
+  --accent-glow:    rgba(30, 215, 96, 0.32);
+
+  /* Semantic */
+  --success:        var(--sc-tint);
+  --success-soft:   rgba(30, 215, 96, 0.14);
+  --warn:           #FFC857;
+  --warn-soft:      rgba(255, 200, 87, 0.12);
+  --danger:         #FF6B6B;
+  --danger-soft:    rgba(255, 107, 107, 0.12);
+
+  /* Borders & overlays */
+  --border:         rgba(255, 255, 255, 0.06);
+  --border-strong:  rgba(255, 255, 255, 0.12);
+  --overlay-scrim:  rgba(0, 0, 0, 0.64);
+  --overlay-tint:   rgba(18, 18, 18, 0.72);
+
+  /* ---------- TYPOGRAPHY ---------- */
+
+  /* The reference bundles SF-Regular / SF-Bold, which a web app cannot ship.
+     Leading with -apple-system gives the real SF on iOS and macOS and falls
+     back to the platform UI face everywhere else. */
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Segoe UI Variable", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono:
+    "Geist Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --font-display: var(--font-sans);
+
+  /* Size scale - 7 steps, fluid where the surface can scale. */
+  --text-2xs: 11px;
+  --text-xs:  12px;
+  --text-sm:  13px;
+  --text-md:  15px;          /* body default - track titles */
+  --text-lg:  17px;
+  --text-xl:  clamp(20px, 4.5vw, 24px);   /* section headings */
+  --text-2xl: clamp(26px, 6.5vw, 34px);   /* hero titles, album names */
+  --text-3xl: clamp(34px, 9vw,   48px);   /* empty-state hero */
+
+  /* Weight scale - the four the reference actually uses (400/600/700/800). */
+  --weight-regular: 400;
+  --weight-medium:  600;
+  --weight-bold:    700;
+  --weight-heavy:   800;
+
+  /* Line height */
+  --leading-tight:  1.15;
+  --leading-snug:   1.3;
+  --leading-normal: 1.5;
+  --leading-loose:  1.7;
+
+  /* Letter spacing - negative on display, positive on uppercase eyebrows */
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.04em;
+  --tracking-eyebrow: 0.12em;
+
+  /* ---------- SPACE ---------- */
+  /* 4px base, 8 steps */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-7:  32px;
+  --space-8:  48px;
+
+  /* ---------- RADIUS ---------- */
+  --radius-xs: 4px;          /* track-row artwork */
+  --radius-sm: 8px;          /* inputs, buttons */
+  --radius-md: 12px;         /* cards, sheets */
+  --radius-lg: 20px;         /* hero artwork, large modals */
+  --radius-pill: 999px;
+
+  /* ---------- ELEVATION ---------- */
+  /* Translucent - never pure black. Tinted slightly green at higher levels. */
+  --shadow-1:
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow-2:
+    0 4px 12px rgba(0, 0, 0, 0.45),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-3:
+    0 12px 32px rgba(0, 0, 0, 0.55),
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  --shadow-glow: 0 0 0 4px var(--accent-glow);   /* focus ring */
+
+  /* ---------- MOTION ---------- */
+  --dur-instant: 80ms;
+  --dur-fast:    140ms;
+  --dur-normal:  220ms;
+  --dur-slow:    360ms;
+
+  /* Easings */
+  --ease-entry:      cubic-bezier(0.16, 1, 0.3, 1);    /* expo-out - for things appearing */
+  --ease-exit:       cubic-bezier(0.7, 0, 0.84, 0);    /* expo-in - for things leaving */
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);       /* M3 emphasized - for big moves */
+  --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);     /* default */
+
+  /* ---------- Z-INDEX ---------- */
+  --z-base:       0;
+  --z-sticky:     5;     /* tab strip, sort-bar */
+  --z-topbar:     10;    /* app header */
+  --z-player:     20;    /* persistent player bar */
+  --z-sheet:      30;    /* bottom sheets */
+  --z-dialog:     40;    /* modals, import */
+  --z-toast:      50;    /* transient confirmations */
+
+  /* ---------- LAYOUT ---------- */
+  --container-max: 720px;
+  --hit-target:    44px;
+  --safe-top:      env(safe-area-inset-top, 0px);
+  --safe-bottom:   env(safe-area-inset-bottom, 0px);
+
+  /* ---------- REFERENCE METRICS ---------- */
+  /* Ported from the Spotify-clone reference (config/constants.ts).
+     Sizes, Shapes and the fixed chrome heights it lays every screen out on. */
+
+  /* Sizes */
+  --sc-size-big:         152px;
+  --sc-size-medium:      140px;
+  --sc-size-small:       120px;
+  --sc-size-very-small:  100px;
+
+  /* Shapes */
+  --sc-square:              0px;
+  --sc-square-border:       4px;
+  --sc-square-border-small: 2px;
+  --sc-edged-border:        8px;
+  --sc-oval:                20px;
+  --sc-circle:              9999px;
+
+  /* Chrome heights */
+  --sc-header-height:            135px;
+  --sc-header-categories-height:  50px;
+  --sc-common-header-height:     100px;
+  --sc-bottom-navigation-height:  90px;
+
+  /* Artwork sizes */
+  --sc-cover-size:             300px;
+  --sc-track-cover-size:        50px;
+  --sc-recently-played-cover:   55px;
+  --sc-browse-category-image:   75px;
+  --sc-browse-category-height:  55px;
+
+  /* Gutters the reference lays out on */
+  --sc-gutter:      16px;
+  --sc-rail-gap:    16px;
+  --sc-grid-gap:    12px;
+}
+
+/* Reduced motion respect - collapse durations, no transforms */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-instant: 0ms;
+    --dur-fast:    0ms;
+    --dur-normal:  0ms;
+    --dur-slow:    0ms;
+  }
+}

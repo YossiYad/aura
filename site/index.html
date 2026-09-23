@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0c0e12" />
+    <meta
+      name="description"
+      content="Meet Aura, an open-source music player for your browser and home screen. Build your library, discover your next mix and listen together."
+    />
+    <meta property="og:title" content="Aura | Your music. Your space." />
+    <meta
+      property="og:description"
+      content="An open-source music player, made for the way you listen. Explore Aura and set up your own player."
+    />
+    <meta property="og:type" content="website" />
+    <title>Aura | Your music. Your space.</title>
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="style.css" />
+    <script src="main.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="header">
+      <div class="container header-inner">
+        <a class="wordmark" href="#" aria-label="Aura home"
+          >aura<span>.</span></a
+        >
+        <button
+          class="menu-toggle"
+          aria-expanded="false"
+          aria-controls="navigation"
+        >
+          Menu <span aria-hidden="true">☰</span>
+        </button>
+        <nav id="navigation" aria-label="Main navigation">
+          <a href="#features">Features</a>
+          <a href="#get-started">Get started</a>
+          <a href="https://github.com/YossiYad/aura#documentation"
+            >Docs <span aria-hidden="true">↗</span></a
+          >
+          <a class="nav-github" href="https://github.com/YossiYad/aura"
+            >GitHub <span aria-hidden="true">↗</span></a
+          >
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero container" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="status-dot"></span> OPEN SOURCE. OPEN POSSIBILITIES.
+          </p>
+          <h1 id="hero-title">Your music.<br /><span>Your space.</span></h1>
+          <p class="hero-description">
+            An open-source music player for your browser and home screen. Find a
+            new favorite, build your library and make every mix your own.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#get-started"
+              >Get Aura <span aria-hidden="true">↓</span></a
+            >
+            <a class="button secondary" href="#features"
+              >Explore features <span aria-hidden="true">↗</span></a
+            >
+          </div>
+          <p class="hero-footnote">
+            Free & open source <span>·</span> Browser & home screen
+          </p>
+          <div class="hero-caption">
+            <span class="tiny-wave" aria-hidden="true"
+              ><i></i><i></i><i></i><i></i><i></i
+            ></span>
+            A little less noise. A lot more music.
+          </div>
+        </div>
+        <div
+          class="hero-visual"
+          aria-label="Screenshots of Aura's library, voice requests and shared listening"
+        >
+          <div class="visual-orbit orbit-one"></div>
+          <div class="visual-orbit orbit-two"></div>
+          <button
+            class="phone phone-library"
+            data-preview="assets/library.png"
+            data-caption="Your library, with fictional demo tracks."
+            aria-label="Enlarge library screenshot"
+          >
+            <img
+              src="assets/library.png"
+              alt="Aura music library with playlists and saved songs"
+              width="786"
+              height="1704"
+            />
+          </button>
+          <button
+            class="phone phone-share"
+            data-preview="assets/shared-queue.png"
+            data-caption="AuraShare, with fictional tracks and guest names."
+            aria-label="Enlarge shared listening screenshot"
+          >
+            <img
+              src="assets/shared-queue.png"
+              alt="AuraShare guest view with a shared queue"
+              width="786"
+              height="1704"
+            />
+          </button>
+          <button
+            class="phone phone-ai"
+            data-preview="assets/ask-ai.png"
+            data-caption="Ask AI on a phone, using the Hebrew interface setting."
+            aria-label="Enlarge Ask AI screenshot"
+          >
+            <img
+              src="assets/ask-ai.png"
+              alt="Ask AI with a text request and voice input, shown on a phone"
+              width="945"
+              height="2048"
+              fetchpriority="high"
+            />
+          </button>
+          <span class="floating-note"
+            ><span aria-hidden="true">✦</span> Find your next favorite.</span
+          >
+        </div>
+      </section>
+
+      <div class="platform-strip">
+        <div class="container platform-inner">
+          <p>At home on your device.</p>
+          <div>
+            <span>iPhone & iPad</span><span>Android</span><span>Windows</span
+            ><span>macOS</span><span>Linux</span>
+          </div>
+          <small>One installable web app.</small>
+        </div>
+      </div>
+
+      <section
+        class="section container"
+        id="features"
+        aria-labelledby="features-title"
+      >
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">MADE FOR LISTENING</p>
+            <h2 id="features-title">Everything in your rhythm.</h2>
+          </div>
+          <p>
+            From the first song of the morning<br />to the last one on the way
+            home.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <span class="feature-icon" aria-hidden="true">♫</span>
+            <h3>A home for your favorites.</h3>
+            <p>
+              Save songs, build playlists, follow artists and pick up your
+              podcasts where you left off.
+            </p>
+            <a
+              href="https://github.com/YossiYad/aura#your-library-your-playlists"
+              >Explore your library <span aria-hidden="true">↗</span></a
+            >
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon" aria-hidden="true">✦</span>
+            <h3>Start with a feeling.</h3>
+            <p>
+              Describe a mood or ask for a song. Optional AI mixes and voice
+              requests help you find what fits.
+            </p>
+            <a
+              href="https://github.com/YossiYad/aura#ai-playlists-and-voice-requests"
+              >Meet Ask AI <span aria-hidden="true">↗</span></a
+            >
+          </article>
+          <article class="feature-card">
+            <span class="feature-icon" aria-hidden="true">↓</span>
+            <h3>Take your music along.</h3>
+            <p>
+              Save permitted tracks on your device for offline listening. Your
+              next train ride is covered.
+            </p>
+            <a href="https://github.com/YossiYad/aura#offline-listening"
+              >About offline listening <span aria-hidden="true">↗</span></a
+            >
+          </article>
+        </div>
+      </section>
+
+      <section class="together container" aria-labelledby="together-title">
+        <div class="together-art">
+          <div class="record" aria-hidden="true">
+            <div class="record-label">aura<span>side a · together</span></div>
+          </div>
+          <div class="queue-note">
+            <span class="queue-note-icon" aria-hidden="true">↗</span>
+            <div>
+              Good company. Better music.<small
+                >One room. Everyone's favorites.</small
+              >
+            </div>
+          </div>
+        </div>
+        <div class="together-copy">
+          <p class="eyebrow">PASS THE AUX. KEEP THE QUEUE.</p>
+          <h2 id="together-title">Better with <br />your people.</h2>
+          <p>
+            Turn a QR code into a listening session. Friends can suggest songs
+            and vote for what's next, right from their browser. You stay in
+            control of the queue.
+          </p>
+          <a
+            class="text-link"
+            href="https://github.com/YossiYad/aura/blob/main/docs/shared-queue.md"
+            >Discover AuraShare <span aria-hidden="true">↗</span></a
+          ><small>Available with the self-hosted server.</small>
+        </div>
+      </section>
+
+      <section
+        class="section container details-section"
+        aria-label="More ways to make Aura yours"
+      >
+        <div>
+          <span class="detail-number">01 / YOUR SETUP</span>
+          <h3>Make it yours.</h3>
+          <p>
+            Choose your theme, tune playback and switch between English and the
+            original mixed Hebrew interface.
+          </p>
+        </div>
+        <div>
+          <span class="detail-number">02 / YOUR DATA</span>
+          <h3>Your library stays close.</h3>
+          <p>
+            Library data stays on your device by default. Export it any time, or
+            sync through a server you run.
+          </p>
+        </div>
+        <div>
+          <span class="detail-number">03 / YOUR CODE</span>
+          <h3>Open from the start.</h3>
+          <p>
+            Read the source, suggest an idea or build something new. Aura is
+            licensed under AGPL-3.0.
+          </p>
+        </div>
+      </section>
+
+      <section
+        class="get-started"
+        id="get-started"
+        aria-labelledby="start-title"
+      >
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">LET'S PRESS PLAY</p>
+              <h2 id="start-title">A little setup.<br />A lot of listening.</h2>
+            </div>
+            <p>
+              Aura is a web app you host yourself.<br />Start small, or make
+              room for everyone.
+            </p>
+          </div>
+          <div class="setup-grid">
+            <article class="setup-card">
+              <span class="setup-label">THE SIMPLE START</span>
+              <h3>Your personal player.</h3>
+              <p>
+                Serve the static app and connect a working Invidious or Piped
+                instance for search and playback.
+              </p>
+              <div class="terminal">
+                <div>
+                  <span>Quick start</span
+                  ><button
+                    id="copy-command"
+                    type="button"
+                    aria-label="Copy quick-start commands"
+                  >
+                    Copy <span aria-hidden="true">⧉</span>
+                  </button>
+                </div>
+                <pre><code id="command">git clone https://github.com/YossiYad/aura.git
+cd aura
+python3 -m http.server 8477</code></pre>
+              </div>
+              <p class="setup-note">
+                Requires Git and Python 3. Open localhost:8477, then configure
+                your instance in Settings.
+              </p>
+              <a
+                class="button secondary"
+                href="https://github.com/YossiYad/aura#quick-start"
+                >Quick-start guide <span aria-hidden="true">↗</span></a
+              >
+            </article>
+            <article class="setup-card server-card">
+              <span class="setup-label">THE FULL EXPERIENCE</span>
+              <h3>Your own music space.</h3>
+              <p>
+                Add shared listening, library sync and nightly mixes with the
+                optional server.
+              </p>
+              <ul>
+                <li>Your domain and HTTPS</li>
+                <li>Google sign-in for your listeners</li>
+                <li>Docker services on your server</li>
+                <li>Guest invitations, no VPN needed</li>
+              </ul>
+              <a
+                class="button primary"
+                href="https://github.com/YossiYad/aura#self-hosting"
+                >Self-hosting guide <span aria-hidden="true">↗</span></a
+              >
+            </article>
+          </div>
+          <div class="install-panel">
+            <div>
+              <h3>Then, make yourself at home.</h3>
+              <p>
+                Once your instance is running over HTTPS, add Aura to your
+                device.
+              </p>
+            </div>
+            <div class="install-instructions">
+              <div class="tabs" role="tablist" aria-label="Installation device">
+                <button
+                  role="tab"
+                  id="tab-ios"
+                  aria-controls="install-ios"
+                  aria-selected="true"
+                  data-device="ios"
+                >
+                  iPhone & iPad</button
+                ><button
+                  role="tab"
+                  id="tab-android"
+                  aria-controls="install-android"
+                  aria-selected="false"
+                  tabindex="-1"
+                  data-device="android"
+                >
+                  Android</button
+                ><button
+                  role="tab"
+                  id="tab-desktop"
+                  aria-controls="install-desktop"
+                  aria-selected="false"
+                  tabindex="-1"
+                  data-device="desktop"
+                >
+                  Desktop
+                </button>
+              </div>
+              <p role="tabpanel" id="install-ios" aria-labelledby="tab-ios">
+                Open your Aura address in Safari. Tap <strong>Share</strong>,
+                then <strong>Add to Home Screen</strong>.
+              </p>
+              <p
+                role="tabpanel"
+                id="install-android"
+                aria-labelledby="tab-android"
+                hidden
+              >
+                Open your Aura address in Chrome. Choose
+                <strong>Install app</strong> or
+                <strong>Add to Home screen</strong> from the menu.
+              </p>
+              <p
+                role="tabpanel"
+                id="install-desktop"
+                aria-labelledby="tab-desktop"
+                hidden
+              >
+                Open your Aura address in Chrome or Edge and use the
+                <strong>install icon</strong> in the address bar. Other browsers
+                can use Aura in a normal tab.
+              </p>
+            </div>
+          </div>
+          <p id="copy-status" class="sr-only" role="status"></p>
+        </div>
+      </section>
+
+      <section
+        class="section container faq-section"
+        aria-labelledby="faq-title"
+      >
+        <div>
+          <p class="eyebrow">A FEW GOOD QUESTIONS</p>
+          <h2 id="faq-title">Before you hit play.</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>
+              Where does the music come from?<span aria-hidden="true">+</span>
+            </summary>
+            <p>
+              Aura uses the Invidious or Piped instances you configure for
+              search and playback. It does not include a licensed music catalog.
+              Instance availability varies. Use content you are permitted to
+              access and download, and follow the relevant service terms.
+            </p>
+          </details>
+          <details>
+            <summary>
+              Do I need AI to use Aura?<span aria-hidden="true">+</span>
+            </summary>
+            <p>
+              No. Search, playlists and playback work without an AI key. AI
+              playlist generation uses your own Gemini or Groq key. Voice
+              recognition depends on your browser and may use its speech
+              service.
+            </p>
+          </details>
+          <details>
+            <summary>
+              Is there a hosted demo or an app-store download?<span
+                aria-hidden="true"
+                >+</span
+              >
+            </summary>
+            <p>
+              This site introduces the project. Set up your own Aura instance
+              using the guides above, then install it from your browser. There
+              is no official public demo or native app-store package linked
+              here.
+            </p>
+          </details>
+          <details>
+            <summary>
+              What data leaves my device?<span aria-hidden="true">+</span>
+            </summary>
+            <p>
+              Your library is local by default. Search, playback, artwork and
+              optional AI or speech features contact their providers.
+              Self-hosted sync stores your library metadata on your server. Read
+              the
+              <a href="https://github.com/YossiYad/aura#privacy"
+                >privacy notes</a
+              >
+              for details.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <section class="open-source container">
+        <div>
+          <p class="eyebrow">BUILT TO BE SHARED</p>
+          <h2>A good idea gets better together.</h2>
+          <p>
+            Found a bug? Have a feature in mind? There is a place for you here.
+          </p>
+        </div>
+        <a class="button secondary" href="https://github.com/YossiYad/aura"
+          >Find us on GitHub <span aria-hidden="true">↗</span></a
+        >
+      </section>
+    </main>
+    <footer class="container footer">
+      <div>
+        <a class="wordmark" href="#" aria-label="Aura home"
+          >aura<span>.</span></a
+        >
+        <p>Music, on your terms.</p>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/YossiYad/aura/blob/main/LICENSE">AGPL-3.0</a
+        ><a href="https://github.com/YossiYad/aura#privacy">Privacy</a
+        ><a href="https://github.com/YossiYad/aura/blob/main/CONTRIBUTING.md"
+          >Contribute</a
+        >
+      </div>
+      <p class="footer-note">
+        An independent open-source project.<br />Not affiliated with YouTube,
+        Spotify or Apple Music.
+      </p>
+    </footer>
+    <dialog id="screenshot-dialog" aria-label="Screenshot preview">
+      <form method="dialog">
+        <button class="close-preview" aria-label="Close screenshot">
+          Close <span aria-hidden="true">×</span>
+        </button>
+      </form>
+      <img id="preview-image" alt="" />
+      <p id="preview-caption"></p>
+    </dialog>
+  </body>
+</html>
