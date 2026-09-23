@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aura | בדיקת חזרה לניגון</title>
+<style>
+  :root { color-scheme: dark; font: 17px system-ui, sans-serif; background: #13151b; color: #f2f3f8; }
+  body { max-width: 680px; margin: auto; padding: 24px 18px; line-height: 1.65; }
+  h1 { font-size: 1.5rem; }
+  button, input { font: inherit; max-width: 100%; }
+  button { background: #b9c8ff; color: #111827; border: 0; border-radius: 10px; padding: 10px 16px; cursor: pointer; }
+  button:disabled { opacity: .5; }
+  audio { display: block; width: 100%; margin: 20px 0; }
+  label { display: block; margin: 18px 0; }
+  textarea { box-sizing: border-box; width: 100%; height: 300px; margin-top: 16px; font: 12px monospace; background: #20232c; color: #f2f3f8; }
+  a { color: #b9c8ff; }
+</style>
+<h1>בדיקת חזרה לניגון אחרי הפרעה</h1>
+<p>עצרו את הניגון ב־Aura לפני הבדיקה. טענו את שיר הבדיקה ואז לחצו על ▶ בנגן שמתחת.</p>
+<button id="stream">טען את שיר הבדיקה</button>
+<label>לבדיקה נפרדת, אפשר לבחור קובץ אודיו מהמכשיר. הקובץ אינו מועלה לשרת.
+  <input id="file" type="file" accept="audio/*">
+</label>
+<p id="status" role="status">ממתין לבחירת אודיו.</p>
+<audio id="audio" controls playsinline preload="auto"></audio>
+<ol>
+  <li>ודאו ששומעים מוזיקה, ואז עברו לאינסטגרם או ענו לשיחת טלפון.</li>
+  <li>המתינו לפחות 30 שניות בריל, או המשיכו לשיחה של כמה דקות.</li>
+  <li>צאו מהריל או סיימו את השיחה. הישארו מחוץ לדף כ־10 שניות ובדקו אם המוזיקה חזרה.</li>
+  <li>חזרו לכאן, העתיקו את הלוג וציינו איזו הפרעה בדקתם והאם שמעתם מוזיקה לפני שחזרתם.</li>
+</ol>
+<p>הבדיקה משתמשת בנגן הדפדפן. היא מתעדת אירועים וזמן ניגון ואינה מנסה להפעיל מחדש אודיו אחרי הפרעה.</p>
+<button id="copy">העתק לוג</button>
+<button id="clear">נקה לוג</button>
+<textarea id="log" dir="ltr" readonly aria-label="לוג הבדיקה"></textarea>
+<p><a href="./">חזרה ל־Aura</a></p>
+<script src="src/api.js"></script>
+<script>
+(() => {
+  "use strict";
+  const audio = document.getElementById("audio");
+  const output = document.getElementById("log");
+  const status = document.getElementById("status");
+  const stream = document.getElementById("stream");
+  const file = document.getElementById("file");
+  const storageKey = "aura.audio-check.log";
+  let lines = [], objectURL = null, generation = 0, lastSample = 0, source = "none";
+  try { lines = JSON.parse(sessionStorage.getItem(storageKey) || "[]"); } catch (err) {}
+  if (!Array.isArray(lines)) lines = [];
+  const number = value => Number.isFinite(value) ? value.toFixed(2) : "unknown";
+  function log(message) {
+    lines.push(new Date().toISOString() + " " + message);
+    lines = lines.slice(-500);
+    output.value = lines.join("\n");
+    output.scrollTop = output.scrollHeight;
+    try { sessionStorage.setItem(storageKey, JSON.stringify(lines)); } catch (err) {}
+  }
+  function snapshot(event) {
+    const buffered = [];
+    for (let i = 0; i < audio.buffered.length; i++) {
+      buffered.push(number(audio.buffered.start(i)) + "-" + number(audio.buffered.end(i)));
+    }
+    log(event + ": " + document.visibilityState + ", source " + source +
+      ", paused " + audio.paused + ", at " + number(audio.currentTime) +
+      "s, duration " + number(audio.duration) + "s, ready " + audio.readyState +
+      ", network " + audio.networkState + ", seeking " + audio.seeking +
+      ", buffered [" + buffered.join(", ") + "], session " +
+      (navigator.audioSession?.state ?? "unavailable") +
+      ", wireless " + (audio.webkitCurrentPlaybackTargetIsWireless ?? "unavailable") +
+      ", error " + (audio.error?.code ?? "none"));
+  }
+  function header() {
+    log("audio-check v2; native controls; no automatic recovery; hidden tick gaps; " + navigator.userAgent);
+    log("standalone " + !!(navigator.standalone || matchMedia("(display-mode: standalone)").matches) +
+      "; audio-session type " + (navigator.audioSession?.type ?? "unavailable"));
+  }
+  try {
+    if (navigator.audioSession) {
+      navigator.audioSession.type = "playback";
+      navigator.audioSession.addEventListener("statechange", () => snapshot("session change"));
+    }
+  } catch (err) { log("audio session setup failed: " + err.name); }
+  header();
+  for (const event of ["play", "playing", "pause", "waiting", "stalled", "suspend", "ended",
+    "error", "emptied", "loadedmetadata", "canplay", "seeking", "seeked", "ratechange"]) {
+    audio.addEventListener(event, () => snapshot(event));
+  }
+  // Observe native callbacks only. No background keepalive or playback retries.
+  audio.addEventListener("timeupdate", () => {
+    if (Date.now() - lastSample < 5000) return;
+    lastSample = Date.now();
+    snapshot("time sample");
+  });
+  // A hidden page that keeps running ticks every second; a gap longer than three
+  // seconds between ticks means the process was suspended in between. Only the
+  // gaps are logged, so a long hold does not flood the log.
+  let lastTick = Date.now();
+  setInterval(() => {
+    const now = Date.now(), gap = now - lastTick;
+    lastTick = now;
+    if (document.visibilityState === "hidden" && gap > 3000) {
+      log("hidden tick gap " + number(gap / 1000) + "s: the page ran nothing in between");
+    }
+  }, 1000);
+  document.addEventListener("visibilitychange", () => snapshot("visibility"));
+  window.addEventListener("pagehide", () => snapshot("pagehide"));
+  window.addEventListener("pageshow", event => snapshot("pageshow persisted=" + event.persisted));
+  function attach(url, label) {
+    audio.pause();
+    if (objectURL) URL.revokeObjectURL(objectURL);
+    objectURL = label === "local file" ? url : null;
+    source = label;
+    lastSample = 0;
+    audio.src = url;
+    audio.load();
+    snapshot("source selected");
+    status.textContent = "האודיו נבחר. לחצו על ▶ בנגן כדי להתחיל.";
+  }
+  stream.addEventListener("click", async () => {
+    const request = ++generation;
+    stream.disabled = true;
+    status.textContent = "טוען את שיר הבדיקה…";
+    log("resolving test track xjsrJa3oNFY");
+    try {
+      const resolved = await Api.resolve("xjsrJa3oNFY", { receiverCompatible: true });
+      if (request !== generation) return;
+      log("resolved format " + resolved.mime + "; catalog duration " + resolved.duration);
+      attach(resolved.url, "stream xjsrJa3oNFY");
+    } catch (err) {
+      if (request !== generation) return;
+      // Do not copy signed media URLs or server responses into the diagnostic log.
+      log("stream lookup failed: " + err.name);
+      status.textContent = "לא ניתן לטעון את השיר. אפשר לנסות שוב או לבחור קובץ מהמכשיר.";
+    } finally { stream.disabled = false; }
+  });
+  file.addEventListener("change", () => {
+    if (!file.files[0]) return;
+    ++generation;
+    stream.disabled = false;
+    log("local file chosen; type " + file.files[0].type + "; bytes " + file.files[0].size);
+    attach(URL.createObjectURL(file.files[0]), "local file");
+  });
+  document.getElementById("clear").addEventListener("click", () => {
+    lines = [];
+    header();
+    snapshot("log cleared");
+  });
+  document.getElementById("copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(output.value);
+      status.textContent = "הלוג הועתק.";
+    } catch (err) {
+      output.focus();
+      output.select();
+      output.setSelectionRange(0, output.value.length);
+      status.textContent = "בחרו העתקה בתפריט הטקסט כדי להעתיק את הלוג המסומן.";
+    }
+  });
+})();
+</script>
+</html>

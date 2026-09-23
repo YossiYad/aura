@@ -1,0 +1,86 @@
+services:
+  invidious:
+    image: quay.io/invidious/invidious:master
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      INVIDIOUS_CONFIG: |
+        db:
+          dbname: invidious
+          user: kemal
+          password: kemal
+          host: invidious-db
+          port: 5432
+        check_tables: true
+        invidious_companion:
+          - private_url: "http://invidious-companion:8282/companion"
+        invidious_companion_key: "CHANGEME16CHARS0"
+        hmac_key: "CHANGE_ME_HMAC_KEY"
+        domain:
+        https_only: false
+        statistics_enabled: false
+        registration_enabled: false
+    healthcheck:
+      test: wget -nv --tries=1 --spider http://127.0.0.1:3000/api/v1/trending || exit 1
+      interval: 30s
+      timeout: 5s
+      retries: 2
+    depends_on:
+      invidious-db:
+        condition: service_healthy
+    mem_limit: 768m
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  invidious-companion:
+    image: quay.io/invidious/invidious-companion:latest
+    restart: unless-stopped
+    environment:
+      # Exactly 16 characters, letters and digits only - the companion refuses to start on
+      # anything else, and a companion that will not start is Invidious answering 401 on
+      # every video and every search, with nothing in its own log to say why.
+      #
+      # Written as a quoted mapping rather than "- KEY=value" on purpose: in the list form
+      # the whole line is one string, so a trailing space or a Windows line ending in an
+      # edited file becomes part of the key. It then fails both checks at once - too long
+      # and not alphanumeric - while still looking correct in "docker compose config".
+      SERVER_SECRET_KEY: "CHANGEME16CHARS0"
+    mem_limit: 512m
+    cap_drop:
+      - ALL
+    read_only: true
+    volumes:
+      - companioncache:/var/tmp/youtubei.js:rw
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  invidious-db:
+    image: docker.io/library/postgres:14
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: invidious
+      POSTGRES_USER: kemal
+      POSTGRES_PASSWORD: kemal
+    volumes:
+      - postgresdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgresdata:
+  companioncache:

@@ -1,0 +1,6 @@
+# Install Caddy on the same host as Docker, then add this block to /etc/caddy/Caddyfile.
+# Replace music.example.com with PUBLIC_HOST. Point DNS here and open ports 80 and 443.
+# If OAUTH_PORT was changed, use that value instead of 4180.
+music.example.com {
+    reverse_proxy 127.0.0.1:4180
+}

@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<!-- Opaque on purpose, and read by iOS only. With black-translucent iOS 26 and 27 move the
+     installed web view up under the status bar without growing it, which strands a dead
+     strip one status bar tall at the bottom of the screen (WebKit bug 301108). -->
+<meta name="apple-mobile-web-app-status-bar-style" content="black" />
+<meta name="apple-mobile-web-app-title" content="Aura" />
+<title>Aura</title>
+<style>
+  html.app-starting { background: #121212; }
+  html.app-starting body { visibility: hidden; }
+  html.app-starting::after {
+    content: "Aura"; position: fixed; inset: 0; z-index: 2147483647;
+    display: grid; place-items: center; background: #121212; color: #fff;
+    font: 600 28px system-ui, sans-serif; letter-spacing: .04em;
+  }
+</style>
+<script>
+  // Cover the first paint until the update check settles, but never wait indefinitely
+  // for a server that cannot be reached. Once revealed, updates wait for next launch.
+  (function () {
+    document.documentElement.classList.add("app-starting");
+    let ready = false, checked = false, navigating = false;
+    function reveal() {
+      if (ready && checked && !navigating) document.documentElement.classList.remove("app-starting");
+    }
+    const timer = setTimeout(function () { checked = true; reveal(); }, 3000);
+    window.AppLaunch = {
+      finish: function () { checked = true; clearTimeout(timer); reveal(); },
+      coverUpdate: function () {
+        if (!document.documentElement.classList.contains("app-starting")) return false;
+        navigating = true;
+        return true;
+      },
+      cancelUpdate: function () { navigating = false; this.finish(); }
+    };
+    document.addEventListener("DOMContentLoaded", function () { ready = true; reveal(); }, { once: true });
+  })();
+</script>
+<link rel="icon" href="icon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="stylesheet" href="aura.css" />
+<link rel="stylesheet" href="src/app.css" />
+<link rel="stylesheet" href="src/progress.css" />
+<link rel="manifest" href="manifest.json" />
+</head>
+<body>
+<div class="phone app">
+  <header class="topbar">
+    <div class="topbar-title">
+      <button class="profile-btn" id="btn-profile" aria-label="Open settings"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/></svg></button>
+      <h1 class="brand" id="app-heading">Home</h1>
+    </div>
+    <div class="home-top-filters" id="home-top-filters" hidden></div>
+    <div class="actions">
+      <button class="icon-btn" id="btn-goto-discover" aria-label="Search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+      </button>
+      <button class="icon-btn" id="btn-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+    <button class="icon-btn" id="btn-library-add" aria-label="Add to library" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+    <button class="private-btn" id="btn-private" aria-label="Private session" aria-pressed="false" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 10.5c.6-4.2 2.1-6.2 6-6.2s5.4 2 6 6.2"/><path d="M3.2 11h17.6"/><circle cx="8.1" cy="16.2" r="2.7"/><circle cx="15.9" cy="16.2" r="2.7"/><path d="M10.8 15.9h2.4"/></svg>
+    </button>
+  </header>
+
+  <div class="main" id="view"></div>
+
+  <div class="player" id="playerbar" hidden>
+    <div class="player-progress song-progress" id="pb-progress" role="slider" tabindex="0" aria-label="Playback position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+    <div class="player-row">
+      <div class="now" id="pb-now">
+        <div class="art" id="pb-art">
+          <div class="eq" id="pb-eq" aria-hidden="true" hidden><span></span><span></span><span></span><span></span></div>
+        </div>
+        <div class="text">
+          <div class="player-title" id="pb-title" dir="auto"></div>
+          <div class="player-artist" id="pb-artist" dir="auto"></div>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="ctl toggle" id="pb-shuffle" aria-label="Shuffle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M16 21h5v-5"/><path d="M21 21l-9-9"/><path d="M3 7l5 5"/><path d="M3 17l9-9"/></svg>
+        </button>
+        <button class="ctl" id="pb-prev" aria-label="Previous">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="20,4 9,12 20,20"/><rect x="5" y="4" width="2.5" height="16" rx="1"/></svg>
+        </button>
+        <button class="ctl play" id="pb-play" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 21,12 7,20"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor" hidden><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        </button>
+        <button class="ctl" id="pb-next" aria-label="Next">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="4,4 15,12 4,20"/><rect x="16.5" y="4" width="2.5" height="16" rx="1"/></svg>
+        </button>
+        <button class="ctl like" id="pb-like" aria-label="Add to playlist">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </button>
+        <button class="ctl" id="pb-queue" aria-label="Queue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+          <span class="queue-count" id="pb-qcount" hidden>0</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="fullplayer" id="fullplayer" hidden>
+    <div class="fp-top">
+      <button class="icon-btn" id="fp-close" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <span class="fp-eyebrow">Now playing</span>
+      <button class="icon-btn" id="fp-more" aria-label="More">
+        <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg>
+      </button>
+    </div>
+    <div class="fp-art-wrap"><div class="fp-art" id="fp-art"></div></div>
+    <div class="fp-meta">
+      <div class="fp-titles">
+        <div class="fp-title" id="fp-title" dir="auto"></div>
+        <div class="fp-artist" id="fp-artist" dir="auto"></div>
+      </div>
+      <button class="icon-btn like" id="fp-like" aria-label="Add to playlist">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      </button>
+    </div>
+    <div class="fp-scrub">
+      <div class="song-progress" id="fp-progress" role="slider" tabindex="0" aria-label="Playback position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+      <div class="fp-times"><span id="fp-cur">0:00</span><span id="fp-dur">0:00</span></div>
+    </div>
+    <div class="fp-controls">
+      <button class="ctl toggle" id="fp-shuffle" aria-label="Shuffle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M21 3l-7 7"/><path d="M16 21h5v-5"/><path d="M21 21l-9-9"/><path d="M3 7l5 5"/><path d="M3 17l9-9"/></svg>
+      </button>
+      <button class="ctl big" id="fp-prev" aria-label="Previous">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="20,4 9,12 20,20"/><rect x="5" y="4" width="2.5" height="16" rx="1"/></svg>
+      </button>
+      <button class="ctl play xl" id="fp-play" aria-label="Play">
+        <svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 21,12 7,20"/></svg>
+        <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor" hidden><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <button class="ctl big" id="fp-next" aria-label="Next">
+        <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="4,4 15,12 4,20"/><rect x="16.5" y="4" width="2.5" height="16" rx="1"/></svg>
+      </button>
+      <button class="ctl toggle" id="fp-repeat" aria-label="Repeat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <span class="rep-one" id="fp-rep-one" hidden>1</span>
+      </button>
+    </div>
+    <div class="fp-bottom">
+      <label class="fp-auto"><input type="checkbox" id="fp-autoplay" /> Autoplay similar</label>
+      <button class="fp-queue-link" id="fp-queue" aria-label="Open queue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+        Queue
+      </button>
+      <div class="fp-vol">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19" fill="currentColor" stroke="none"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9.5 9.5 0 0 1 0 13"/></svg>
+        <input type="range" id="fp-volume" min="0" max="100" value="100" />
+      </div>
+      <button class="fp-queue-link" id="fp-speed" aria-label="Playback speed">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 17a9 9 0 1 1 17 0"/><line x1="12" y1="13" x2="16.5" y2="9"/></svg>
+        <span id="fp-speed-label">1x</span>
+      </button>
+      <button class="fp-queue-link" id="fp-timer" aria-label="Sleep timer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
+        Timer
+      </button>
+      <button class="fp-queue-link" id="fp-drive" aria-label="Driving mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13l1.8-5.2A2 2 0 0 1 6.7 6.5h10.6a2 2 0 0 1 1.9 1.3L21 13"/><path d="M3 13h18v4H3z"/><circle cx="7" cy="17.5" r="1.2"/><circle cx="17" cy="17.5" r="1.2"/></svg>
+        Drive
+      </button>
+    </div>
+    <div class="fp-content">
+      <section class="lyrics-card" id="lyrics-card">
+        <div class="lyrics-head"><strong>Lyrics</strong><button id="lyrics-expand">Expand</button></div>
+        <div class="lyrics-lines" id="lyrics-lines"><span>Lyrics will appear here when available.</span></div>
+      </section>
+      <section class="about-card" id="fp-about">
+        <div class="about-cover" id="fp-about-cover"></div>
+        <div class="about-body"><span>About the artist</span><strong id="fp-about-name"></strong><button id="fp-about-open">View artist</button></div>
+      </section>
+      <section class="credits-card">
+        <div class="lyrics-head"><strong>Credits</strong></div>
+        <div class="credit-row"><span id="fp-credit-name"></span><small>Main artist</small></div>
+      </section>
+    </div>
+  </div>
+
+  <!-- Artwork-led driving player with a separate voice assistant entry point. -->
+  <div class="drive" id="drive" role="region" aria-label="Driving mode" hidden>
+    <img class="drive-art" id="drive-art" alt="" hidden />
+    <div class="drive-shade" aria-hidden="true"></div>
+    <div class="drive-header">
+      <div class="drive-brand" aria-label="Aura Drive">
+        <svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><circle cx="24" cy="24" r="19" stroke="currentColor" stroke-width="4"/><circle cx="24" cy="24" r="6" fill="currentColor"/></svg>
+      </div>
+      <button class="drive-voice" id="drive-voice" aria-label="בקשה קולית עם Aura AI" aria-pressed="false">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M6 14v4M11 10v12M16 6v20M21 10v12M26 14v4"/></svg>
+      </button>
+      <button class="drive-close" id="drive-close" aria-label="Leave driving mode">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+    <!-- A spoken request while driving: the orb and what it is doing. A tap anywhere ends it. -->
+    <div class="drive-voice-layer" id="drive-voice-layer" dir="rtl" hidden>
+      <thinking-orb id="drive-voice-orb" state="connecting" px="180" aria-hidden="true"></thinking-orb>
+      <p class="drive-voice-status" id="drive-voice-status" role="status"></p>
+      <p class="drive-voice-text" id="drive-voice-text" dir="auto"></p>
+    </div>
+    <div class="drive-bottom">
+      <div class="drive-meta">
+        <div class="drive-title" id="drive-title" dir="auto"></div>
+        <div class="drive-artist" id="drive-artist" dir="auto"></div>
+      </div>
+      <div class="drive-progress song-progress" id="drive-progress" role="slider" tabindex="0" aria-label="Playback position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+      <div class="drive-controls">
+        <button class="drive-btn play" id="drive-play" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 21,12 7,20"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" fill="currentColor" hidden><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        </button>
+        <button class="drive-btn" id="drive-prev" aria-label="Previous">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="20,4 9,12 20,20"/><rect x="5" y="4" width="2.5" height="16" rx="1"/></svg>
+        </button>
+        <button class="drive-btn" id="drive-next" aria-label="Next">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="4,4 15,12 4,20"/><rect x="16.5" y="4" width="2.5" height="16" rx="1"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav" role="tablist" id="tabs">
+    <button class="bn-tab" data-tab="create" aria-label="Create">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>Create</span>
+    </button>
+    <button class="bn-tab active" data-tab="home" aria-label="Home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>
+      <span>Home</span>
+    </button>
+    <button class="bn-tab" data-tab="ai" aria-label="Ask AI">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>AI</span>
+    </button>
+    <button class="bn-tab" data-tab="library" aria-label="Your Library">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="4" x2="4" y2="20"/><line x1="10" y1="4" x2="10" y2="20"/><path d="M15 5l5 1.2v13L15 18z"/></svg>
+      <span>Library</span>
+    </button>
+    <button class="bn-tab" data-tab="search" aria-label="Search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="20" y1="20" x2="16.65" y2="16.65"/></svg>
+      <span>Search</span>
+    </button>
+  </nav>
+
+  <div class="scrim" id="scrim" hidden></div>
+  <div class="sheet" id="sheet" hidden></div>
+  <div class="modal-wrap" id="modal" hidden></div>
+  <div class="toasts" id="toasts"></div>
+</div>
+
+<audio id="audio" preload="auto"></audio>
+
+<script src="src/log.js"></script>
+<script src="src/api.js"></script>
+<script src="src/api/normalize.js"></script>
+<script src="src/api/search-servers.js"></script>
+<script src="src/api/artists.js"></script>
+<script src="src/api/search.js"></script>
+<script src="src/api/relays.js"></script>
+<script src="src/api/import.js"></script>
+<script src="src/api/match.js"></script>
+<script src="src/api/classify.js"></script>
+<script src="src/api/streams.js"></script>
+<script src="src/api/blobs.js"></script>
+<script src="src/api/segments.js"></script>
+<script src="src/api/lyrics.js"></script>
+<script src="src/api/public.js"></script>
+<script src="src/ai.js"></script>
+<script src="src/store.js"></script>
+<script src="src/store/text.js"></script>
+<script src="src/store/library.js"></script>
+<script src="src/store/playlists.js"></script>
+<script src="src/store/media.js"></script>
+<script src="src/store/listening.js"></script>
+<script src="src/store/follows.js"></script>
+<script src="src/store/backup.js"></script>
+<script src="src/store/positions.js"></script>
+<script src="src/store/blocked.js"></script>
+<script src="src/store/caches.js"></script>
+<script src="src/store/podcasts.js"></script>
+<script src="src/store/private.js"></script>
+<script src="src/store/searches.js"></script>
+<script src="src/store/collections.js"></script>
+<script src="src/store/public.js"></script>
+<script src="guest/i18n.js"></script>
+<script src="src/orientation.js"></script>
+<script src="src/sync.js"></script>
+<script src="src/sync/shared.js"></script>
+<script src="src/push.js"></script>
+<script src="src/nightly.js"></script>
+<script src="src/cast.js"></script>
+<script src="src/player.js"></script>
+<script src="src/player/remote.js"></script>
+<script src="src/player/session.js"></script>
+<script src="src/player/events.js"></script>
+<script src="src/player/youtube.js"></script>
+<script src="src/player/downloads.js"></script>
+<script src="src/player/cache.js"></script>
+<script src="src/player/sources.js"></script>
+<script src="src/player/sleep.js"></script>
+<script src="src/player/load.js"></script>
+<script src="src/player/radio.js"></script>
+<script src="src/player/queue.js"></script>
+<script src="src/player/transport.js"></script>
+<script src="src/player/levels.js"></script>
+<script src="src/player/controls.js"></script>
+<script src="src/player/media-session.js"></script>
+<script src="src/player/stall.js"></script>
+<script src="src/player/crossfade.js"></script>
+<script src="src/player/elements.js"></script>
+<script src="src/player/network.js"></script>
+<script src="src/player/public.js"></script>
+<script src="src/voice.js"></script>
+<script src="src/voice/requests.js"></script>
+<script src="src/shared-queue.js"></script>
+<script src="src/vendor/thinking-orbs.js"></script>
+<script src="src/orbs.js"></script>
+<script src="src/views.js"></script>
+<script src="src/views/covers.js"></script>
+<script src="src/views/home.js"></script>
+<script src="src/views/following.js"></script>
+<script src="src/views/library.js"></script>
+<script src="src/views/ask.js"></script>
+<script src="src/views/search.js"></script>
+<script src="src/views/collections.js"></script>
+<script src="src/views/artist.js"></script>
+<script src="src/views/shared.js"></script>
+<script src="src/views/router.js"></script>
+<script src="src/views/sheets.js"></script>
+<script src="src/views/queue.js"></script>
+<script src="src/views/app-version.js"></script>
+<script src="src/views/import.js"></script>
+<script src="src/views/settings.js"></script>
+<script src="src/views/gestures.js"></script>
+<script src="src/views/swipe.js"></script>
+<script src="src/views/clicks.js"></script>
+<script src="src/views/public.js"></script>
+<script src="src/progress.js"></script>
+<script src="src/main.js"></script>
+<script src="src/main/viewport.js"></script>
+<script src="src/main/lyrics.js"></script>
+<script src="src/main/bar.js"></script>
+<script src="src/main/failures.js"></script>
+<script src="src/main/gestures.js"></script>
+<script src="src/main/drive.js"></script>
+<script src="src/main/controls.js"></script>
+<script src="src/main/keyboard.js"></script>
+<script src="src/main/updates.js"></script>
+<script src="src/main/launch.js"></script>
+</body>
+</html>

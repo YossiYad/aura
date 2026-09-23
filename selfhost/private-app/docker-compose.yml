@@ -1,0 +1,171 @@
+services:
+  aura-app:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+    volumes:
+      - ../..:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - invidious
+    mem_limit: 64m
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:latest
+    restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"
+    env_file:
+      - oauth.env
+    environment:
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_UPSTREAMS: http://aura-app:80/
+      # setup.sh saves the operator's domain in .env for subsequent Compose runs.
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_REDIRECT_URL: "https://${PUBLIC_HOST:?missing - run setup.sh once, it writes .env}/oauth2/callback"
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/authenticated-emails.txt
+      OAUTH2_PROXY_COOKIE_EXPIRE: 720h
+      OAUTH2_PROXY_COOKIE_REFRESH: 4h
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      # Guests and signed media only. Ticket creation and app/library routes require login.
+      OAUTH2_PROXY_SKIP_AUTH_ROUTES: "GET=^/guest/$$,GET=^/guest/(app[.]js|i18n[.]js|style[.]css)$$,GET=^/guest/api/state$$,POST=^/guest/api/(join|search|suggest|vote)$$,GET=^/media/play$$,HEAD=^/media/play$$,OPTIONS=^/media/play$$"
+      OAUTH2_PROXY_SKIP_AUTH_STRIP_HEADERS: "true"
+      OAUTH2_PROXY_EXCLUDE_LOGGING_PATHS: "/media/play,/api/queue/"
+      # That list is matched as whole paths, not prefixes, so /api/queue/<invite>/... was
+      # still written out with the invitation in it. Sign-ins are logged separately.
+      OAUTH2_PROXY_REQUEST_LOGGING: "false"
+    volumes:
+      - ./authenticated-emails.txt:/etc/oauth2-proxy/authenticated-emails.txt:ro
+    ports:
+      - "127.0.0.1:${OAUTH_PORT:-4180}:4180"
+    networks:
+      - invidious
+    depends_on:
+      - aura-app
+    mem_limit: 64m
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  aura-media:
+    build: ./media
+    restart: unless-stopped
+    environment:
+      PUBLIC_ORIGIN: "https://${PUBLIC_HOST:?missing - run setup.sh once, it writes .env}"
+    volumes:
+      - aura-media-data:/data
+    networks:
+      - invidious
+    mem_limit: 128m
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  aura-queue:
+    build: ./queue
+    restart: unless-stopped
+    environment:
+      PUBLIC_ORIGIN: "https://${PUBLIC_HOST:?missing - run setup.sh once, it writes .env}"
+    networks:
+      - invidious
+    mem_limit: 128m
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  aura-sync:
+    build: ./sync
+    restart: unless-stopped
+    environment:
+      SYNC_MAX_BYTES: "${SYNC_MAX_BYTES:-2097152}"
+    volumes:
+      - aura-sync-data:/data
+    networks:
+      - invidious
+    mem_limit: 64m
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  aura-push:
+    build: ./push
+    restart: unless-stopped
+    environment:
+      POLL_MINUTES: "${PUSH_POLL_MINUTES:-20}"
+      VAPID_SUBJECT: "${PUSH_VAPID_SUBJECT:-mailto:push@localhost}"
+    volumes:
+      - aura-push-data:/data
+      # Read-only: aura-push only ever reads each listener's follows list from here, it
+      # never writes into aura-sync's own storage.
+      - aura-sync-data:/sync-data:ro
+    networks:
+      - invidious
+    depends_on:
+      - aura-sync
+    mem_limit: 96m
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  # Builds the "Picked for you today" mix once a night, for everyone who has synced. The
+  # app does this in the browser when it has an AI key of its own; when this service is
+  # running the app takes the ready-made mix from here instead, so a phone that was asleep
+  # at 4am - or has no key at all - still opens onto a fresh one.
+  #
+  # Everyone has their own AI key, so each listener hands theirs over once from Settings ->
+  # Daily prep and their mix is built with it. Nothing needs configuring here for that.
+  #
+  # ai.env next to this file (git-ignored, like oauth.env) is optional, and only sets a
+  # shared fallback key for anyone who has not handed one over:
+  #   GEMINI_KEYS=key1,key2
+  #   GROQ_KEYS=key3
+  # With no key at all - neither kind - the service answers "nothing built" and every
+  # device falls back to building the mix on itself, exactly as before.
+  aura-mix:
+    build: ./mix
+    restart: unless-stopped
+    env_file:
+      - path: ai.env
+        required: false
+    environment:
+      # Local time, so this follows TZ rather than the container's UTC default.
+      TZ: "${TZ:-Asia/Jerusalem}"
+      MIX_HOUR: "${MIX_HOUR:-4}"
+      MIX_SONGS: "${MIX_SONGS:-15}"
+    volumes:
+      - aura-mix-data:/data
+      # Read-only: the listening profile a mix is built from is read from aura-sync's
+      # storage, never written back to it.
+      - aura-sync-data:/sync-data:ro
+    networks:
+      - invidious
+    depends_on:
+      - aura-sync
+    mem_limit: 128m
+    logging:
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+volumes:
+  aura-media-data:
+  aura-sync-data:
+  aura-push-data:
+  aura-mix-data:
+
+networks:
+  invidious:
+    external: true
+    name: ${INVIDIOUS_NETWORK:-invidious_default}

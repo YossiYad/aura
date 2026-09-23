@@ -1,0 +1,7 @@
+# The Google addresses allowed to sign in, one per line, no comments on the same line.
+# Copy this to authenticated-emails.txt and fill it in. That file is git-ignored: this
+# machine's allowlist is nobody else's business, and it never leaves it.
+#
+# The HTTPS reverse proxy makes the app reachable from the public internet.
+# This list controls who can sign in. Keep it tight.
+you@gmail.com

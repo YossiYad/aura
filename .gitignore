@@ -1,0 +1,52 @@
+# Local workspace state and troubleshooting notes
+.claude/
+.design-canvas.state.json
+/.local/
+/docs/*.local.md
+
+# Installed dependencies and tool caches
+node_modules/
+.npm/
+.cache/
+
+# Generated test reports and coverage
+test-results/
+playwright-report/
+blob-report/
+coverage/
+.nyc_output/
+
+# Logs and scratch files
+*.log
+*.log.*
+/tmp/
+/temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+.directory
+
+# Deployment state and private configuration
+/config.json
+/app-revision.txt
+/selfhost/private-app/.setup-pending
+/selfhost/private-app/oauth.env
+/selfhost/private-app/authenticated-emails.txt
+.env
+.env.*
+*.env
+*.env.*
+cookies.txt
+cookies.json
+
+# Keep shareable environment templates
+!.env.example
+!.env.*.example
+!*.env.example

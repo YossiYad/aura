@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="he">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aura - ממיר עוגיות YouTube ל-Cobalt</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 780px; margin: 24px auto; padding: 0 16px; background:#0b0d0c; color:#e8eae9; direction: rtl; }
+  h1 { font-size: 20px; }
+  p { line-height: 1.6; color:#b7bcb9; }
+  textarea { width: 100%; min-height: 160px; background:#14181a; color:#e8eae9; border:1px solid #2a2f2c; border-radius:8px; padding:10px; font-family: ui-monospace, monospace; font-size:12px; direction: ltr; }
+  button { background:#1fe079; color:#04120a; border:none; border-radius:999px; padding:10px 20px; font-size:15px; font-weight:700; cursor:pointer; margin-top:12px; }
+  .out { margin-top:16px; }
+  .note { font-size:13px; color:#7f8582; }
+  code { background:#14181a; padding:2px 6px; border-radius:4px; }
+</style>
+</head>
+<body>
+<h1>🍪 ממיר עוגיות YouTube ל-Cobalt</h1>
+<p>כלי מקומי לגמרי. שום דבר לא נשלח לאף שרת - הכל רץ בדפדפן שלך.</p>
+<p><b>1.</b> הדבק כאן את התוכן שיצא מהתוסף "Get cookies.txt LOCALLY" (פורמט Netscape - שורות עם טאבים):</p>
+<textarea id="in" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com	TRUE	/	TRUE	1799999999	SID	xxxx&#10;..."></textarea>
+<button id="go">המר</button>
+<div class="out">
+  <p><b>2.</b> העתק את התוצאה הזאת לקובץ <code>cookies.json</code> ב-Space שלך:</p>
+  <textarea id="out" readonly placeholder="התוצאה תופיע כאן"></textarea>
+  <p class="note" id="count"></p>
+</div>
+<script>
+document.getElementById("go").onclick = function () {
+  const raw = document.getElementById("in").value;
+  const pairs = [];
+  raw.split(/\r?\n/).forEach(line => {
+    if (!line || (line.startsWith("#") && !line.startsWith("#HttpOnly_"))) return;
+    line = line.replace(/^#HttpOnly_/, "");
+    const p = line.split("\t");
+    if (p.length < 7) return;
+    const domain = p[0] || "";
+    if (!/youtube\.com|google\.com/i.test(domain)) return;
+    const name = p[5], value = p[6];
+    if (name && value != null) pairs.push(name + "=" + value);
+  });
+  const header = pairs.join("; ");
+  const json = JSON.stringify({ youtube: [header] }, null, 2);
+  document.getElementById("out").value = header ? json : "לא נמצאו עוגיות של youtube - ודא שייצאת כשהיית מחובר ל-youtube.com";
+  document.getElementById("count").textContent = pairs.length ? (pairs.length + " עוגיות הומרו") : "";
+};
+</script>
+</body>
+</html>
