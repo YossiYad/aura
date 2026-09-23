@@ -3,6 +3,7 @@
   // Published on V for the other files of this module; see src/views.js.
   Object.defineProperties(V, {
     applyAppearance: { get: () => applyAppearance },
+    askLanguage: { get: () => askLanguage },
     openSettings: { get: () => openSettings },
     renderSettingsPage: { get: () => renderSettingsPage },
     renderStatsPage: { get: () => renderStatsPage },
@@ -13,6 +14,54 @@
   function openSettings() {
     if (V.subView && V.subView.kind === "settings") return;
     V.pushSubView({ kind: "settings" });
+  }
+
+  // Asked once, on the first launch that has no language saved. Both languages speak for
+  // themselves on the same card, so the question is readable before it is answered, and
+  // the one the browser prefers takes the focus. Closing the card without picking keeps
+  // English, the default, and saves it so the question is not asked again.
+  /** Asks which interface language to use, unless the listener has already chosen. */
+  function askLanguage() {
+    if (!window.I18n || I18n.chosen()) return;
+    const choice = (code, name, note) =>
+      '<button type="button" class="lang-choice" data-lang-pick="' + code + '" lang="' + code + '" dir="' + (code === "he" ? "rtl" : "ltr") + '">' +
+        '<strong>' + name + '</strong><span>' + note + '</span></button>';
+    V.openModal(
+      '<div class="modal lang-welcome" role="dialog" aria-modal="true" aria-labelledby="lang-welcome-title">' +
+        '<h3 id="lang-welcome-title"><span lang="en">Choose your language</span> · <span lang="he" dir="rtl">בחרו שפה</span></h3>' +
+        '<div class="lang-choices">' +
+          choice("en", "English", "Aura and its AI answers in English") +
+          choice("he", "עברית", "בקשות קוליות ותשובות AI בעברית") +
+        '</div>' +
+        '<p class="lang-hint"><span lang="en">You can change this any time in Settings › Look.</span> ' +
+          '<span lang="he" dir="rtl">אפשר לשנות בכל עת בהגדרות.</span></p>' +
+      '</div>');
+    let picked = false;
+    V.modalCleanup = () => {
+      if (!picked) try { I18n.setLanguage(I18n.language()); } catch (e) {}
+    };
+    const buttons = /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll("[data-lang-pick]"));
+    buttons.forEach(button => {
+      button.onclick = () => {
+        if (picked) return;
+        picked = true;
+        try { I18n.setLanguage(button.dataset.langPick); } catch (e) {}
+        V.dismissViaHistory(() => { V.closeModal(); V.scrimEl.hidden = true; });
+        V.render();
+      };
+    });
+    // The launch cover hides the page, and a hidden button cannot take focus, so the
+    // suggested language is focused once the cover lifts.
+    const suggested = /** @type {HTMLElement} */ (document.querySelector('[data-lang-pick="' + I18n.suggested() + '"]'));
+    const root = document.documentElement;
+    const focusSuggested = () => { if (suggested && suggested.isConnected && !picked) suggested.focus(); };
+    if (!root.classList.contains("app-starting") || !window.MutationObserver) { focusSuggested(); return; }
+    const cover = new MutationObserver(() => {
+      if (root.classList.contains("app-starting")) return;
+      cover.disconnect();
+      focusSuggested();
+    });
+    cover.observe(root, { attributes: true, attributeFilter: ["class"] });
   }
 
   // iPhones have no system Back inside a standalone PWA - Android's hardware Back and
@@ -32,13 +81,20 @@
     ["mono", "#E9EBE6"]
   ];
 
-  /** Applies the accent, animation and timeline style settings to the page. */
+  // Text size scales what is read - lists, sheets, dialogs, labels - by one factor each,
+  // set in CSS against <html data-text-size>. "default" is the design as drawn.
+  const TEXT_SIZES = [["default", "Default"], ["large", "Large"], ["larger", "Larger"]];
+
+  /** Applies the accent, animation, text size, contrast and timeline style settings to the page. */
   function applyAppearance() {
     const s = Store.settings();
     const root = document.documentElement;
     if (s.accent && s.accent !== "green" && ACCENT_CHOICES.some(a => a[0] === s.accent)) root.setAttribute("data-accent", s.accent);
     else root.removeAttribute("data-accent");
     root.classList.toggle("no-anim", s.animations === false);
+    if (s.textSize && s.textSize !== "default" && TEXT_SIZES.some(z => z[0] === s.textSize)) root.setAttribute("data-text-size", s.textSize);
+    else root.removeAttribute("data-text-size");
+    root.classList.toggle("high-contrast", s.highContrast === true);
     // Loaded after this file, and absent on a page that shows no timeline.
     if (window.SongProgress) SongProgress.setStyle(s.progressStyle);
   }
@@ -120,8 +176,11 @@
     return '<label class="set-item">' + setTextPair(title, sub) +
       '<input type="checkbox" id="' + id + '"' + (on ? ' checked' : '') + ' /><span class="switch"></span></label>';
   }
+  // The buttons of a choice are named by the row's title, so a screen reader says what
+  // "Large" or "Night" is a choice of.
   function choiceRow(title, sub, inner) {
-    return '<div class="set-item col">' + setTextPair(title, sub) + inner + '</div>';
+    return '<div class="set-item col">' + setTextPair(title, sub) +
+      inner.replace('role="group"', 'role="group" aria-label="' + V.esc(title) + '"') + '</div>';
   }
   // The lit button in the player is the only other place this shows, and the player is not
   // on screen while Settings is. Someone who came here to check has come to the right place.
@@ -425,8 +484,12 @@
     const swatches = '<div class="swatches">' + ACCENT_CHOICES.map(a =>
       '<button type="button" class="swatch' + ((s.accent || "green") === a[0] ? ' on' : '') + '" data-accent-pick="' + a[0] + '" style="--sw:' + a[1] + '" aria-label="Use ' + a[0] + ' accent" aria-pressed="' + ((s.accent || "green") === a[0]) + '"></button>').join('') + '</div>';
     return setSection("appearance", "Appearance",
-      choiceRow("Interface language", "English translates the Hebrew interface text. Hebrew keeps the current mix of Hebrew and English.",
-        segControl("set-interface-lang", [["en", "English"], ["he", "עברית"]], window.I18n ? I18n.language() : "he")) +
+      // Titled in both languages, so it can be found by someone who reads only one of them.
+      choiceRow("Language · שפה", "Menus, messages, voice replies and AI answers follow this choice. Song titles and artist names stay as they are.",
+        segControl("set-interface-lang", [["en", "English"], ["he", "עברית"]], window.I18n ? I18n.language() : "en")) +
+      choiceRow("Text size", "Makes lists, menus and messages easier to read",
+        segControl("set-text-size", TEXT_SIZES, TEXT_SIZES.some(z => z[0] === s.textSize) ? s.textSize : "default")) +
+      toggleRow("set-contrast", "High contrast", "Brighter secondary text and clearer outlines. Turns on by itself when your device asks for more contrast.", s.highContrast === true) +
       choiceRow("Accent color", "Highlights, active states and buttons across the app", swatches) +
       choiceRow("Song timeline", "How a song's progress is drawn in the players and in driving mode",
         segControl("set-progress-style", [["wave", "Wave"], ["line", "Line"]], s.progressStyle === "line" ? "line" : "wave")) +
@@ -585,7 +648,7 @@
         const patch = {};
         patch[key] = el.checked;
         Store.patchSettings(patch);
-        if (key === "animations") applyAppearance();
+        if (key === "animations" || key === "highContrast") applyAppearance();
         if (key === "voiceReply" && !el.checked) Voice.stopReply();
         // The Drive button lives in the player, which is not on screen while Settings is,
         // so nothing else would pick this up before it is next looked for.
@@ -603,6 +666,7 @@
       };
     };
     bindToggle("set-anims", "animations");
+    bindToggle("set-contrast", "highContrast");
     bindToggle("set-voice-reply", "voiceReply");
     bindToggle("set-portrait-lock", "portraitLock");
     bindToggle("set-autoplay", "autoplay");
@@ -863,6 +927,7 @@
     };
     bindSeg("set-quality-seg", "audioQuality");
     bindSeg("set-progress-style", "progressStyle", null, applyAppearance);
+    bindSeg("set-text-size", "textSize", null, applyAppearance);
     bindSeg("set-drive-look", "driveLook");
     bindSeg("set-xfade-seg", "crossfade", v => parseInt(v, 10) || 0);
     bindSeg("set-cache-seg", "cacheLimitMB", v => parseInt(v, 10) || 0);

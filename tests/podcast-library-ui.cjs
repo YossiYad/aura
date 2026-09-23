@@ -28,7 +28,7 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', e => errors.push(e.message));
       await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
       await page.addInitScript(() => {
-        localStorage.setItem('aura.settings', JSON.stringify({ autoplay: false, nightlyPrebuild: false, aiHomeSection: false }));
+        localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'en', autoplay: false, nightlyPrebuild: false, aiHomeSection: false }));
         localStorage.setItem('aura.library', JSON.stringify([
           { id: 'song', title: 'Saved song', artist: 'Publisher', duration: 180, kind: 'music' },
           { id: 'episode', title: 'Saved episode', artist: 'Publisher', duration: 1800, kind: 'podcast', podcast: 'Science Hour' }

@@ -27,6 +27,7 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
       await page.addInitScript(() => {
+        localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'en' }));
         window.viewportTest = Object.assign(new EventTarget(), { height: 793, width: 393, offsetTop: 0, scale: 1, inner: 793 });
         Object.defineProperty(window, 'visualViewport', { value: viewportTest });
         Object.defineProperty(window, 'innerHeight', { get: () => viewportTest.inner });
@@ -132,7 +133,10 @@ const server = http.createServer((req, res) => {
     }
     const page = await browser.newPage({ viewport: { width: 393, height: 793 }, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15' });
     await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
-    await page.addInitScript(() => Object.defineProperty(navigator, 'standalone', { value: true }));
+    await page.addInitScript(() => {
+      localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'en' }));
+      Object.defineProperty(navigator, 'standalone', { value: true });
+    });
     await page.goto(origin);
     await page.waitForFunction(() => window.Views);
     const checks = await page.evaluate(() => {

@@ -66,6 +66,7 @@
     syncStatusPainter: { get: () => syncStatusPainter, set: value => { syncStatusPainter = value; } },
     syncStatusSubscribed: { get: () => syncStatusSubscribed, set: value => { syncStatusSubscribed = value; } },
     tabScroll: { get: () => tabScroll },
+    textZoom: { get: () => textZoom },
     toast: { get: () => toast },
     trackRow: { get: () => trackRow },
     view: { get: () => view },
@@ -74,7 +75,7 @@
   });
 
   // The same number as CACHE in sw.js; a test holds the two together.
-  const APP_VERSION = "v203";
+  const APP_VERSION = "v204";
   const view = /** @type {PaintedElement} */ (document.getElementById("view"));
   const sheetEl = document.getElementById("sheet");
   const scrimEl = document.getElementById("scrim");
@@ -602,6 +603,14 @@
     }
   }, true);
   scrimEl.addEventListener("click", () => dismissViaHistory(() => { closeSheet(); closeModal(); }));
+  // Escape closes the dialog or sheet on top, the way Back and a tap outside do, so they can
+  // be left from a keyboard. A control that answers Escape itself (a rename, a drag) has
+  // already taken it.
+  document.addEventListener("keydown", e => {
+    if (e.key !== "Escape" || e.defaultPrevented || (modalEl.hidden && sheetEl.hidden)) return;
+    e.preventDefault();
+    dismissViaHistory(() => { closeSheet(); closeModal(); scrimEl.hidden = true; });
+  });
 
   let modalCleanup = null;
   function closeModal() {
@@ -642,6 +651,14 @@
     };
     document.getElementById("modal-ok").onclick = ok;
     input.addEventListener("keydown", e => { if (e.key === "Enter") ok(); });
+  }
+
+  // The Text size setting scales the content of the view and of sheets with CSS zoom (see
+  // app.css). A finger moves in screen pixels and a transform inside that content is drawn
+  // in its own, larger ones, so a gesture divides what the finger travelled by this.
+  function textZoom() {
+    if (!document.documentElement.hasAttribute("data-text-size")) return 1;
+    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--text-zoom")) || 1;
   }
 
   const PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 21,12 7,20"/></svg>';

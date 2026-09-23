@@ -29,7 +29,7 @@ const server = http.createServer((req, res) => {
       page.on('pageerror', error => errors.push(error.message));
       await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
       await page.addInitScript(() => {
-        localStorage.setItem('aura.settings', JSON.stringify({ autoplay: false, aiHomeSection: false }));
+        localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'en', autoplay: false, aiHomeSection: false }));
         localStorage.setItem('aura.queue', JSON.stringify({ extra: [{ id: 'one', title: 'Test song', artist: 'Artist', duration: 180 }], pos: 0 }));
         const remotes = new WeakMap();
         Object.defineProperty(HTMLMediaElement.prototype, 'remote', { get() {

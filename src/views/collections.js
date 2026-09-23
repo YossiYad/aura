@@ -177,7 +177,7 @@
       const before = others.find(row => { const box = row.getBoundingClientRect(); return g.y < box.top + box.height / 2; });
       if (before) list.insertBefore(g.row, before); else list.appendChild(g.row);
       g.row.style.transform = "none";
-      g.row.style.transform = "translateY(" + (g.y - g.offset - g.row.getBoundingClientRect().top) + "px)";
+      g.row.style.transform = "translateY(" + (g.y - g.offset - g.row.getBoundingClientRect().top) / g.zoom + "px)";
       frame = requestAnimationFrame(paintDrag);
     }
     list.addEventListener("pointerdown", e => {
@@ -189,7 +189,7 @@
       if (handle && !move || !handle && !remove) return;
       gesture = { row, pointer: e.pointerId, x: e.clientX, y: e.clientY, startY: e.clientY,
         dx: 0, offset: e.clientY - row.getBoundingClientRect().top, original: rows(),
-        mode: handle ? "move" : "remove", live: false,
+        mode: handle ? "move" : "remove", live: false, zoom: V.textZoom(),
         threshold: Math.max(80, Math.min(130, row.offsetWidth * .3)) };
       window.addEventListener("keydown", escapeDrag, true);
       window.addEventListener("pointerup", releaseDrag);
@@ -200,7 +200,8 @@
     list.addEventListener("pointermove", e => {
       const g = gesture;
       if (!g || e.pointerId !== g.pointer) return;
-      g.dx = e.clientX - g.x;
+      // Sideways travel in the row's own pixels, as its threshold is; see V.textZoom.
+      g.dx = (e.clientX - g.x) / g.zoom;
       g.y = e.clientY;
       const dy = g.y - g.startY;
       if (!g.live) {

@@ -265,9 +265,16 @@
   const PODCAST_SHOWS_TTL = 7 * 24 * 60 * 60 * 1000;
   const PODCAST_ROWS = 5;
 
+  // Podcasts are listened to, so the language of the shows follows the listener: Hebrew
+  // when they picked Hebrew, English when they picked it on a Hebrew phone, and otherwise
+  // the phone's own language - English on a French phone still means French shows, as the
+  // interface offers no French of its own to pick.
   function listenerLanguage() {
     const tag = String((navigator.languages && navigator.languages[0]) || navigator.language || "");
-    return tag.toLowerCase().split("-")[0] || "en";
+    const browser = tag.toLowerCase().split("-")[0] || "en";
+    const chosen = window.I18n ? I18n.language() : "";
+    if (chosen === "he") return "he";
+    return chosen === "en" && browser === "he" ? "en" : browser;
   }
 
   function languageName(code) {
