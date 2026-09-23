@@ -75,6 +75,8 @@
  * @property {ArtistPageCursor | null} [songPage]
  * @property {PlaylistSummary[]} albums
  * @property {PlaylistSummary[]} playlists
+ * @property {boolean} [fromSearch] Built from search results when the channel could not be
+ *   read: `videos` are then in relevance order, not newest first.
  */
 
 /**

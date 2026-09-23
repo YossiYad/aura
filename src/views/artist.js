@@ -98,8 +98,10 @@
         backfillDates(sv, data);
         // Opening the page is itself an acknowledgment: fold in whatever is newest and
         // clear the "new" dot, the same way reading a message clears its unread badge.
+        // A page built from search results is not in upload order, so its first video
+        // says nothing about what is newest.
         if (Store.isFollowing(data.id) && data.videos && data.videos[0]) {
-          Store.refreshFollowLatest(data.id, data.videos[0].id);
+          if (!data.fromSearch) Store.refreshFollowLatest(data.id, data.videos[0].id);
           Store.markFollowSeen(data.id);
         }
         if (V.subView === sv) V.render();
