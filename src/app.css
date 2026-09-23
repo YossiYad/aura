@@ -3056,3 +3056,59 @@ thinking-orb { vertical-align: middle; pointer-events: none; }
   pointer-events: none;
 }
 .song.track-swiping.swipe-ready::after { background: #a52238; color: #fff; }
+
+/* ============================================================
+   Accessibility: language picker, text size, contrast
+   ============================================================ */
+/* First-launch language card. Each choice is written in its own language. */
+.lang-welcome h3 { line-height: 1.35; }
+.lang-choices { display: grid; gap: var(--space-3); }
+.lang-choice {
+  display: grid; gap: 4px; width: 100%; min-height: 64px; padding: 14px 18px;
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  background: var(--bg-3); color: var(--fg-strong); font: inherit; text-align: start; cursor: pointer;
+}
+.lang-choice strong { font-size: var(--text-lg); }
+.lang-choice span { color: var(--fg-muted); font-size: var(--text-sm); }
+@media (hover: hover) { .lang-choice:hover { border-color: var(--accent); } }
+.lang-hint { margin: var(--space-4) 0 0; color: var(--fg-muted); font-size: var(--text-xs); line-height: 1.6; }
+.lang-hint span { display: block; }
+
+/* Text size from Settings > Look. The design is drawn in pixels, so what is read is
+   scaled as a whole: the page, sheets, dialogs, toasts and the labels on the bars.
+   Containers that gestures move (the view, the sheet) keep their own size, and only
+   what is inside them grows, so a drag still follows the finger. */
+html[data-text-size="large"] { --text-zoom: 1.15; }
+html[data-text-size="larger"] { --text-zoom: 1.3; }
+html[data-text-size] #view > *,
+html[data-text-size] .sheet > *,
+html[data-text-size] .modal,
+html[data-text-size] .toast,
+html[data-text-size] .player .text,
+html[data-text-size] .bn-tab span,
+html[data-text-size] .fp-titles,
+html[data-text-size] .fp-content { zoom: var(--text-zoom, 1); }
+html[data-text-size] .modal { max-height: calc(85vh / var(--text-zoom, 1)); }
+html[data-text-size].keyboard-open .modal-wrap .modal { max-height: calc(100% / var(--text-zoom, 1)); }
+
+/* High contrast from Settings > Look, or the system's "increase contrast". Secondary
+   text moves up to near-white and hairline borders become visible outlines. The token
+   sheet derives --fg, --fg-muted and --fg-faint from these greys on the same element. */
+html.high-contrast {
+  --sc-lighter-grey: #f4f4f4;
+  --sc-light-grey: #e2e2e2;
+  --sc-grey: #c4c4c4;
+  --border: rgba(255, 255, 255, 0.24);
+  --border-strong: rgba(255, 255, 255, 0.46);
+}
+@media (prefers-contrast: more) {
+  :root {
+    --sc-lighter-grey: #f4f4f4;
+    --sc-light-grey: #e2e2e2;
+    --sc-grey: #c4c4c4;
+    --border: rgba(255, 255, 255, 0.24);
+    --border-strong: rgba(255, 255, 255, 0.46);
+  }
+}
+html.high-contrast .switch, html.high-contrast .seg { border-color: var(--border-strong); }
+html.high-contrast .set-item input:focus-visible ~ .switch { outline: 2px solid var(--accent); outline-offset: 2px; }

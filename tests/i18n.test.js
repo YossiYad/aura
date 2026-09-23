@@ -14,12 +14,29 @@ function language(settings = {}, browser = 'en-US') {
   return { ...store, I18n: window.I18n, events };
 }
 
-test('interface language uses a saved choice before the browser preference', () => {
-  assert.equal(language({}, 'he-IL').I18n.language(), 'he');
+test('interface language is English until the listener saves a choice', () => {
+  assert.equal(language({}, 'he-IL').I18n.language(), 'en');
   assert.equal(language({}, 'fr-FR').I18n.language(), 'en');
   assert.equal(language({ interfaceLanguage: 'en' }, 'he-IL').I18n.language(), 'en');
   assert.equal(language({ interfaceLanguage: 'he' }).I18n.language(), 'he');
   assert.equal(language({ interfaceLanguage: '<script>' }).I18n.language(), 'en');
+});
+
+test('the first-launch question knows whether a choice exists and which one to offer first', () => {
+  const unset = language({}, 'he-IL').I18n;
+  assert.equal(unset.chosen(), false);
+  assert.equal(unset.suggested(), 'he');
+  assert.equal(language({}, 'en-GB').I18n.suggested(), 'en');
+  assert.equal(language({ interfaceLanguage: '<script>' }).I18n.chosen(), false);
+  assert.equal(language({ interfaceLanguage: 'en' }, 'he-IL').I18n.chosen(), true);
+});
+
+test('AI replies are asked for in the interface language', () => {
+  assert.equal(language({}, 'he-IL').I18n.aiLanguage(), 'English');
+  assert.equal(language({ interfaceLanguage: 'he' }).I18n.aiLanguage(), 'Hebrew');
+  const h = language({ interfaceLanguage: 'he' });
+  h.I18n.setLanguage('en');
+  assert.equal(h.I18n.aiLanguage(), 'English');
 });
 
 test('English translates interface fragments without changing markup or unknown content', () => {

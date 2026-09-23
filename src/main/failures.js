@@ -99,14 +99,19 @@
     }
   });
   Store.onChange(() => V.refreshBar());
-  function applyInterfaceLanguage() {
+  function applyStaticLanguage() {
     V.$("drive-voice").setAttribute("aria-label", tr("בקשה קולית עם Aura AI"));
+    // The spoken-request status reads right to left only when the interface is Hebrew.
+    V.$("drive-voice-layer").dir = window.I18n ? I18n.direction() : "rtl";
+  }
+  function applyInterfaceLanguage() {
+    applyStaticLanguage();
     V.refreshBar();
     V.refreshDrive();
   }
   window.addEventListener("aura-language", applyInterfaceLanguage);
   // Static accessibility labels need the saved preference before the first interaction.
-  V.$("drive-voice").setAttribute("aria-label", tr("בקשה קולית עם Aura AI"));
+  applyStaticLanguage();
 
   V.$("pb-play").onclick = e => { e.stopPropagation(); Player.toggle(); };
   V.$("pb-next").onclick = e => { e.stopPropagation(); Player.next(); };

@@ -48,7 +48,7 @@ const proxy = http.createServer((req, res) => {
     const hostContext = await browser.newContext({ viewport: { width: 393, height: 850 }, serviceWorkers: 'block', locale: 'he-IL' });
     await hostContext.addCookies([{ name: 'test_host', value: 'yes', url: origin }]);
     await hostContext.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
-    await hostContext.addInitScript(() => localStorage.setItem('aura.settings', JSON.stringify({ autoplay: false, noYtFallback: true, aiHomeSection: false })));
+    await hostContext.addInitScript(() => localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'he', autoplay: false, noYtFallback: true, aiHomeSection: false })));
     const host = await hostContext.newPage(), errors = [];
     host.on('pageerror', error => errors.push(error.message));
     await host.goto(origin);

@@ -236,7 +236,7 @@
     </div>
   </div>
 
-  <nav class="bottom-nav" role="tablist" id="tabs">
+  <nav class="bottom-nav" id="tabs" aria-label="Main">
     <button class="bn-tab" data-tab="create" aria-label="Create">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       <span>Create</span>
@@ -262,7 +262,7 @@
   <div class="scrim" id="scrim" hidden></div>
   <div class="sheet" id="sheet" hidden></div>
   <div class="modal-wrap" id="modal" hidden></div>
-  <div class="toasts" id="toasts"></div>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 </div>
 
 <audio id="audio" preload="auto"></audio>

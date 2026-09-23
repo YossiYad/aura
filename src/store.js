@@ -106,7 +106,10 @@
  * @property {boolean} portraitLock
  * @property {"recent" | "name"} [librarySort] Order of the Library's collections.
  * @property {"list" | "grid"} [libraryLayout] How the Library lays them out.
- * @property {string} [voiceLanguage] Speech recognition language, "he-IL" by default.
+ * @property {"en" | "he"} [interfaceLanguage] Unset until the listener picks; English until then.
+ * @property {"default" | "large" | "larger"} [textSize] How much larger text is drawn.
+ * @property {boolean} [highContrast] Brighter secondary text and stronger outlines.
+ * @property {string} [voiceLanguage] Speech recognition language; follows the interface language until set.
  * @property {boolean} [voiceReply] Spoken answers; unset means on everywhere but iOS.
  * @property {string} [lastGoodInstance] Device-local hint: the server that answered last.
  */
