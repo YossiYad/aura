@@ -461,11 +461,23 @@
     return null;
   }
 
+  // Every change of top artists or shows is a new key, and nothing but a pull to refresh
+  // used to clear the old ones: the copy grew for as long as the app was used, towards
+  // the storage quota the library and playlists are saved under. Keep the newest few
+  // that can still be shown.
+  const HOME_FEED_CACHE_KEYS = 6;
+
   function homeFeedCacheSave(key, sections) {
     try {
       const cache = JSON.parse(localStorage.getItem("aura.homeFeeds") || "{}");
       cache[key] = { at: Date.now(), sections };
-      localStorage.setItem("aura.homeFeeds", JSON.stringify(cache));
+      const kept = {};
+      Object.keys(cache)
+        .filter(k => cache[k] && Date.now() - Number(cache[k].at || 0) < STALE_MAX)
+        .sort((a, b) => Number(cache[b].at || 0) - Number(cache[a].at || 0))
+        .slice(0, HOME_FEED_CACHE_KEYS)
+        .forEach(k => { kept[k] = cache[k]; });
+      localStorage.setItem("aura.homeFeeds", JSON.stringify(kept));
     } catch (e) {}
   }
 
