@@ -140,6 +140,41 @@ test('appending songs with an empty queue starts the first and retains the rest'
   assert.equal(h.audio.paused, false);
 });
 
+const list = ['first', 'second', 'third'].map(id => ({ id, title: id }));
+
+test('a list put up next plays in its own order', async () => {
+  const h = setup({ tracks: list });
+  h.submit();
+  await flushMicrotasks(80);
+  assert.deepEqual(Array.from(h.window.Player.queue(), t => t.id), ['current', 'first', 'second', 'third', 'later']);
+  assert.equal(h.window.Player.current().id, 'current');
+});
+
+test('a list put up next with an empty queue starts its first song and keeps its order', async () => {
+  const h = setup({ empty: true, tracks: list });
+  h.submit();
+  await flushMicrotasks(80);
+  h.runImmediateTimers();
+  await flushMicrotasks(40);
+  assert.deepEqual(Array.from(h.window.Player.queue(), t => t.id), ['first', 'second', 'third']);
+  assert.equal(h.window.Player.current().id, 'first');
+  assert.equal(h.audio.paused, false);
+});
+
+test('a list put up next in a shared queue keeps its order', async () => {
+  const h = setup({ tracks: list });
+  let saved = null;
+  h.Store.sharedQueuePlayback = value => { if (value !== undefined) saved = value; return saved; };
+  h.window.Player.beginShare('room');
+  h.window.Player.addToQueue({ id: 'guest', title: 'Guest', duration: 180 });
+  await flushMicrotasks(80);
+  h.submit();
+  await flushMicrotasks(80);
+  assert.deepEqual(Array.from(h.window.Player.queue(), t => t.id), ['guest', 'first', 'second', 'third']);
+  assert.equal(h.window.Player.current().id, 'guest');
+  h.window.Player.endShare();
+});
+
 test('cancelling during the spoken queue confirmation prevents any insertion', async () => {
   const h = setup({ action: 'append' });
   let release;
