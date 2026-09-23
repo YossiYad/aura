@@ -613,7 +613,10 @@
     await Promise.all(state.sections.map(section => loadHomeSection(state, section, key)));
     if (!state.sections.some(section => section.tracks.length)) throw new Error("no rows came back");
     homeFeeds[key] = state;
-    delete homeFeeds[homeFeedKey()];
+    // Rows held under a key that moved while these loaded are the old ones; make way for
+    // these. With the key unchanged that deleted the rows just built, and Home painted
+    // skeletons that nothing was going to fill.
+    if (homeFeedKey() !== key) delete homeFeeds[homeFeedKey()];
     followHomeFeedKey(state, key);
     fillHomeFeeds();
   }

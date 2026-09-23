@@ -41,7 +41,7 @@ function harness(reply) {
   vm.runInContext(readModule('api'), context);
   context.Api = context.window.Api;
   const views = readModule('views');
-  for (const name of ['categorySearch', 'searchedRow', 'followHomeFeedKey', 'loadHomeSection', 'buildHomeFeeds']) {
+  for (const name of ['categorySearch', 'searchedRow', 'followHomeFeedKey', 'loadHomeSection', 'buildHomeFeeds', 'rebuildHomeFeeds']) {
     const match = new RegExp('^  (?:async )?function ' + name + '\\(', 'm').exec(views);
     vm.runInContext(views.slice(match.index, views.indexOf('\n  }', match.index) + 4), context);
   }
@@ -189,4 +189,31 @@ test('rows stay reachable when the show order moves the key while they load', as
   key = 'music:new';
   h.context.followHomeFeedKey(state, 'all:new:Show A|Show B');
   assert.equal(h.context.homeFeeds['music:new'], undefined);
+});
+
+// The nightly run builds the rows off to the side and then swaps them in. With the key
+// unchanged the swap deleted what it had just put in, and Home painted skeletons.
+test('the nightly rebuild leaves its rows on Home', async () => {
+  const h = harness(() => ({ json: [song] }));
+  h.context.homeFeeds.home = { sections: [] };
+  const done = h.context.rebuildHomeFeeds();
+  await h.advance(1);
+  await done;
+  const state = h.context.homeFeeds.home;
+  assert(state, 'rows are held for the current key');
+  assert(state.sections.every(section => section.status === 'ready' && section.tracks[0].id === song.videoId));
+});
+
+test('the nightly rebuild replaces rows held under a key that moved while it loaded', async () => {
+  const h = harness(() => ({ json: [song], delay: 100 }));
+  let key = 'all:new:Show A|Show B';
+  h.context.homeFeedKey = () => key;
+  h.context.homeFeedBase = () => 'all:new';
+  h.context.homeFeeds['all:new:Show B|Show A'] = { sections: [] };
+  const done = h.context.rebuildHomeFeeds();
+  key = 'all:new:Show B|Show A';
+  await h.advance(1000);
+  await done;
+  assert.equal(h.context.homeFeeds[key], h.context.homeFeeds['all:new:Show A|Show B']);
+  assert(h.context.homeFeeds[key].sections.every(section => section.status === 'ready'));
 });
