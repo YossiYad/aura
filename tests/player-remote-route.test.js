@@ -813,3 +813,49 @@ test('Cast connected while the next song loads starts it from the top', async ()
   assert.equal(load.media.customData.auraTrackId, 'three');
   assert.equal(load.currentTime, 0);
 });
+
+// Safari drops the wireless flag while the receiver loads a new source. A second change
+// inside that wait found the flag already down, never saw it drop again, and so missed the
+// receiver's return: playback stayed paused while still meant to be playing.
+test('a second AirPlay source change during the wait still resumes when the receiver returns', async () => {
+  let now = 1000000;
+  const h = createHarness({ withAirPlay: true, withAudioContext: true, withAudioSession: false,
+    navigator: { userAgent: 'iPhone' }, Date: { now: () => now },
+    tracks: ['one', 'two', 'three'].map(id => ({ id, title: id, duration: 180 })),
+    settings: { autoplay: false, noYtFallback: true } });
+  const player = h.window.Player;
+  h.Api.invalidate = () => {};
+  h.Api.getSkipSegments = async () => [];
+  h.Api.resolve = async id => ({ url: 'https://test/' + id });
+  h.play();
+  h.audioContexts[0].setState('running');
+  await flushMicrotasks(40);
+  h.audio.webkitCurrentPlaybackTargetIsWireless = true;
+  h.audio.dispatch('webkitcurrentplaybacktargetiswirelesschanged');
+  await flushMicrotasks(40);
+  let source = h.audio.src;
+  Object.defineProperty(h.audio, 'src', { configurable: true, get: () => source, set: value => {
+    source = value; h.audio.currentTime = 0; h.audio.readyState = 0;
+    if (h.audio.webkitCurrentPlaybackTargetIsWireless) {
+      h.audio.webkitCurrentPlaybackTargetIsWireless = false;
+      h.audio.dispatch('webkitcurrentplaybacktargetiswirelesschanged');
+    }
+  } });
+  player.next();
+  await flushMicrotasks(40);
+  now += 2000;
+  player.next();
+  await flushMicrotasks(40);
+  h.audio.paused = true;
+  const plays = h.audio.playCalls;
+  h.audio.readyState = 4;
+  h.audio.webkitCurrentPlaybackTargetIsWireless = true;
+  h.audio.dispatch('webkitcurrentplaybacktargetiswirelesschanged');
+  now += 3000;
+  h.runTimers(2500);
+  await flushMicrotasks(40);
+  assert.equal(player.current().id, 'three');
+  assert.equal(h.audio.playCalls - plays, 1);
+  assert.equal(h.audio.paused, false);
+  player.dismiss();
+});
