@@ -181,7 +181,9 @@
     const save = document.getElementById("ask-save");
     if (save) save.onclick = () => { if (V.askState.tracks.length) V.openPlaylistPickerBulk(V.askState.tracks, V.askState.name); };
     const retry = document.getElementById("ask-retry");
-    if (retry) retry.onclick = () => runAsk(V.askState.prompt, true);
+    // The request these results answer, not whatever the field holds now: a voice request
+    // since then emptied it, or left its own words there.
+    if (retry) retry.onclick = () => runAsk(V.askState.asked || V.askState.prompt, true);
   }
 
   // One request-and-match round: asks for songs, resolves each to a real track, and
@@ -222,6 +224,7 @@
     }
     const avoid = isRetry ? V.askState.tracks.map(t => t.title + " - " + t.artist) : null;
     V.askState.prompt = ask;
+    V.askState.asked = ask;
     V.askState.status = "loading";
     V.askState.step = "taste";
     V.askState.error = "";
