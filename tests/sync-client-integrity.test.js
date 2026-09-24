@@ -261,3 +261,23 @@ test('recovering the waiting copy keeps this device\'s unsynced changes in the s
  assert.deepEqual(library(main.data),['from-other']);
  assert(conflict&&library(conflict.data).includes('only-here'),'this device\'s change waits in the slot');
 });
+// The copy this device just left is its own. When the adopt after it failed, the next
+// attempt could not name it, the server refused to replace it, and the device stayed dirty
+// behind a notice claiming another device's changes were waiting.
+test('a conflict copy stays replaceable when adopting after it fails',async()=>{
+ const requests=[];let main={stamp:20,data:backup('other-device')},conflict=null;
+ const c=client(async(url,opts={})=>{requests.push({url,...opts});const isC=url.endsWith('/conflict');
+  if(opts.method==='PUT'&&isC){if(conflict&&opts.headers['If-Match']!==String(conflict.stamp))return {ok:false,status:409,json:async()=>({hasConflict:true})};
+   conflict={stamp:(conflict?conflict.stamp:0)+100};return response({stamp:conflict.stamp});}
+  if(opts.method==='PUT')return {ok:false,status:409,json:async()=>({stamp:main.stamp,data:main.data})};
+  return response({stamp:10,data:backup('initial')});});
+ await flushMicrotasks(40);c.Store.addTrack({id:'mine'});
+ const importData=c.Store.importData;let fail=true;
+ c.Store.importData=(...args)=>{if(fail)throw new Error('QuotaExceededError');return importData.apply(c.Store,args);};
+ await c.Sync.pushNow();
+ assert.equal(c.state().dirty,true);assert.equal(c.state().ownConflict,100);
+ fail=false;await c.Sync.pushNow();
+ const copies=requests.filter(x=>x.url.endsWith('/conflict')&&x.method==='PUT');
+ assert.equal(copies.length,2);assert.equal(copies[1].headers['If-Match'],'100');
+ assert(c.Store.findTrack('other-device'));assert.equal(c.state().dirty,false);
+});
