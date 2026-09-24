@@ -647,10 +647,14 @@ function catchUpOnBoot() {
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    let total = 0;
+    let total = 0, over = false;
     req.on("data", chunk => {
+      if (over) return;
       total += chunk.length;
-      if (total > limit) { reject(Object.assign(new Error("payload too large"), { code: 413 })); req.destroy(); return; }
+      // Answered with 413 and the rest read and dropped: destroying the request here
+      // closed the socket before the answer could be written, so the client saw only a
+      // reset connection.
+      if (total > limit) { over = true; chunks.length = 0; reject(Object.assign(new Error("payload too large"), { code: 413 })); return; }
       chunks.push(chunk);
     });
     req.on("end", () => resolve(Buffer.concat(chunks)));
