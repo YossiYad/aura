@@ -471,6 +471,11 @@
     if (!head.ok) throw new Error("Couldn't read the server copy; nothing was restored");
     const remote = await head.json();
     if (startingRevision !== changeRevision) throw new Error("Local changes were made during recovery; retry to restore the copy");
+    // Changes this device has not uploaded exist nowhere else. Recovering the waiting copy
+    // used to import over them and then empty the slot, and they were gone. They take the
+    // recovered copy's place in the slot instead, to be restored or discarded in turn.
+    const before = readState();
+    const own = before.dirty && !bareStore(Store.exportData().data) ? Store.exportData() : null;
     importing = true;
     try { Store.importData(body.data, { preserveDownloads: true }); } finally { importing = false; }
     const revision = ++changeRevision;
@@ -482,9 +487,17 @@
     if (!saved.ok) throw new Error("Recovered locally; server save failed. The other-device copy was kept.");
     const out = await saved.json();
     writeState(Object.assign(readState(), { stamp: out.stamp, dirty: revision !== changeRevision, at: Date.now() }));
-    const removed = await fetch(CONFLICT, { method: "DELETE", headers: { "If-Match": String(body.stamp || 0) } });
-    if (!removed.ok) throw new Error("Recovered and saved; a newer other-device copy was kept");
-    conflictOnServer = false;
+    if (own) {
+      const kept = await fetch(CONFLICT, { method: "PUT", cache: "no-store",
+        headers: { "Content-Type": "application/json", "If-Match": String(body.stamp || 0) }, body: JSON.stringify(own) });
+      if (!kept.ok) throw new Error("Recovered and saved; this device's earlier changes could not be kept on the server");
+      conflictOnServer = true;
+      if (window.Views && Views.toast) Views.toast("Restored the other device's copy - this device's earlier changes are kept under Settings");
+    } else {
+      const removed = await fetch(CONFLICT, { method: "DELETE", headers: { "If-Match": String(body.stamp || 0) } });
+      if (!removed.ok) throw new Error("Recovered and saved; a newer other-device copy was kept");
+      conflictOnServer = false;
+    }
     notifyListeners();
     if (revision !== changeRevision) schedulePush(PUSH_DEBOUNCE_MS);
     if (window.Views) Views.render();
