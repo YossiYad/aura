@@ -236,3 +236,28 @@ test('a shared playlist keeps its cached songs while its summary has not moved',
  summary.count=3;summary.updatedAt=6;await c.Sync.sharedList();
  assert.equal(c.Sync.sharedCached('sp_1').tracks,undefined,'a list that moved on is fetched again');
 });
+// With another device's copy already in the one conflict slot, this device keeps its own
+// changes locally. Recovering the waiting copy then imported over them and emptied the slot,
+// and they existed nowhere at all. They take the recovered copy's place in the slot instead.
+test('recovering the waiting copy keeps this device\'s unsynced changes in the slot',async()=>{
+ const library=d=>Array.from(d.data.library,t=>t.id);
+ let main={stamp:10,data:backup('initial')},conflict=null;
+ const c=client(async(url,opts={})=>{const isC=url.endsWith('/conflict'),m=opts.method||'GET';
+  if(m==='PUT'){
+   if(isC){if(conflict&&opts.headers['If-Match']!==String(conflict.stamp))return {ok:false,status:409,json:async()=>({hasConflict:true})};
+    conflict={stamp:500,data:JSON.parse(opts.body)};return response({stamp:500});}
+   if(opts.headers['If-Match']!==String(main.stamp))return {ok:false,status:409,json:async()=>({stamp:main.stamp,data:main.data,hasConflict:!!conflict})};
+   main={stamp:main.stamp+1,data:JSON.parse(opts.body)};return response({stamp:main.stamp});}
+  if(m==='DELETE'){if(isC)conflict=null;return response({ok:true});}
+  if(isC)return conflict?response(conflict):{ok:false,status:404,json:async()=>({})};
+  return response({stamp:main.stamp,data:main.data,hasConflict:!!conflict});});
+ await flushMicrotasks(40);
+ conflict={stamp:300,data:backup('from-other')};main={stamp:20,data:backup('from-third')};
+ c.Store.addTrack({id:'only-here'});
+ await c.Sync.pushNow();await flushMicrotasks(40);
+ assert.equal(c.state().dirty,true,'the local change is kept while the slot is taken');
+ await c.Sync.recoverConflict();
+ assert.deepEqual(Array.from(c.Store.library(),t=>t.id),['from-other']);
+ assert.deepEqual(library(main.data),['from-other']);
+ assert(conflict&&library(conflict.data).includes('only-here'),'this device\'s change waits in the slot');
+});
