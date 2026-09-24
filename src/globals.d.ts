@@ -232,7 +232,7 @@ interface AuraPlayer {
   releaseForVoice(): void;
   primeForPlayback(): void;
   /** What the audio element holds, for the diagnostic log. */
-  captureState(): { src: boolean, paused: boolean, ended: boolean, ready: number, kick: string, backend: string, tts: boolean };
+  captureState(): { src: boolean, paused: boolean, ended: boolean, ready: number, kick: string, backend: string, primed: boolean, tts: boolean };
   seekTo(sec: number): void;
   /** @param v 0 to 1. */
   setVolume(v: number): void;

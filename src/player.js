@@ -172,8 +172,10 @@
   let ytFocusResumeAttempts = 0;
   let loadingInProgress = false;
   let pendingPlaybackPermission = null;
-  // Set once the element has been handed iOS playback permission inside a gesture, so a
-  // later AI-resolved play() is allowed without a manual tap. Diagnostic only.
+  // Set once the element holds iOS playback permission - primed inside a gesture, or seen
+  // playing - so the song a request resolves to later starts without a manual tap. A voice
+  // request primes the element only while this is unset (releaseForVoice); a refused play
+  // clears it.
   let playbackPrimed = false;
   let audioSessionBound = false;
   let sessionKick = null;

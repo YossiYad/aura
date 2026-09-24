@@ -355,8 +355,13 @@
   // AudioContext, which even SUSPENDED keeps the session pinned to playback. Release both for a
   // capture - detach every element source (position stashed so resumePlay's no-source branch
   // reloads current() in place) and close the context. Then, still inside the capture-opening
-  // tap, re-arm the element's playback permission so the track the AI resolves seconds later
-  // starts without a manual Play tap. No-op off iOS and off the audio backend.
+  // tap, give the element its playback permission if it does not hold it yet, so the song the
+  // request resolves to seconds later starts without a manual Play tap. iOS keeps that
+  // permission on the element across sources - the prime itself drops its source and the
+  // later play() is still allowed - so a primed element is not primed again: doing that on
+  // every request played and stopped the element right in front of each capture. A refused
+  // play clears the mark (holdPlaybackPermission), and the next request's tap primes again.
+  // No-op off iOS and off the audio backend.
   /** On iOS, lets go of the audio element so the microphone can open. */
   function releaseForVoice() {
     if (!V.isIOS || V.backend !== "audio") return;
@@ -374,7 +379,8 @@
       });
       releaseSessionKick();
     }
-    primeForPlayback();
+    if (V.playbackPrimed) V.log("voice", "element already holds playback permission, not priming");
+    else primeForPlayback();
   }
 
   function mediaSessionPause() {
