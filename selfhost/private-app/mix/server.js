@@ -560,6 +560,9 @@ async function buildMixOnce(key) {
   // worse than one with a few unfamiliar names in it.
   const picked = inWorld.length >= 6 ? inWorld : found;
 
+  // A build runs for a while. A key withdrawn in the meantime took the old mix with it,
+  // and a mix written now would be one made with that key that nothing ever removes.
+  if (mine && !readOwnKeys(key)) throw new Error("the key was withdrawn while the mix was being built");
   const mix = {
     at: Date.now(),
     sig: signatureOf(account),
