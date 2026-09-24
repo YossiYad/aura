@@ -654,6 +654,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .fullplayer.closing { animation: fp-out 240ms var(--ease-exit) forwards; }
 @keyframes fp-out { to { transform: translate3d(0, 100%, 0); } }
 .fullplayer.dragging { animation: none; transition: none; border-radius: 18px 18px 0 0; }
+/* Once a drag has moved the player it must not slide in again from the bottom when the
+   drag classes come off; only a tap open (which clears this) plays the entry. */
+.fullplayer.drag-settled:not(.closing) { animation: none; }
 .fullplayer.drag-resetting {
   animation: none;
   transform: translate3d(0,0,0) !important;
