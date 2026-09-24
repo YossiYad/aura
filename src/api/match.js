@@ -47,12 +47,20 @@
   function scoreMatch(candidate, wantTitle, wantArtist) {
     const candTitle = matchTokens(candidate.title);
     const candArtist = matchTokens(candidate.artist);
-    const titleScore = coverage(matchTokens(wantTitle), candTitle.concat(candArtist));
+    // "Song (feat. Someone)" is how streaming services name a track with a guest, and the
+    // upload is often plain "Song". Counted as title words, the guest's name halved a short
+    // title's coverage and the song was reported not found.
+    // The guest still says which recording is meant, so an upload naming them ranks first.
+    const feature = /\s*[([]?\s*\b(?:feat|ft|featuring)\b\.?\s+[^)\]]*[)\]]?/gi;
+    const plainTitle = matchTokens(String(wantTitle || "").replace(feature, " "));
+    const guests = matchTokens((String(wantTitle || "").match(feature) || []).join(" "));
+    const titleScore = coverage(plainTitle.length ? plainTitle : matchTokens(wantTitle), candTitle.concat(candArtist));
     const wantedArtist = matchTokens(wantArtist);
     const artistScore = wantedArtist.length
       ? Math.max(coverage(wantedArtist, candArtist), coverage(wantedArtist, candTitle))
       : 1;
     let score = titleScore * 3 + artistScore * 2;
+    if (plainTitle.length && guests.length) score += coverage(guests, candTitle.concat(candArtist));
     const asked = normMatch(wantTitle + " " + wantArtist);
     const got = normMatch(candidate.title + " " + candidate.artist);
     let other = 0;

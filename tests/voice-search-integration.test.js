@@ -183,3 +183,17 @@ test('an import passes over a Hebrew cover, karaoke or remix by someone else', a
     assert.equal((await harness([version, original]).Api.matchTrack('תגידי', 'עומר אדם')).id, original.videoId, version.title);
   }
 });
+
+// Streaming services name a track with a guest "Song (feat. Someone)"; the upload is often
+// plain "Song". The guest's words used to count as title words, and a short title then
+// matched nothing - the song was reported not found on import.
+test('an imported title with a featured artist still finds the plain upload, and prefers the one naming the guest', async () => {
+  const plain = { type: 'video', videoId: 'umbrella111', title: 'Umbrella', author: 'Rihanna - Topic', lengthSeconds: 275, viewCount: 1000000 };
+  for (const title of ['Umbrella (feat. JAY-Z)', 'Umbrella feat. JAY-Z', 'Umbrella [ft. JAY-Z]']) {
+    assert.equal((await harness([plain]).Api.matchTrack(title, 'Rihanna')).id, plain.videoId, title);
+  }
+  const original = { type: 'video', videoId: 'original000', title: 'Luis Fonsi - Despacito ft. Daddy Yankee', author: 'LuisFonsiVEVO', lengthSeconds: 280, viewCount: 8000000000 };
+  const guest = { type: 'video', videoId: 'guestmix000', title: 'Luis Fonsi, Daddy Yankee - Despacito (Audio) ft. Justin Bieber', author: 'LuisFonsiVEVO', lengthSeconds: 230, viewCount: 1000000000 };
+  assert.equal((await harness([original, guest]).Api.matchTrack('Despacito (feat. Justin Bieber)', 'Luis Fonsi')).id, guest.videoId);
+  assert.equal((await harness([original, guest]).Api.matchTrack('Despacito', 'Luis Fonsi')).id, original.videoId);
+});
