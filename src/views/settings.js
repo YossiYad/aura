@@ -548,7 +548,7 @@
       Ai.providers.map(p => aiProviderBlockHtml(p)).join('<div class="ai-provider-sep"></div>') +
       choiceRow("Speech language", "What the orb listens for when you tap it. Recognition is done by the browser and may use an online service.",
         segControl("set-voice-lang", [["he-IL", "עברית"], ["en-US", "English"]], (window.I18n ? I18n.speechLanguage() : s.voiceLanguage || "he-IL"))) +
-      toggleRow("set-voice-reply", "Spoken replies", "Answers a voice request out loud, with a voice stored on this device. On iPhone it can keep your next request from being heard, so it starts off there.", Voice.repliesOn ? Voice.repliesOn() : s.voiceReply !== false) +
+      toggleRow("set-voice-reply", "Spoken replies", "Answers a voice request out loud, with a voice stored on this device. On iPhone the answer stays on screen: iOS speaks only right after a tap, and speaking would keep your next request from being heard.", Voice.repliesOn ? Voice.repliesOn() : s.voiceReply !== false) +
       toggleRow("set-ai-home", "AI picks on Home", "Adds a “Picked for you today” row to Home, built from your own listening history and refreshed about once a day. On a self-hosted server that builds it overnight, this works without a key on this device.", s.aiHomeSection === true));
   }
 

@@ -231,7 +231,8 @@ interface AuraPlayer {
   isPaused(): boolean;
   playbackRequested(): boolean;
   isLoading(): boolean;
-  releaseForVoice(): void;
+  /** Settles once the player's audio context has closed. */
+  releaseForVoice(): Promise<void>;
   primeForPlayback(): void;
   /** What the audio element holds, for the diagnostic log. */
   captureState(): { src: boolean, paused: boolean, ended: boolean, ready: number, kick: string, backend: string, primed: boolean, tts: boolean };
