@@ -224,9 +224,10 @@
     "network": "זיהוי הדיבור לא זמין כרגע. נסו שוב או כתבו למעלה.",
     "no-speech": "לא שמעתי המשך. אפשר לשלוח או להמשיך לדבר.",
     "language-not-supported": "השפה הזו לא נתמכת בזיהוי הדיבור כאן.",
-    // The iPhone records a request once its built-in recognizer has run; see src/voice.js.
+    // After its first request an iPhone also records each one, transcribed only when the
+    // built-in recognizer heard nothing; see src/voice.js.
     "transcribe-failed": "לא הצלחתי לתמלל את הבקשה. נסו שוב או כתבו למעלה.",
-    "no-key": "כדי לשמוע עוד בקשות באייפון צריך מפתח Groq או Gemini בהגדרות. אפשר גם לכתוב למעלה.",
+    "no-key": "זיהוי הדיבור לא שמע. עם מפתח Groq או Gemini בהגדרות ההקלטה תתומלל. אפשר גם לכתוב למעלה.",
     "mic-silent": "המיקרופון לא העביר קול. נסו שוב, ואם זה חוזר - סגרו ופתחו את האפליקציה."
   };
 

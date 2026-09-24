@@ -69,16 +69,17 @@
   let lastSpokeAt = 0;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
     navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-  // The built-in recognizer on iOS is fed audio only for the first recognition of a page
-  // load; every later one reports audio start and receives nothing. Tried on device with new
-  // and reused recognizers and every audio-session reset: WebKit runs that capture apart from
-  // the page's own microphone, and nothing on the page reaches it. The page's microphone
-  // keeps working, so once the recognizer has run, an iPhone records each later request and
-  // has it transcribed (record) - with the Groq or Gemini key from Settings.
+  // On iOS the built-in recognizer heard only the first request of a page load: every later
+  // one reported audio start and received nothing, on new and reused recognizers and after
+  // every audio-session reset. The page's own microphone, opened the default way, delivered
+  // nothing either - until a capture without voice processing had run first (MICROPHONES).
+  // So once the recognizer has run, an iPhone opens each later request's microphone that way
+  // and records it (record), and the recognizer listens alongside once the microphone
+  // delivers. Its words are the request; only when it heard nothing is the recording
+  // transcribed, with the Groq or Gemini key from Settings.
   let recognizerRan = false;
-  function canTranscribe() {
-    return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
-      window.Ai && Ai.transcribe && Ai.hasAnyKey());
+  function canRecord() {
+    return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
   }
   // Spoken replies use speechSynthesis, which on iOS leaves WebKit unable to feed the next
   // recognition (WebKit bug 321436): speaking a reply deafens the very next voice request.
@@ -156,12 +157,9 @@
     const Ctor = speechCtor();
     if (!Ctor) throw new Error("Speech recognition is unavailable");
     if (currentCapture) currentCapture();
-    if (isIOS && recognizerRan && canTranscribe()) return record(options);
+    if (isIOS && recognizerRan && canRecord()) return record(options);
     const id = ++captureCount;
     const trace = message => log("capture " + id + ": " + message);
-    // Without a key to transcribe with, a later iPhone request still tries the recognizer,
-    // and when it hears nothing the message names the missing key instead.
-    const needsKey = isIOS && recognizerRan && !(window.Ai && Ai.hasAnyKey());
     let recognition, timer, finishTimer, finishing = false, closed = false;
     let inputTimer, previousAudioType, microphone;
     let recoveries = 0, runs = 0;
@@ -185,8 +183,8 @@
         (track.muted ? " muted" : "") + (track.enabled === false ? " disabled" : "")).join(", ") : "none";
       return state + ", microphone " + tracks;
     }
-    trace("opened on the " + (ios ? "iOS" : "standard") + " path" + (ios && recognizerRan ? " after an earlier recognition" +
-      (needsKey ? ", no key to transcribe with" : "") : "") + ", transcript reset, " + inputState());
+    trace("opened on the " + (ios ? "iOS" : "standard") + " path" + (ios && recognizerRan ? " after an earlier recognition" : "") +
+      ", transcript reset, " + inputState());
     // Takes the handlers off the current recognizer, which is never started again, and
     // aborts it unless it already ended. Whatever its native run still sends reaches no one.
     function detach(ended) {
@@ -284,7 +282,6 @@
     }
     function fail(code) {
       if (closed) return;
-      if (needsKey && code === "recognition-timeout") code = "no-key";
       const value = text();
       trace("error " + code + ", " + value.length + " characters");
       cancel();
@@ -473,9 +470,12 @@
     { name: "without voice processing, session left to the browser", audio: RAW_AUDIO, session: "auto" }
   ];
   /**
-   * Records one request through the page's microphone, ends it on silence and has it
-   * transcribed: the iPhone path once the built-in recognizer has run (see recognizerRan).
-   * The same contract as listen(), except that the words arrive once, from the transcript.
+   * The iPhone path once the built-in recognizer has run (see recognizerRan): records one
+   * request through the page's microphone, opened a way that delivers (MICROPHONES), and has
+   * the recognizer listen alongside once it does. The request is the recognizer's words,
+   * shown as they come; the recording is transcribed only when it heard nothing. It ends on
+   * silence - the recording's level, or two seconds without new words. The same contract as
+   * listen().
    * @param {ListenOptions} options
    * @returns {{ cancel: () => void, finish: () => void }}
    */
@@ -490,13 +490,20 @@
     /** @type {Blob[]} */
     let chunks = [];
     let liveTimer = null, waitTimer = null, capTimer = null;
-    let heard = false, sound = false, lit = false, startedAt = 0;
+    let heard = false, sound = false, lit = false, stopped = false, startedAt = 0;
     // The meter: how much of the decoded recording has been measured, the quietest slice of
     // the first half second, and how long it has been quiet since the voice.
     const Offline = window.OfflineAudioContext;
     /** @type {OfflineAudioContext | null} */
     let decoder = null;
     let meterBroken = !Offline, decoding = false, measured = 0, room = Infinity, threshold = VOICE_MAX, quiet = 0;
+    // The recognizer alongside: its current run, the words it has heard, whether they changed
+    // in the last second and a half, and whether it hears speech right now.
+    let recognition = null, runs = 0, stopTimer = null, restartTimer = null, wordsTimer = null, freshTimer = null;
+    let speaking = false, fresh = false;
+    /** @type {{ text: string, final: boolean }[]} */
+    let committed = [], session = [];
+    const words = () => requestStart(transcriptParts(committed.concat(session)).map(part => part.text).join(" "));
     const audioSession = navigator.audioSession;
     let previousAudioType = null;
     currentCapture = cancel;
@@ -534,11 +541,29 @@
       tracks.forEach(track => { track.onmute = track.onunmute = null; track.stop(); });
       trace("microphone released, tracks " + tracks.map(track => track.readyState || "stopped").join(", "));
     }
+    // Takes the handlers off the recognizer's current run, which is never started again, and
+    // aborts it unless it already ended. Whatever the run still sends reaches no one.
+    function dropRecognizer(ended) {
+      clearTimeout(stopTimer);
+      const run = recognition;
+      if (!run) return;
+      recognition = null;
+      speaking = false;
+      run.onstart = run.onresult = run.onerror = run.onend = null;
+      run.onspeechstart = run.onspeechend = run.onaudiostart = null;
+      if (ended) return;
+      trace("recognizer run " + runs + " aborted");
+      try { run.abort(); } catch (e) {}
+    }
     // Everything that holds the microphone, let go before the recording is sent.
     function release() {
       clearTimeout(liveTimer);
       clearTimeout(waitTimer);
       clearTimeout(capTimer);
+      clearTimeout(restartTimer);
+      clearTimeout(freshTimer);
+      clearWords();
+      dropRecognizer(false);
       dropRecorder();
       dropStream();
       if (previousAudioType != null) {
@@ -565,12 +590,40 @@
       clearTimeout(liveTimer);
       clearTimeout(waitTimer);
       clearTimeout(capTimer);
+      clearTimeout(restartTimer);
+      clearWords();
       if (options.onfinishing) options.onfinishing();
       trace("recording stopped after " + (startedAt ? ((Date.now() - startedAt) / 1000).toFixed(1) + "s" : "none") +
-        ", " + bytes() + " bytes, voice heard " + heard + ", sound " + sound + (meterBroken ? ", no meter" : ""));
+        ", " + bytes() + " bytes, voice heard " + heard + ", sound " + sound + (meterBroken ? ", no meter" : "") +
+        ", recognizer " + (runs ? words().length + " characters" : "not started"));
+      // Stopped, the recognizer hands over its last words; some builds never say it ended.
+      if (recognition) {
+        const run = recognition;
+        trace("recognizer run " + runs + " stop requested");
+        stopTimer = setTimeout(() => { trace("recognizer gave no end within 1.5s of stop"); dropRecognizer(false); decide(); }, 1500);
+        try { run.stop(); } catch (e) { dropRecognizer(false); }
+      }
       if (recorder && recorder.state !== "inactive") {
         try { recorder.stop(); return; } catch (e) {}
       }
+      recordingStopped();
+    }
+    function recordingStopped() {
+      stopped = true;
+      decide();
+    }
+    // Once the recording and the recognizer have both stopped: the recognizer's words when it
+    // heard any, and nothing is sent; else the recording, for the transcriber.
+    function decide() {
+      if (closed || !finishing || !stopped || recognition) return;
+      const value = words();
+      if (value) {
+        trace("the request is the recognizer's, " + value.length + " characters; the recording is not sent");
+        cancel();
+        options.onfinish(value);
+        return;
+      }
+      if (runs) trace("the recognizer heard nothing; the recording goes to the transcriber");
       send();
     }
     // Sent only with the microphone closed, and only with a voice in it when the meter could
@@ -581,6 +634,8 @@
       release();
       if (!blob.size) { fail("recognition-timeout"); return; }
       if (!meterBroken && !heard) { fail(sound ? "recognition-timeout" : "mic-silent"); return; }
+      // Without a key there is nothing to transcribe it with, and it goes nowhere.
+      if (!(window.Ai && Ai.transcribe && Ai.hasAnyKey())) { fail("no-key"); return; }
       trace("recorded " + Math.max(1, Math.round(blob.size / 1024)) + "KB, transcribing");
       Promise.resolve().then(() => Ai.transcribe(blob, options.lang || "he-IL")).then(raw => {
         if (closed) return;
@@ -600,6 +655,79 @@
       if (lit || closed || finishing) return;
       lit = true;
       if (options.onlistening) options.onlistening(true);
+      startRecognizer();
+    }
+    // The recognizer starts once the microphone delivers: by then the capture it shares
+    // delivers too. A run that ends while the request goes on is replaced, twice at most, and
+    // the words it heard are kept.
+    function startRecognizer() {
+      const Ctor = speechCtor();
+      if (!Ctor || closed || finishing || recognition) return;
+      committed = transcriptParts(committed.concat(session));
+      session = [];
+      let run;
+      try { run = new Ctor(); }
+      catch (e) { trace("recognizer could not be created; the recording is the request"); return; }
+      recognition = run;
+      const runId = ++runs;
+      const note = message => trace("recognizer run " + runId + " " + message);
+      const active = () => !closed && recognition === run;
+      run.lang = options.lang || "he-IL";
+      run.continuous = true;
+      run.interimResults = true;
+      run.maxAlternatives = 1;
+      run.onstart = () => { if (active()) note("started, " + run.lang); };
+      run.onaudiostart = () => { if (active()) note("audio started"); };
+      run.onspeechstart = () => {
+        if (!active() || finishing) return;
+        note("speech started");
+        speaking = true;
+        clearWords();
+      };
+      run.onspeechend = () => {
+        if (!active()) return;
+        note("speech ended");
+        speaking = false;
+        waitAfterWords();
+      };
+      run.onresult = event => {
+        if (!active()) return;
+        const before = words();
+        session = Array.from(event.results, result => ({ text: result[0].transcript.trim(), final: !!result.isFinal }));
+        const final = !!(event.results.length && event.results[event.results.length - 1].isFinal);
+        note("result, " + words().length + " characters, final " + final);
+        if (final) speaking = false;
+        if (words() !== before) {
+          clearWords();
+          fresh = true;
+          clearTimeout(freshTimer);
+          freshTimer = setTimeout(() => { fresh = false; }, 1500);
+        }
+        if (options.ontext) options.ontext(words(), final);
+        waitAfterWords();
+      };
+      run.onerror = event => { if (active()) note("error " + (event.error || "unknown")); };
+      run.onend = () => {
+        if (!active()) return;
+        note("ended");
+        dropRecognizer(true);
+        if (finishing) { decide(); return; }
+        waitAfterWords();
+        if (runs < 3) restartTimer = setTimeout(startRecognizer, 300);
+      };
+      note("created alongside the recording, start requested");
+      try { run.start(); }
+      catch (e) { note("start threw " + ((e && e.name) || "an error") + "; the recording is the request"); dropRecognizer(true); }
+    }
+    // Words, then two seconds without new ones, end the request as they end the first one;
+    // the recording's level can end it sooner (measure).
+    function waitAfterWords() {
+      if (closed || finishing || speaking || !words() || wordsTimer !== null) return;
+      wordsTimer = setTimeout(() => { wordsTimer = null; finish(); }, 2000);
+    }
+    function clearWords() {
+      clearTimeout(wordsTimer);
+      wordsTimer = null;
     }
     function measure() {
       if (meterBroken || decoding || closed || finishing || !chunks.length) return;
@@ -633,11 +761,13 @@
           if (measured >= DEAD_SECONDS * audio.sampleRate) noAudio();
           return;
         }
+        // Quiet ends the request only once the recognizer's words have stopped changing too:
+        // words still arriving are someone still speaking, whatever the level says.
         if (level >= threshold) {
           if (!heard) trace("voice detected");
           heard = true;
           quiet = 0;
-        } else if (heard && (quiet += seconds) >= 1.5) finish();
+        } else if (heard && (quiet += seconds) >= 1.5 && !fresh) finish();
       }, error => {
         decoding = false;
         if (closed || meterBroken) return;
@@ -686,7 +816,7 @@
         chunks.push(event.data);
         measure();
       };
-      current.onstop = () => { if (recorder === current) send(); };
+      current.onstop = () => { if (recorder === current) recordingStopped(); };
       current.onerror = () => { if (recorder !== current) return; trace("recorder failed"); fail("audio-capture"); };
       try { current.start(SLICE_MS); }
       catch (e) { trace("recorder could not start, " + ((e && e.name) || "error")); fail("audio-capture"); return; }
@@ -701,7 +831,7 @@
       // A request nobody speaks into ends without sending anything; one the meter cannot
       // judge is sent at its time limit, for the transcriber to judge.
       waitTimer = setTimeout(() => {
-        if (heard) return;
+        if (heard || words()) return;
         if (meterBroken) finish();
         else fail("recognition-timeout");
       }, 10000);
