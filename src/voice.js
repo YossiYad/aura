@@ -420,9 +420,11 @@
     return { cancel, finish };
   }
 
-  // The level at which the meter counts a voice: someone speaking to the phone, well above
-  // the noise of a quiet room. Float samples, so a live microphone never reads exactly zero.
-  const SPEECH_LEVEL = 0.045;
+  // The meter counts a voice at three times the room's own level, learned over the first
+  // half second - no stricter than someone speaking close to the phone (VOICE_MAX), and
+  // never down in the noise of a quiet room (VOICE_MIN), so a softer voice or a phone in a
+  // car mount is still heard. Float samples: a live microphone never reads exactly zero.
+  const VOICE_MIN = 0.015, VOICE_MAX = 0.045;
   /**
    * Records one request through the page's microphone, ends it on silence and has it
    * transcribed: the iPhone path once the built-in recognizer has run (see recognizerRan).
@@ -442,6 +444,7 @@
     let context = null;
     let levelTimer = null, waitTimer = null, capTimer = null;
     let signal = false, heard = false, quietTicks = 0, startedAt = 0;
+    let ticks = 0, quietest = Infinity, threshold = VOICE_MAX;
     /** @type {Blob[]} */
     const chunks = [];
     const audioSession = navigator.audioSession;
@@ -542,7 +545,14 @@
           for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
           const level = Math.sqrt(sum / samples.length);
           if (level > 0 && !signal) { signal = true; trace("microphone signal arriving, meter " + meter.state); }
-          if (level >= SPEECH_LEVEL) {
+          if (++ticks <= 5) {
+            quietest = Math.min(quietest, level);
+            if (ticks === 5) {
+              threshold = Math.min(VOICE_MAX, Math.max(VOICE_MIN, quietest * 3));
+              trace("voice threshold " + threshold.toFixed(3) + ", room level " + quietest.toFixed(4));
+            }
+          }
+          if (level >= threshold) {
             if (!heard) trace("voice detected");
             heard = true;
             quietTicks = 0;
