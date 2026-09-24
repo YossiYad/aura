@@ -62,20 +62,22 @@ const server = http.createServer((req, res) => {
     });
     const settle = () => page.waitForTimeout(450);
     const bar = await page.locator('#pb-now').boundingBox();
+    const barTop = (await page.locator('#playerbar').boundingBox()).y;
     const x = bar.x + 60;
     const y = bar.y + bar.height / 2;
 
-    // A short, slow pull shows the player under the finger and drops it back.
+    // A short, slow pull grows the player out of the bar under the finger - its top edge
+    // starts where the bar is, not at the bottom of the screen - and drops it back.
     let during = await drag(x, y, x, y - 60, 40);
     assert.equal(during.hidden, false);
     assert.equal(during.dragging, true);
-    assert.ok(during.top > 600 && during.top < 793, 'player follows the finger: ' + during.top);
+    assert.ok(Math.abs(during.top - (barTop - 60)) <= 12, 'player top follows the finger from the bar: ' + during.top + ' vs bar ' + barTop);
     await settle();
     assert.equal((await player()).hidden, true, 'short pull falls back');
 
     // A long pull opens it, and it does not replay the slide-in once it has settled.
     during = await drag(x, y, x, y - 400, 16);
-    assert.ok(during.top > 300 && during.top < 500, 'player follows the finger: ' + during.top);
+    assert.ok(Math.abs(during.top - Math.max(0, barTop - 400)) <= 12, 'player top follows the finger from the bar: ' + during.top);
     await page.waitForTimeout(300);
     let state = await player();
     assert.equal(state.hidden, false);
