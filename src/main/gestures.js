@@ -38,8 +38,11 @@
 
   function openFullPlayer() {
     if (fpCloseTimer) clearTimeout(fpCloseTimer);
+    if (fpSettleTimer) clearTimeout(fpSettleTimer);
+    fpSettleTimer = null;
     resetFullPlayerDrag();
-    fullPlayer.classList.remove("closing");
+    // A tap slides the player in; after a drag it is already where the finger left it.
+    fullPlayer.classList.remove("closing", "drag-settled");
     fullPlayer.scrollTop = 0;
     fullPlayer.hidden = false;
     V.refreshBar();
@@ -59,6 +62,53 @@
   let barSwiping = false;
   let barSwipeFrame = 0;
   let barSwipedAt = 0;
+  // Dragged up, the bar pulls the full player in from the bottom under the finger, and
+  // the player is dragged back down the same way (controls.js). Let go past the threshold
+  // or with a flick and it settles open; short of that it drops back behind the bar.
+  let barPulling = false;
+  let barPullHeight = 0;
+  let barPullY = 0;
+  let fpSettleTimer = null;
+
+  function startBarPull() {
+    if (fpCloseTimer) clearTimeout(fpCloseTimer);
+    fpCloseTimer = null;
+    if (fpSettleTimer) clearTimeout(fpSettleTimer);
+    fpSettleTimer = null;
+    resetFullPlayerDrag();
+    fullPlayer.classList.remove("closing");
+    fullPlayer.classList.add("dragging", "drag-settled");
+    fullPlayer.scrollTop = 0;
+    fullPlayer.style.transform = "translate3d(0,100%,0)";
+    fullPlayer.hidden = false;
+    barPullHeight = fullPlayer.offsetHeight || window.innerHeight || 640;
+    barPulling = true;
+    V.refreshBar();
+    V.refreshTime(true);
+  }
+
+  function paintBarPull() {
+    fpDragFrame = 0;
+    fullPlayer.style.transform = "translate3d(0," + barPullY + "px,0)";
+  }
+
+  function finishBarPull(dy) {
+    barPulling = false;
+    if (fpDragFrame) cancelAnimationFrame(fpDragFrame);
+    fpDragFrame = 0;
+    const pulled = Math.max(0, -dy);
+    const elapsed = Math.max(1, performance.now() - barStartAt);
+    const flick = pulled / elapsed > 0.5 && pulled > 40;
+    const crossedThreshold = pulled > Math.min(160, barPullHeight * 0.25);
+    fullPlayer.classList.remove("dragging");
+    if (!(flick || crossedThreshold)) { dismissFullPlayerBySwipe(); return; }
+    fullPlayer.classList.add("drag-resetting");
+    fpSettleTimer = setTimeout(() => {
+      fpSettleTimer = null;
+      fullPlayer.classList.remove("drag-resetting");
+      fullPlayer.style.removeProperty("transform");
+    }, 260);
+  }
 
   function resetBarSwipe() {
     if (barSwipeFrame) cancelAnimationFrame(barSwipeFrame);
@@ -101,10 +151,24 @@
     const touch = e.touches[0];
     const dx = touch.clientX - barStartX;
     const dy = touch.clientY - barStartY;
+    if (barPulling) {
+      barPullY = Math.min(barPullHeight, Math.max(0, barPullHeight + dy));
+      if (!fpDragFrame) fpDragFrame = requestAnimationFrame(paintBarPull);
+      e.preventDefault();
+      return;
+    }
     if (!barSwiping) {
-      if (Math.abs(dx) < 8) return;
-      // A finger going up or down is reaching for the full player, not for this.
-      if (Math.abs(dy) >= Math.abs(dx)) { resetBarSwipe(); return; }
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      // A finger going up is reaching for the full player; one going down has nowhere
+      // to take the bar.
+      if (Math.abs(dy) >= Math.abs(dx)) {
+        if (dy > 0) { resetBarSwipe(); return; }
+        startBarPull();
+        barPullY = Math.min(barPullHeight, Math.max(0, barPullHeight + dy));
+        if (!fpDragFrame) fpDragFrame = requestAnimationFrame(paintBarPull);
+        e.preventDefault();
+        return;
+      }
       barSwiping = true;
       playerBar.classList.add("swiping");
     }
@@ -120,9 +184,16 @@
     e.preventDefault();
   }, { passive: false });
 
-  playerBar.addEventListener("touchend", () => {
+  playerBar.addEventListener("touchend", e => {
     if (!barSwipeEligible) return;
     barSwipeEligible = false;
+    if (barPulling) {
+      // Same as below: the lift's click must not land on the bar under the player.
+      barSwipedAt = Date.now();
+      const touch = e.changedTouches && e.changedTouches[0];
+      finishBarPull(touch ? touch.clientY - barStartY : barPullY - barPullHeight);
+      return;
+    }
     if (!barSwiping) return;
     // The lift still fires a click on whatever the finger started on, and on this bar that
     // would open the full player of a track just thrown away.
@@ -144,7 +215,16 @@
     setTimeout(() => playerBar.classList.remove("swipe-resetting"), 240);
   }, { passive: true });
 
-  playerBar.addEventListener("touchcancel", resetBarSwipe, { passive: true });
+  playerBar.addEventListener("touchcancel", () => {
+    if (barPulling) {
+      barPulling = false;
+      barSwipeEligible = false;
+      fullPlayer.classList.remove("dragging");
+      dismissFullPlayerBySwipe();
+      return;
+    }
+    resetBarSwipe();
+  }, { passive: true });
 
   V.$("pb-now").onclick = () => {
     if (Date.now() - barSwipedAt < 400) return;

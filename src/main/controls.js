@@ -76,7 +76,7 @@
       if (dy <= 6) return;
       if (Math.abs(dx) > dy) { V.resetFullPlayerDrag(); return; }
       V.fpDragging = true;
-      V.fullPlayer.classList.add("dragging");
+      V.fullPlayer.classList.add("dragging", "drag-settled");
     }
     V.fpDragY = Math.max(0, dy);
     if (!V.fpDragFrame) {
