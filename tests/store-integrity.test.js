@@ -136,3 +136,17 @@ test('blocking an artist from a Topic upload covers the same artist on their oth
   assert.equal(Store.isBlocked({ id: 'y', title: 'Hello', artist: 'AdeleVEVO' }), true);
   assert.equal(Store.isBlocked({ id: 'z', title: 'Hello', artist: 'Adele Smith' }), false);
 });
+
+// Tracks in the listening profile are capped so the synced copy stays under the server's
+// limit; the artists beside them were not, and grew for as long as new artists were heard.
+test('the listening profile keeps its artists to the same bound as its tracks', () => {
+  const artists = {};
+  for (let i = 0; i < 2000; i++) artists['Old artist ' + i] = { plays: 1, lastPlayed: 1000 + i, thumb: '', artistId: null };
+  const { Store, read } = createStore({ 'aura.listeningProfile': { tracks: {}, artists } });
+  Store.pushRecent({ id: 'new-song', title: 'New song', artist: 'New artist', duration: 200, kind: 'music' });
+  const saved = read('aura.listeningProfile').artists;
+  assert.equal(Object.keys(saved).length, 2000);
+  assert.ok(saved['New artist']);
+  assert.equal(saved['Old artist 0'], undefined, 'the artist heard longest ago makes way');
+  assert.ok(saved['Old artist 1999']);
+});
