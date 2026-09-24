@@ -59,10 +59,15 @@ function simulateDevice(ios) {
   window.micLevel = 0.002;
   // While set, stop() and abort() never deliver the native end: the run stays busy.
   window.hangEnds = false;
+  // While set, a microphone opened without voice processing records exact silence, as an
+  // iPhone's did after music had played.
+  window.plainSilent = false;
   const later = fn => setTimeout(fn, 5);
   if (ios) {
-    navigator.mediaDevices.getUserMedia = async () => {
-      const track = { readyState: 'live', muted: false, enabled: true, stop() { this.readyState = 'ended'; } };
+    navigator.mediaDevices.getUserMedia = async asked => {
+      const audio = asked && asked.audio;
+      const processed = !(audio && typeof audio === 'object' && audio.echoCancellation === false);
+      const track = { readyState: 'live', muted: false, enabled: true, processed, stop() { this.readyState = 'ended'; } };
       microphones.push(track);
       return { getTracks: () => [track] };
     };
@@ -75,7 +80,8 @@ function simulateDevice(ios) {
       start(slice) {
         if (!this.stream.getTracks().some(track => track.readyState === 'live')) throw new DOMException('No live track', 'InvalidStateError');
         this.state = 'recording';
-        this.timer = setInterval(() => this.ondataavailable?.({ data: new Blob([String(micLevel).padEnd(16)], { type: 'audio/mp4' }) }), slice);
+        const silent = plainSilent && this.stream.getTracks().every(track => !track.processed);
+        this.timer = setInterval(() => this.ondataavailable?.({ data: new Blob([String(silent ? 0 : micLevel).padEnd(16)], { type: 'audio/mp4' }) }), slice);
       }
       stop() {
         if (this.state === 'inactive') return;
@@ -161,6 +167,16 @@ function simulateDevice(ios) {
           return spoken.shift() || '';
         };
         Api.resolve = async () => ({ url: origin + '/test-song.wav' });
+        // Which microphone was live each time the orb started showing it listens.
+        window.litWith = [];
+        let wasLit = false;
+        new MutationObserver(() => {
+          const orb = document.getElementById('ask-voice');
+          const lit = !!orb && orb.classList.contains('listening');
+          if (lit && !wasLit) litWith.push(microphones.filter(track => track.readyState === 'live')
+            .map(track => track.processed ? 'processed' : 'plain').join(',') || 'none');
+          wasLit = lit;
+        }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
         // Stands in for understanding the request: each one follows the plan made for it.
         Voice.resolve = async text => {
           requests.push(text);
@@ -171,6 +187,7 @@ function simulateDevice(ios) {
           return { tracks: [{ id, title: id, artist: 'Singer', duration: 30 }], label: id, action: 'play' };
         };
       }, origin);
+      if (ios) await page.evaluate(() => { plainSilent = true; });
 
       const state = () => page.evaluate(() => ({
         recognizers: recognizers.length, recorders: recorders.length, sent: requests.length,
@@ -193,7 +210,7 @@ function simulateDevice(ios) {
         const recording = records();
         asked++;
         const before = await state();
-        await page.evaluate(plan => plans.push(plan), plan);
+        await page.evaluate(plan => { plans.push(plan); litWith.length = 0; }, plan);
         await page.locator('#ask-voice').tap();
         await page.waitForFunction(opened, { before, recording }, { timeout: 5000 });
         const open = await state();
@@ -201,6 +218,9 @@ function simulateDevice(ios) {
         if (ios) assert.equal(open.liveMicrophones, 1, words + ': one live microphone, the earlier ones released');
         if (recording) {
           assert.equal(open.recognizers, before.recognizers, words + ': no recognizer after the first, it would hear nothing');
+          assert.equal(open.recorders - before.recorders, 2, words + ': the plain capture first, then voice processing');
+          assert.deepEqual(await page.evaluate(() => litWith.slice()), ['processed'],
+            words + ': shown as listening only once the voice-processed microphone delivers');
           assert.equal(await page.evaluate(() => contexts.filter(context => context.state !== 'closed').length), 0,
             words + ': no live audio context while the microphone records');
           await page.evaluate(words => {

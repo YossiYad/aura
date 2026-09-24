@@ -453,11 +453,18 @@
   // one left the microphone silent, and WebKit gives a page with any live context a
   // 128-frame audio buffer. The recording arrives in slices, and each one is measured.
   const SLICE_MS = 300, METER_RATE = 16000;
-  // Ways to open the microphone for a recording, tried in turn while one delivers no audio;
-  // the one that last did goes first next time. The default capture on an iPhone runs
-  // through voice processing - the unit WebKit's own recognizer captures with - and after
-  // music had played it delivered nothing at all, twice in a row, on a live track. Without
-  // voice processing iOS captures through a different, plainer unit.
+  // A way of opening the microphone is dead when no bytes arrive in a second and a half, or
+  // when the first 0.6s it recorded is exact digital silence: a live microphone, even in a
+  // quiet room, never reads exactly zero. The next way opens at once, while the screen still
+  // says to wait, so no words are spoken into a dead one.
+  const DEAD_MS = 1500, DEAD_SECONDS = 0.6;
+  // Ways to open the microphone for a recording, tried in turn while one delivers no audio,
+  // from the first on every request. The default capture on an iPhone runs through voice
+  // processing - the unit WebKit's own recognizer captures with - and after music had played
+  // it delivered nothing at all, twice in a row, on a live track. Opened right after a
+  // capture without voice processing, one that itself recorded only exact silence, it
+  // delivered the request. So the plainer way always goes first, even after the processed
+  // one worked: opened first, that one is the capture that delivered nothing.
   const RAW_AUDIO = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
   /** @type {{ name: string, audio: MediaTrackConstraints | boolean, session: AudioSession["type"] }[]} */
   const MICROPHONES = [
@@ -465,7 +472,6 @@
     { name: "with voice processing", audio: true, session: "play-and-record" },
     { name: "without voice processing, session left to the browser", audio: RAW_AUDIO, session: "auto" }
   ];
-  let workingMicrophone = 0;
   /**
    * Records one request through the page's microphone, ends it on silence and has it
    * transcribed: the iPhone path once the built-in recognizer has run (see recognizerRan).
@@ -477,7 +483,6 @@
     const id = ++captureCount;
     const trace = message => log("capture " + id + ": " + message);
     let closed = false, finishing = false, attempt = 0;
-    const order = MICROPHONES.map((_, i) => (workingMicrophone + i) % MICROPHONES.length);
     /** @type {MediaRecorder | null} */
     let recorder = null;
     /** @type {MediaStream | null} */
@@ -485,7 +490,7 @@
     /** @type {Blob[]} */
     let chunks = [];
     let liveTimer = null, waitTimer = null, capTimer = null;
-    let heard = false, sound = false, startedAt = 0;
+    let heard = false, sound = false, lit = false, startedAt = 0;
     // The meter: how much of the decoded recording has been measured, the quietest slice of
     // the first half second, and how long it has been quiet since the voice.
     const Offline = window.OfflineAudioContext;
@@ -589,9 +594,18 @@
         fail(error && error.noKey ? "no-key" : "transcribe-failed");
       });
     }
+    // The screen says it is listening only once this way is known to deliver: sound in the
+    // recording, or bytes where no meter can tell. Until then it says to wait.
+    function listening() {
+      if (lit || closed || finishing) return;
+      lit = true;
+      if (options.onlistening) options.onlistening(true);
+    }
     function measure() {
       if (meterBroken || decoding || closed || finishing || !chunks.length) return;
       decoding = true;
+      // A decode still running when a dead way is dropped belongs to that way, not the next.
+      const way = attempt;
       const recording = new Blob(chunks, { type: chunks[0].type || "audio/mp4" });
       recording.arrayBuffer().then(buffer => {
         if (!decoder) decoder = new Offline(1, 1, METER_RATE);
@@ -599,6 +613,7 @@
       }).then(audio => {
         decoding = false;
         if (closed || finishing) return;
+        if (way !== attempt) { measure(); return; }
         const samples = audio.getChannelData(0);
         if (samples.length <= measured) return;
         let sum = 0;
@@ -606,13 +621,17 @@
         const from = measured / audio.sampleRate, seconds = (samples.length - measured) / audio.sampleRate;
         const level = Math.sqrt(sum / (samples.length - measured));
         measured = samples.length;
-        if (level > 0 && !sound) { sound = true; workingMicrophone = order[attempt]; trace("sound in the recording"); }
+        if (level > 0 && !sound) { sound = true; trace("sound in the recording"); listening(); }
         if (from < 0.5) {
           room = Math.min(room, level);
           if (from + seconds >= 0.5) {
             threshold = Math.min(VOICE_MAX, Math.max(VOICE_MIN, room * 3));
             trace("voice threshold " + threshold.toFixed(3) + ", room level " + room.toFixed(4));
           }
+        }
+        if (!sound) {
+          if (measured >= DEAD_SECONDS * audio.sampleRate) noAudio();
+          return;
         }
         if (level >= threshold) {
           if (!heard) trace("voice detected");
@@ -622,8 +641,10 @@
       }, error => {
         decoding = false;
         if (closed || meterBroken) return;
+        if (way !== attempt) { measure(); return; }
         meterBroken = true;
         trace("no level meter, " + ((error && error.name) || "decoding failed") + "; the recording ends at 8s");
+        listening();
         clearTimeout(waitTimer);
         clearTimeout(capTimer);
         capTimer = setTimeout(finish, Math.max(0, 8000 - (Date.now() - startedAt)));
@@ -633,9 +654,11 @@
     // silent capture an iPhone showed after playback. The next way of opening it is tried.
     function noAudio() {
       if (closed || finishing) return;
-      trace("no audio in 2.5s, " + bytes() + " bytes, " + trackState() + ", session " + sessionType());
-      if (attempt + 1 >= order.length) { fail("mic-silent"); return; }
+      trace("no audio after " + (Date.now() - startedAt) + "ms, " + (chunks.length ? bytes() + " bytes of exact silence" : "no bytes") +
+        ", " + trackState() + ", session " + sessionType());
+      if (attempt + 1 >= MICROPHONES.length) { fail("mic-silent"); return; }
       attempt++;
+      clearTimeout(liveTimer);
       clearTimeout(waitTimer);
       clearTimeout(capTimer);
       dropRecorder();
@@ -655,10 +678,10 @@
       current.ondataavailable = event => {
         if (recorder !== current || !event.data || !event.data.size) return;
         if (!chunks.length) {
-          // Bytes alone may be encoded silence; the meter confirms the way works (measure).
-          if (meterBroken) workingMicrophone = order[attempt];
           trace("audio arriving after " + (Date.now() - startedAt) + "ms, " + (event.data.type || "untyped") +
-            ", " + MICROPHONES[order[attempt]].name);
+            ", " + MICROPHONES[attempt].name);
+          // Bytes alone may be encoded silence: the meter tells (measure), where there is one.
+          if (meterBroken) listening();
         }
         chunks.push(event.data);
         measure();
@@ -669,10 +692,12 @@
       catch (e) { trace("recorder could not start, " + ((e && e.name) || "error")); fail("audio-capture"); return; }
       startedAt = Date.now();
       trace("recording in " + SLICE_MS + "ms slices, " + (current.mimeType || "default format") + ", microphone " + trackState());
-      if (options.onlistening) options.onlistening(true);
+      // Exact silence usually shows well before (measure); a meter slow to decode it gets
+      // another second.
       liveTimer = setTimeout(() => {
-        if (!chunks.length || (!meterBroken && measured > 0 && !sound)) noAudio();
-      }, 2500);
+        if (!chunks.length) { noAudio(); return; }
+        liveTimer = setTimeout(() => { if (!meterBroken && measured > 0 && !sound) noAudio(); }, 1000);
+      }, DEAD_MS);
       // A request nobody speaks into ends without sending anything; one the meter cannot
       // judge is sent at its time limit, for the transcriber to judge.
       waitTimer = setTimeout(() => {
@@ -687,10 +712,10 @@
       fail(error && (error.name === "NotAllowedError" || error.name === "SecurityError") ? "not-allowed" : "audio-capture");
     };
     function openMicrophone() {
-      const setup = MICROPHONES[order[attempt]];
+      const setup = MICROPHONES[attempt];
       try { if (audioSession) audioSession.type = setup.session; }
       catch (e) { trace("could not set the audio session for recording"); }
-      trace("microphone requested, attempt " + (attempt + 1) + " of " + order.length + ": " + setup.name + ", session " + sessionType());
+      trace("microphone requested, attempt " + (attempt + 1) + " of " + MICROPHONES.length + ": " + setup.name + ", session " + sessionType());
       try {
         navigator.mediaDevices.getUserMedia({ audio: setup.audio }).then(got => {
           // Permission may resolve after cancellation or a newer request.
