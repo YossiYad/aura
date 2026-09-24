@@ -196,7 +196,12 @@
       if (!url || (data.status && data.status === "error")) { V.markBad(base, "stream"); throw new Error("cobalt " + (data.status || "no url")); }
       V.markGood(base);
       V.log("cobalt", "stream OK via " + V.host(base));
-      return { url, at: Date.now(), base, kind: "cobalt", related: [] };
+      // A tunnel lives about a minute and a half and names its end in its "exp" parameter.
+      // Cached as if it lasted like any other stream, it was handed out long dead - to a
+      // start a few minutes later, and to the next song prepared at this one's start.
+      let expiresAt;
+      try { expiresAt = Number(new URL(url).searchParams.get("exp")) || undefined; } catch (e) {}
+      return { url, at: Date.now(), base, kind: "cobalt", related: [], expiresAt };
     } catch (e) {
       V.log("cobalt", V.host(base) + " fail: " + String(e.message || e).slice(0, 60));
       V.markBad(base, "stream");

@@ -10,7 +10,7 @@
  * @property {string} [mime] Missing for cobalt streams.
  * @property {number} [duration] Seconds, when the server reports it.
  * @property {number} at When it was resolved, in ms.
- * @property {number} [expiresAt] When a private media ticket stops working, in ms.
+ * @property {number} [expiresAt] When the link stops working, in ms: a private media ticket, or a cobalt tunnel.
  * @property {string} base The server it came from.
  * @property {SourceKind} kind
  * @property {Track[]} related Related uploads, used for radio.
