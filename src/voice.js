@@ -67,6 +67,17 @@
   let lastSpokeAt = 0;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
     navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+  // The built-in recognizer on iOS is fed audio only for the first recognition of a page
+  // load; every later one reports audio start and receives nothing. Tried on device with new
+  // and reused recognizers and every audio-session reset: WebKit runs that capture apart from
+  // the page's own microphone, and nothing on the page reaches it. The page's microphone
+  // keeps working, so once the recognizer has run, an iPhone records each later request and
+  // has it transcribed (record) - with the Groq or Gemini key from Settings.
+  let recognizerRan = false;
+  function canTranscribe() {
+    return !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia &&
+      window.Ai && Ai.transcribe && Ai.hasAnyKey());
+  }
   // Spoken replies use speechSynthesis, which on iOS leaves WebKit unable to feed the next
   // recognition (WebKit bug 321436): speaking a reply deafens the very next voice request.
   // So default replies off on iOS and on elsewhere; the Spoken replies setting overrides.
@@ -125,8 +136,12 @@
     const Ctor = speechCtor();
     if (!Ctor) throw new Error("Speech recognition is unavailable");
     if (currentCapture) currentCapture();
+    if (isIOS && recognizerRan && canTranscribe()) return record(options);
     const id = ++captureCount;
     const trace = message => log("capture " + id + ": " + message);
+    // Without a key to transcribe with, a later iPhone request still tries the recognizer,
+    // and when it hears nothing the message names the missing key instead.
+    const needsKey = isIOS && recognizerRan && !(window.Ai && Ai.hasAnyKey());
     let recognition, timer, finishTimer, finishing = false, closed = false;
     let inputTimer, previousAudioType, microphone;
     let recoveries = 0, runs = 0;
@@ -150,7 +165,8 @@
         (track.muted ? " muted" : "") + (track.enabled === false ? " disabled" : "")).join(", ") : "none";
       return state + ", microphone " + tracks;
     }
-    trace("opened on the " + (ios ? "iOS" : "standard") + " path, transcript reset, " + inputState());
+    trace("opened on the " + (ios ? "iOS" : "standard") + " path" + (ios && recognizerRan ? " after an earlier recognition" +
+      (needsKey ? ", no key to transcribe with" : "") : "") + ", transcript reset, " + inputState());
     // Takes the handlers off the current recognizer, which is never started again, and
     // aborts it unless it already ended. Whatever its native run still sends reaches no one.
     function detach(ended) {
@@ -248,6 +264,7 @@
     }
     function fail(code) {
       if (closed) return;
+      if (needsKey && code === "recognition-timeout") code = "no-key";
       const value = text();
       trace("error " + code + ", " + value.length + " characters");
       cancel();
@@ -354,7 +371,8 @@
         timer = setTimeout(start, 300);
       };
       note("created, start requested");
-      try { run.start(); } catch (e) { note("start threw " + ((e && e.name) || "an error")); fail("start-failed"); }
+      try { run.start(); recognizerRan = true; }
+      catch (e) { note("start threw " + ((e && e.name) || "an error")); fail("start-failed"); }
       if (active() && !finishing) watchInput(recoveries ? 12000 : 20000);
     }
     function arm() {
@@ -399,6 +417,178 @@
       try { audioSession.type = "auto"; } catch (e) {}
       timer = setTimeout(() => { if (!closed && !finishing) arm(); }, 800);
     } else arm();
+    return { cancel, finish };
+  }
+
+  // The level at which the meter counts a voice: someone speaking to the phone, well above
+  // the noise of a quiet room. Float samples, so a live microphone never reads exactly zero.
+  const SPEECH_LEVEL = 0.045;
+  /**
+   * Records one request through the page's microphone, ends it on silence and has it
+   * transcribed: the iPhone path once the built-in recognizer has run (see recognizerRan).
+   * The same contract as listen(), except that the words arrive once, from the transcript.
+   * @param {ListenOptions} options
+   * @returns {{ cancel: () => void, finish: () => void }}
+   */
+  function record(options) {
+    const id = ++captureCount;
+    const trace = message => log("capture " + id + ": " + message);
+    let closed = false, finishing = false;
+    /** @type {MediaRecorder | null} */
+    let recorder = null;
+    /** @type {MediaStream | null} */
+    let stream = null;
+    /** @type {AudioContext | null} */
+    let context = null;
+    let levelTimer = null, waitTimer = null, capTimer = null;
+    let signal = false, heard = false, quietTicks = 0, startedAt = 0;
+    /** @type {Blob[]} */
+    const chunks = [];
+    const audioSession = navigator.audioSession;
+    let previousAudioType = null;
+    currentCapture = cancel;
+    trace("opened on the recording path, the recognizer already ran in this page load; transcript reset");
+    // Recording takes the record category, as the recognizer does; release() hands back the
+    // category the player had, once, before anything is sent or played.
+    try {
+      if (audioSession) { previousAudioType = audioSession.type; audioSession.type = "play-and-record"; }
+    } catch (e) { trace("could not set the audio session for recording"); }
+    function trackState() {
+      return stream ? stream.getTracks().map(track => (track.readyState || "unknown") + (track.muted ? " muted" : "")).join(", ") : "none";
+    }
+    // Everything that holds the microphone, let go before the recording is sent.
+    function release() {
+      clearInterval(levelTimer);
+      clearTimeout(waitTimer);
+      clearTimeout(capTimer);
+      levelTimer = null;
+      if (context) {
+        const meter = context;
+        context = null;
+        try { Promise.resolve(meter.close()).catch(() => {}); } catch (e) {}
+      }
+      if (stream) {
+        const tracks = stream.getTracks();
+        stream = null;
+        tracks.forEach(track => track.stop());
+        trace("microphone released, tracks " + tracks.map(track => track.readyState || "stopped").join(", "));
+      }
+      if (previousAudioType != null) {
+        try { if (audioSession) audioSession.type = previousAudioType; } catch (e) {}
+        previousAudioType = null;
+      }
+    }
+    function cancel() {
+      if (closed) return;
+      closed = true;
+      if (recorder && recorder.state !== "inactive") { try { recorder.stop(); } catch (e) {} }
+      release();
+      if (currentCapture === cancel) currentCapture = null;
+      trace("closed, cleanup complete");
+    }
+    function fail(code) {
+      if (closed) return;
+      trace("error " + code);
+      cancel();
+      options.onerror(code, "");
+    }
+    function finish() {
+      if (closed || finishing) return;
+      finishing = true;
+      if (options.onfinishing) options.onfinishing();
+      trace("recording stopped after " + (startedAt ? ((Date.now() - startedAt) / 1000).toFixed(1) + "s" : "none") +
+        ", voice heard " + heard + ", signal " + signal);
+      if (recorder && recorder.state !== "inactive") {
+        try { recorder.stop(); return; } catch (e) {}
+      }
+      send();
+    }
+    // Sent only with the microphone closed, and only with a voice in it: given room noise
+    // alone, a transcriber makes words up.
+    function send() {
+      if (closed) return;
+      release();
+      const blob = new Blob(chunks, { type: (chunks[0] && chunks[0].type) || (recorder && recorder.mimeType) || "audio/mp4" });
+      if ((signal && !heard) || !blob.size) { fail("recognition-timeout"); return; }
+      trace("recorded " + Math.max(1, Math.round(blob.size / 1024)) + "KB, transcribing");
+      Promise.resolve().then(() => Ai.transcribe(blob, options.lang || "he-IL")).then(raw => {
+        if (closed) return;
+        const value = requestStart(String(raw || "").trim());
+        trace("transcribed, " + value.length + " characters");
+        if (!value) { fail("recognition-timeout"); return; }
+        cancel();
+        options.onfinish(value);
+      }, error => {
+        if (closed) return;
+        fail(error && error.noKey ? "no-key" : "transcribe-failed");
+      });
+    }
+    // Ends the request on a second and a half of quiet after the voice, as the recognizer
+    // does on its own silence.
+    function watchLevel() {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) { trace("no level meter here; the recording ends on its time limits"); return; }
+      try {
+        const meter = context = new AudioCtx();
+        if (meter.state === "suspended") Promise.resolve(meter.resume()).catch(() => {});
+        const analyser = meter.createAnalyser();
+        analyser.fftSize = 1024;
+        meter.createMediaStreamSource(stream).connect(analyser);
+        const samples = new Float32Array(analyser.fftSize);
+        levelTimer = setInterval(() => {
+          if (closed || finishing) return;
+          analyser.getFloatTimeDomainData(samples);
+          let sum = 0;
+          for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+          const level = Math.sqrt(sum / samples.length);
+          if (level > 0 && !signal) { signal = true; trace("microphone signal arriving, meter " + meter.state); }
+          if (level >= SPEECH_LEVEL) {
+            if (!heard) trace("voice detected");
+            heard = true;
+            quietTicks = 0;
+          } else if (heard && ++quietTicks >= 15) finish();
+        }, 100);
+      } catch (e) { trace("no level meter, " + ((e && e.name) || "error") + "; the recording ends on its time limits"); }
+    }
+    function begin() {
+      try { recorder = new window.MediaRecorder(stream); }
+      catch (e) { trace("recorder unavailable, " + ((e && e.name) || "error")); fail("audio-capture"); return; }
+      recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
+      recorder.onstop = () => send();
+      recorder.onerror = () => { trace("recorder failed"); fail("audio-capture"); };
+      try { recorder.start(); }
+      catch (e) { trace("recorder could not start, " + ((e && e.name) || "error")); fail("audio-capture"); return; }
+      startedAt = Date.now();
+      trace("recording, " + (recorder.mimeType || "default format") + ", microphone " + trackState());
+      if (options.onlistening) options.onlistening(true);
+      watchLevel();
+      // A request nobody speaks into ends here without sending anything; when the meter cannot
+      // hear the microphone at all, the recording is sent for the transcriber to judge.
+      waitTimer = setTimeout(() => {
+        if (heard) return;
+        if (signal) fail("recognition-timeout");
+        else finish();
+      }, 10000);
+      capTimer = setTimeout(finish, 20000);
+    }
+    const unavailable = error => {
+      trace("microphone unavailable, " + ((error && error.name) || "error"));
+      fail(error && (error.name === "NotAllowedError" || error.name === "SecurityError") ? "not-allowed" : "audio-capture");
+    };
+    trace("microphone requested");
+    try {
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(got => {
+        // Permission may resolve after cancellation or a newer request.
+        if (closed || finishing) {
+          got.getTracks().forEach(track => track.stop());
+          trace("late microphone stream released");
+          return;
+        }
+        stream = got;
+        trace("microphone ready");
+        begin();
+      }, unavailable);
+    } catch (e) { unavailable(e); }
     return { cancel, finish };
   }
 
