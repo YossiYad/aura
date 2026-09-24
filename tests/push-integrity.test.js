@@ -82,3 +82,25 @@ test('failed notification removal is reported so the control can be retried', as
  await assert.rejects(c.Push.disable(), /unsubscribe failed/);
  assert.equal((await c.Push.status()).subscribed, true);
 });
+
+// A body over the limit was answered by destroying the request, which closed the socket
+// before the 413 could be written: behind the proxy that reached the app as a bad gateway.
+for (const service of ['push', 'mix']) test(service + ' server answers an oversized body with 413 instead of dropping the connection', async () => {
+ const fs = require('node:fs'), http = require('node:http');
+ const source = fs.readFileSync(require.resolve('../selfhost/private-app/' + service + '/server.js'), 'utf8');
+ const start = source.indexOf('function readBody(');
+ const readBody = vm.runInNewContext('(' + source.slice(start, source.indexOf('\n}\n', start) + 2) + ')', { Buffer, Object, Error });
+ const server = http.createServer((req, res) => {
+  readBody(req, 1024).then(() => { res.writeHead(200); res.end('ok'); },
+   e => { res.writeHead(e.code === 413 ? 413 : 400); res.end('too large'); });
+ });
+ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+ try {
+  const url = 'http://127.0.0.1:' + server.address().port + '/';
+  const big = await fetch(url, { method: 'POST', body: 'x'.repeat(20 * 1024) });
+  assert.equal(big.status, 413);
+  assert.equal(await big.text(), 'too large');
+  const small = await fetch(url, { method: 'POST', body: '{}' });
+  assert.equal(small.status, 200);
+ } finally { server.closeAllConnections(); server.close(); }
+});
