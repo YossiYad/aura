@@ -1,7 +1,7 @@
 (function () {
   const $ = id => document.getElementById(id);
   const fallbackArt = '../icon.svg';
-  let player = null, scrubbing = false, queueKey = '', receiverError = '';
+  let player = null, scrubbing = false, queueKey = '', receiverError = '', commandError = '', commandErrorTimer = 0;
   // Playback must not depend on the drawing: a TV that could not load the wave still plays.
   const progress = window.SongProgress ? SongProgress.create($('progress')) : { set() {} };
   const seconds = value => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0;
@@ -101,13 +101,20 @@
     }
     $('elapsed').textContent = time(elapsed);
     $('remaining').textContent = '−' + time(duration - elapsed);
-    $('status').textContent = receiverError || (state === 'BUFFERING' ? 'Buffering…' : state === 'PAUSED' ? 'Paused' :
+    $('status').textContent = receiverError || commandError || (state === 'BUFFERING' ? 'Buffering…' : state === 'PAUSED' ? 'Paused' :
       active ? '' : 'Connect from the three-dot menu on your phone');
     renderQueue(active);
   }
+  // A command that failed is said for a few seconds, or until one works. Kept with the
+  // playback error, it stayed on screen through the rest of a song playing on normally.
   function command(action) {
-    try { action(); }
-    catch (e) { receiverError = 'Could not complete that command. Try again from your phone.'; render(); }
+    clearTimeout(commandErrorTimer);
+    try { action(); commandError = ''; }
+    catch (e) {
+      commandError = 'Could not complete that command. Try again from your phone.';
+      commandErrorTimer = setTimeout(() => { commandError = ''; render(); }, 6000);
+    }
+    render();
   }
   function jump(amount) {
     const request = new cast.framework.messages.QueueUpdateRequestData();
@@ -136,7 +143,7 @@
     player = context.getPlayerManager();
     const events = cast.framework.events.EventType;
     [events.MEDIA_STATUS, events.TIME_UPDATE].forEach(event => player.addEventListener(event, render));
-    player.addEventListener(events.LOADED_METADATA, () => { receiverError = ''; render(); });
+    player.addEventListener(events.LOADED_METADATA, () => { receiverError = ''; commandError = ''; render(); });
     player.addEventListener(events.ERROR, () => {
       receiverError = 'This song could not play. Choose another song on your phone.';
       render();
