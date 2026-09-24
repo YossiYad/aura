@@ -119,3 +119,24 @@ test("hiding the feature mid-session leaves no private queue behind for the next
   Store.setPrivateSession(true);
   assert.deepEqual(ids(Store.loadQueue().items), ["v2"]);
 });
+
+// Settings travel with the synced copy. Another device hiding the feature used to switch a
+// session running here off silently, and what was played after it was recorded and synced.
+test('a synced copy with the feature hidden does not end a private session running here', () => {
+  const { Store, read } = createStore();
+  Store.rememberInstance('https://here.example');
+  Store.setPrivateSession(true);
+  const remote = Store.exportData();
+  remote.data.settings = Object.assign({}, remote.data.settings, { privateSession: false, lastGoodInstance: 'https://there.example' });
+  Store.importData(remote, { preserveDownloads: true });
+  assert.equal(Store.privateSession(), true);
+  Store.pushRecent({ id: 'secret', title: 'Secret', artist: 'Someone' });
+  Store.pushSearch('secret search');
+  assert.deepEqual(Array.from(Store.exportData().data.recents), []);
+  assert.deepEqual(Array.from(Store.searches()), []);
+  assert.equal(read('aura.settings').lastGoodInstance, 'https://here.example');
+  // Once the session is over, the hidden feature from the other device applies.
+  Store.setPrivateSession(false);
+  Store.importData(remote, { preserveDownloads: true });
+  assert.equal(Store.settings().privateSession, false);
+});
