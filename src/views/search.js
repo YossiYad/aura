@@ -226,7 +226,8 @@
     "language-not-supported": "השפה הזו לא נתמכת בזיהוי הדיבור כאן.",
     // The iPhone records a request once its built-in recognizer has run; see src/voice.js.
     "transcribe-failed": "לא הצלחתי לתמלל את הבקשה. נסו שוב או כתבו למעלה.",
-    "no-key": "כדי לשמוע עוד בקשות באייפון צריך מפתח Groq או Gemini בהגדרות. אפשר גם לכתוב למעלה."
+    "no-key": "כדי לשמוע עוד בקשות באייפון צריך מפתח Groq או Gemini בהגדרות. אפשר גם לכתוב למעלה.",
+    "mic-silent": "המיקרופון לא העביר קול. נסו שוב, ואם זה חוזר - סגרו ופתחו את האפליקציה."
   };
 
   // Spoken answers are part of the interface: in English they are always English, even
@@ -351,7 +352,7 @@
     // when it is only paused or waiting for a play tap (WebKit 321436; seen on device with
     // src:true and pauseNeeded false). Release it on every capture, not just when pausing;
     // releaseForVoice is a no-op when nothing is loaded, and the song reloads in place.
-    if (Player.releaseForVoice) Player.releaseForVoice();
+    const released = Player.releaseForVoice ? Player.releaseForVoice() : null;
     me.recording = true;
     voiceSay(tr("רגע…"));
     me.capture = Voice.listen({
@@ -359,6 +360,8 @@
       // Music playing until now leaves the iOS audio session warm; let listen() idle and
       // settle it first so this request is not deaf on the second onward (WebKit 321436).
       settle: pauseNeeded,
+      // And the microphone waits for the player's audio context to finish closing.
+      released,
       onrecover() { if (voice === me) voiceSay(tr("מחדש האזנה…")); },
       onfinishing() { if (voice !== me) return; me.finishing = true; me.hearing = false; voiceSay(tr("רגע…")); },
       onlistening(active) {

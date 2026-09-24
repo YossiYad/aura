@@ -68,24 +68,35 @@ function simulateDevice(ios) {
     };
     Object.defineProperty(navigator, 'audioSession', { configurable: true,
       value: { type: 'auto', state: 'inactive', addEventListener() {} } });
+    // The recorder hands out slices, each carrying the level it was recorded at; the offline
+    // decoder turns the slices back into that many samples at those levels.
     window.MediaRecorder = class {
-      constructor(stream) { this.stream = stream; this.state = 'inactive'; this.mimeType = 'audio/mp4'; recorders.push(this); }
-      start() {
+      constructor(stream) { this.stream = stream; this.state = 'inactive'; this.mimeType = ''; recorders.push(this); }
+      start(slice) {
         if (!this.stream.getTracks().some(track => track.readyState === 'live')) throw new DOMException('No live track', 'InvalidStateError');
         this.state = 'recording';
+        this.timer = setInterval(() => this.ondataavailable?.({ data: new Blob([String(micLevel).padEnd(16)], { type: 'audio/mp4' }) }), slice);
       }
       stop() {
         if (this.state === 'inactive') return;
         this.state = 'inactive';
-        later(() => { this.ondataavailable?.({ data: new Blob(['voice'], { type: 'audio/mp4' }) }); this.onstop?.(); });
+        clearInterval(this.timer);
+        later(() => { this.ondataavailable?.({ data: new Blob([], { type: 'audio/mp4' }) }); this.onstop?.(); });
       }
     };
-    // The meter reads the level the test sets; the simulated stream is not a real one.
-    const source = AudioContext.prototype.createMediaStreamSource;
-    AudioContext.prototype.createMediaStreamSource = function (stream) {
-      return stream instanceof MediaStream ? source.call(this, stream) : { connect() {} };
+    window.OfflineAudioContext = class {
+      constructor(channels, length, rate) { this.sampleRate = rate; }
+      async decodeAudioData(buffer) {
+        const levels = (new TextDecoder().decode(buffer).match(/.{16}/g) || []).map(Number);
+        const perSlice = Math.round(this.sampleRate * 0.3), samples = new Float32Array(levels.length * perSlice);
+        levels.forEach((level, i) => samples.fill(level, i * perSlice, (i + 1) * perSlice));
+        return { sampleRate: this.sampleRate, getChannelData: () => samples };
+      }
     };
-    AnalyserNode.prototype.getFloatTimeDomainData = function (samples) { samples.fill(micLevel); };
+    // Every live audio context the page makes, to check none is open while it records.
+    window.contexts = [];
+    const Context = window.AudioContext;
+    window.AudioContext = class extends Context { constructor(...args) { super(...args); contexts.push(this); } };
     // iOS playback permission: granted to an element by a play() inside a tap, kept after.
     let tapping = false;
     for (const type of ['pointerdown', 'pointerup', 'touchend', 'click']) {
@@ -190,7 +201,13 @@ function simulateDevice(ios) {
         if (ios) assert.equal(open.liveMicrophones, 1, words + ': one live microphone, the earlier ones released');
         if (recording) {
           assert.equal(open.recognizers, before.recognizers, words + ': no recognizer after the first, it would hear nothing');
-          await page.evaluate(words => { spoken.push(words); micLevel = 0.2; setTimeout(() => { micLevel = 0.002; }, 600); }, words);
+          assert.equal(await page.evaluate(() => contexts.filter(context => context.state !== 'closed').length), 0,
+            words + ': no live audio context while the microphone records');
+          await page.evaluate(words => {
+            spoken.push(words);
+            setTimeout(() => { micLevel = 0.2; }, 700);
+            setTimeout(() => { micLevel = 0.002; }, 1600);
+          }, words);
         } else {
           await page.evaluate(words => recognizers.at(-1).hear(words), words);
           assert.equal(await page.locator('#ask-prompt').inputValue(), words, words + ': the field shows this request');

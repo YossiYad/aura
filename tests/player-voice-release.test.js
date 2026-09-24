@@ -70,3 +70,30 @@ test('off iOS releaseForVoice leaves the element loaded so quick resume is uncha
   Player.releaseForVoice();
   assert.ok(h.audio.src, 'no iOS session bug off iOS, so the element stays loaded');
 });
+
+test('the release for a voice capture settles only once the session-holder context has closed', async () => {
+  // A context still closing leaves an iPhone's microphone as silent as a live one, so the
+  // capture waits on this promise before it opens the microphone.
+  const h = createHarness({ withAudioContext: true, withStorage: true, navigator: { userAgent: 'iPhone' },
+    tracks: [{ id: 'one', title: 'one' }, { id: 'two', title: 'two' }], settings: { autoplay: false, noYtFallback: true } });
+  h.Api.resolve = async id => ({ url: 'https://test/' + id });
+  h.Api.invalidate = () => {};
+  h.play();
+  await flushMicrotasks(60);
+  const ctx = h.audioContexts[0];
+  let finishClose;
+  ctx.close = function () { this.closeCalls = (this.closeCalls || 0) + 1; return new Promise(resolve => { finishClose = () => { this.setState('closed'); resolve(); }; }); };
+  let released = false;
+  h.window.Player.releaseForVoice().then(() => { released = true; });
+  await flushMicrotasks(10);
+  assert.equal(ctx.closeCalls, 1, 'the context is asked to close at once');
+  assert.equal(released, false, 'but the release waits for the close to complete');
+  finishClose();
+  await flushMicrotasks(10);
+  assert.equal(released, true);
+  // With nothing to close, and off iOS, the release settles straight away.
+  let settled = false;
+  h.window.Player.releaseForVoice().then(() => { settled = true; });
+  await flushMicrotasks(5);
+  assert.equal(settled, true);
+});

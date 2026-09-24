@@ -31,14 +31,15 @@ function harness(options = {}) {
   const Ai = options.Ai || { hasAnyKey: () => false };
   const Api = options.Api || {};
   const window = { SpeechRecognition: Recognition, Ai, Log: options.Log,
-    MediaRecorder: options.MediaRecorder, AudioContext: options.AudioContext };
+    MediaRecorder: options.MediaRecorder, OfflineAudioContext: options.OfflineAudioContext };
   if (options.synth) {
     window.speechSynthesis = options.synth;
     window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
   }
   vm.runInNewContext(source, {
     window, Store, Ai, Api, Player: { queue: () => [] }, navigator: { onLine: options.online !== false, audioSession: options.audioSession,
-      userAgent: options.userAgent, platform: options.platform, maxTouchPoints: options.maxTouchPoints, mediaDevices: options.mediaDevices },
+      userAgent: options.userAgent, platform: options.platform, maxTouchPoints: options.maxTouchPoints, mediaDevices: options.mediaDevices,
+      userActivation: options.userActivation },
     setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms, at: now + ms }); return id; },
     clearTimeout: id => timers.delete(id),
     setInterval: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms, at: now + ms, every: ms }); return id; },
@@ -51,8 +52,12 @@ function harness(options = {}) {
     if (timer.every) timers.set(id, { ...timer, at: timer.at + timer.every });
     timer.fn();
   };
+  const clock = {
+    setInterval: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms, at: now + ms, every: ms }); return id; },
+    clearInterval: id => timers.delete(id)
+  };
   return {
-    Voice: window.Voice, Store, recognitions,
+    Voice: window.Voice, Store, recognitions, clock,
     tick(ms) {
       for (const [id, timer] of [...timers]) if (timer.ms === ms) fire(id, timer);
     },
@@ -629,10 +634,11 @@ test("iPhone re-listens after a spoken reply on a freshly settled audio session"
   const audioSession = { type: 'playback' }, local = { lang: 'he-IL', localService: true };
   const { Voice, Store, recognitions, advance } = harness({ userAgent: 'iPhone', audioSession,
     synth: { getVoices: () => [local], cancel() {}, speak: u => u.onend() },
-    mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) }
+    mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) },
+    userActivation: { isActive: true }
   });
   // Spoken replies default off on iPhone (they deafen the next request); this test opts in
-  // to exercise the settle that follows a reply the listener asked for.
+  // to exercise the settle that follows a reply the listener asked for, spoken in a tap.
   Store.patchSettings({ voiceReply: true });
   assert.equal(await Voice.reply({ he: 'מצאתי' }, 'he-IL'), true);
   let finished;
@@ -1035,7 +1041,8 @@ test("remote-only speech voices and muted replies never synthesize audio", async
 
 test("spoken replies default off on iPhone and on elsewhere, and the setting overrides", async () => {
   const speak = { getVoices: () => [{ lang: "he-IL", localService: true }], cancel() {}, speak: u => u.onend() };
-  const ios = harness({ userAgent: "iPhone", synth: speak });
+  // Inside a tap, the only moment iOS speaks at all.
+  const ios = harness({ userAgent: "iPhone", synth: speak, userActivation: { isActive: true } });
   assert.equal(ios.Voice.repliesOn(), false, "off by default on iPhone - a spoken reply deafens the next request");
   assert.equal(await ios.Voice.reply({ he: "מצאתי" }, "he-IL"), false, "so no audio is synthesized");
   ios.Store.patchSettings({ voiceReply: true });
@@ -1118,31 +1125,46 @@ test("a verb with nothing after it asks what to play without searching", async (
 
 // ---- The iPhone recording path ----
 // On iOS only the first recognition of a page load is fed audio, so every later iPhone
-// request is recorded through the page's microphone and transcribed.
+// request is recorded through the page's microphone and transcribed. The recorder hands
+// out 300ms slices, each carrying the level it was recorded at, and the offline decoder
+// turns the slices back into that many samples at those levels.
+const SLICE_BYTES = 16;
 function recordingDevice() {
-  const device = { level: 0.002, recorders: [], contexts: [] };
+  const device = { level: 0.002, live: true, undecodable: false, recorders: [], decoders: 0, clock: null };
   device.MediaRecorder = class {
-    constructor(stream) { this.stream = stream; this.state = "inactive"; this.mimeType = "audio/mp4"; device.recorders.push(this); }
-    start() { this.state = "recording"; }
+    constructor(stream) { this.stream = stream; this.state = "inactive"; this.mimeType = ""; device.recorders.push(this); }
+    start(slice) {
+      this.state = "recording";
+      this.timer = device.clock.setInterval(() => {
+        // A deaf microphone hands the recorder nothing at all.
+        if (device.live) this.ondataavailable?.({ data: new Blob([String(device.level).padEnd(SLICE_BYTES)], { type: "audio/mp4" }) });
+      }, slice);
+    }
     stop() {
       if (this.state === "inactive") return;
       this.state = "inactive";
+      device.clock.clearInterval(this.timer);
       Promise.resolve().then(() => {
-        this.ondataavailable?.({ data: new Blob(["recorded voice"], { type: "audio/mp4" }) });
+        this.ondataavailable?.({ data: new Blob([], { type: "audio/mp4" }) });
         this.onstop?.();
       });
     }
   };
-  device.AudioContext = class {
-    constructor() { this.state = "running"; device.contexts.push(this); }
-    createAnalyser() { return { fftSize: 2048, getFloatTimeDomainData: samples => samples.fill(device.level) }; }
-    createMediaStreamSource() { return { connect() {} }; }
-    resume() { this.state = "running"; return Promise.resolve(); }
-    close() { this.state = "closed"; return Promise.resolve(); }
+  device.OfflineAudioContext = class {
+    constructor(channels, length, rate) { this.sampleRate = rate; device.decoders++; }
+    async decodeAudioData(buffer) {
+      if (device.undecodable) throw Object.assign(new Error("undecodable"), { name: "EncodingError" });
+      const levels = (Buffer.from(buffer).toString().match(new RegExp(".{" + SLICE_BYTES + "}", "g")) || []).map(Number);
+      const perSlice = Math.round(this.sampleRate * 0.3), samples = new Float32Array(levels.length * perSlice);
+      levels.forEach((level, i) => samples.fill(level, i * perSlice, (i + 1) * perSlice));
+      return { sampleRate: this.sampleRate, getChannelData: () => samples };
+    }
   };
   return device;
 }
-const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+// Lets blob reads, decodes and transcriptions finish between fake timer steps.
+const flush = async () => { for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve)); };
+async function run(h, ms) { for (let t = 0; t < ms; t += 100) { h.advance(100); await flush(); } }
 function transcriber(words) {
   const sent = [];
   return { sent, Ai: { hasAnyKey: () => true, transcribe: async (blob, lang) => {
@@ -1150,102 +1172,148 @@ function transcriber(words) {
     return typeof words === "function" ? words() : " " + words.shift() + " ";
   } } };
 }
+function recordingHarness(platform, Ai, extra = {}) {
+  const device = recordingDevice();
+  const h = voiceHarness(platform, { Ai, MediaRecorder: device.MediaRecorder, OfflineAudioContext: device.OfflineAudioContext, ...extra });
+  device.clock = h.clock;
+  return { ...h, device };
+}
 // The first request of the page load, on the built-in recognizer.
 async function firstRequest(h) {
   let heard;
   h.Voice.listen({ ontext() {}, onfinish: value => heard = value, onerror: assert.fail });
-  await Promise.resolve();
+  await flush();
   const recognition = h.recognitions.at(-1);
   recognition.emit("audiostart");
   recognition.result([["play First", true]]);
   h.advance(2000); recognition.end();
   assert.equal(heard, "play First");
 }
-function speak(h, device) {
-  device.level = 0.2; h.advance(500);
-  device.level = 0.002; h.advance(1500);
+async function speak(h, level = 0.2) {
+  h.device.level = 0.002; await run(h, 600);
+  h.device.level = level; await run(h, 900);
+  h.device.level = 0.002; await run(h, 2100);
 }
 
 test("after its first request an iPhone records each request and sends the words it transcribes", async () => {
-  const device = recordingDevice(), { sent, Ai } = transcriber(["play Second", "play Third", "play Fourth"]);
+  const { sent, Ai } = transcriber(["play Second", "play Third", "play Fourth"]);
   const finished = [], errors = [], listening = [];
-  const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+  const h = recordingHarness({ userAgent: "iPhone" }, Ai);
   await firstRequest(h);
   for (const words of ["play Second", "play Third", "play Fourth"]) {
     h.Voice.listen({ ontext: assert.fail, onfinish: value => finished.push(value), onerror: code => errors.push(code),
       onlistening: value => listening.push(value) });
-    await Promise.resolve();
+    await flush();
     assert.equal(h.recognitions.length, 1, "no second recognizer: it would hear nothing");
-    const recorder = device.recorders.at(-1);
+    const recorder = h.device.recorders.at(-1);
     assert.equal(recorder.state, "recording");
     assert.equal(h.audioSession.type, "play-and-record");
     assert.equal(h.Voice.isListening(), true);
-    speak(h, device);
-    assert.equal(recorder.state, "inactive", "a second and a half of quiet ends the request");
+    await speak(h);
+    assert.equal(recorder.state, "inactive", "a second and a half of quiet after the voice ends the request");
     await flush();
     assert.equal(finished.at(-1), words);
     assert.equal(h.Voice.isListening(), false);
     assert.equal(h.audioSession.type, "playback");
     assert.ok(h.tracks.every(track => track.readyState === "ended"), "the microphone is released");
-    assert.ok(device.contexts.every(context => context.state === "closed"), "the level meter is closed");
   }
   assert.deepEqual(errors, []);
   assert.deepEqual(listening, [true, true, true]);
   assert.deepEqual(sent.map(s => s.lang), ["he-IL", "he-IL", "he-IL"]);
   assert.equal(sent[0].type, "audio/mp4");
+  assert.ok(h.device.decoders > 0, "levels come from an offline decode, not a live audio context");
   assert.equal(h.logs.some(line => /Second|Third|Fourth/.test(line)), false, "spoken words stay out of the log");
   assert.ok(h.logs.some(line => line.startsWith("voice capture 2: opened on the recording path")));
+  assert.ok(h.logs.some(line => /^voice capture 2: audio arriving after \d+ms$/.test(line)));
 });
 
 test("a soft voice in a quiet room is heard, and a murmur barely above a noisy room is not sent", async () => {
   for (const [room, voice, expected] of [[0.002, 0.025, "play Soft"], [0.012, 0.03, "recognition-timeout"]]) {
-    const device = recordingDevice(), { sent, Ai } = transcriber(["play Soft"]);
+    const { sent, Ai } = transcriber(["play Soft"]);
     const finished = [], errors = [];
-    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    const h = recordingHarness({ userAgent: "iPhone" }, Ai);
     await firstRequest(h);
     h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
-    await Promise.resolve();
-    device.level = room; h.advance(500);
-    device.level = voice; h.advance(500);
-    device.level = room; h.advance(10000);
+    await flush();
+    h.device.level = room; await run(h, 600);
+    h.device.level = voice; await run(h, 900);
+    h.device.level = room; await run(h, 10000);
     await flush();
     assert.deepEqual(finished.concat(errors), [expected], "room " + room + ", voice " + voice);
     assert.equal(sent.length, expected === "play Soft" ? 1 : 0);
   }
 });
 
-test("a recording nobody speaks into is never sent, and a meter that hears nothing lets the transcriber judge", async () => {
-  for (const [level, expected] of [[0.002, "recognition-timeout"], [0, "play Quiet"]]) {
-    const device = recordingDevice(), { sent, Ai } = transcriber(["play Quiet"]);
+test("a recording nobody speaks into is never sent, and one the meter cannot decode is sent at its limit", async () => {
+  for (const [undecodable, expected] of [[false, "recognition-timeout"], [true, "play Quiet"]]) {
+    const { sent, Ai } = transcriber(["play Quiet"]);
     const finished = [], errors = [];
-    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    const h = recordingHarness({ userAgent: "iPhone" }, Ai);
     await firstRequest(h);
+    h.device.undecodable = undecodable;
     h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
-    await Promise.resolve();
-    device.level = level; h.advance(10000);
     await flush();
-    if (level) {
-      assert.deepEqual(errors, [expected], "room noise alone is not sent to be turned into words");
-      assert.equal(sent.length, 0);
-    } else {
-      assert.deepEqual(finished, [expected]);
-      assert.equal(sent.length, 1);
-    }
+    await run(h, 10500);
+    await flush();
+    assert.deepEqual(finished.concat(errors), [expected]);
+    assert.equal(sent.length, undecodable ? 1 : 0, "room noise is sent only when nothing could judge it");
     assert.ok(h.tracks.every(track => track.readyState === "ended"));
+  }
+});
+
+test("a microphone that delivers nothing gets one new stream, then says so", async () => {
+  for (const [recovers, silent] of [[false, false], [true, false], [false, true]]) {
+    const { sent, Ai } = transcriber(["play Again"]);
+    const finished = [], errors = [];
+    const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+    await firstRequest(h);
+    // Dead: no bytes at all; silent: bytes of exact digital silence.
+    if (silent) h.device.level = 0; else h.device.live = false;
+    h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
+    await flush();
+    await run(h, 2600);
+    assert.equal(h.tracks.length, 3, "the first stream was replaced by a new one");
+    assert.equal(h.tracks[1].readyState, "ended");
+    if (recovers) { h.device.live = true; await speak(h); }
+    else await run(h, 2600);
+    await flush();
+    assert.deepEqual(finished.concat(errors), [recovers ? "play Again" : "mic-silent"]);
+    assert.equal(sent.length, recovers ? 1 : 0);
+    assert.ok(h.tracks.every(track => track.readyState === "ended"));
+    assert.ok(h.logs.some(line => /no audio in 2\.5s/.test(line)));
+  }
+});
+
+test("the microphone waits for the player's audio to close, and never for long", async () => {
+  for (const path of ["recognizer", "recording"]) {
+    for (const settles of [true, false]) {
+      const { Ai } = transcriber(["play Later"]);
+      const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+      if (path === "recording") await firstRequest(h);
+      let settle;
+      const released = new Promise(resolve => { settle = resolve; });
+      const opened = h.tracks.length;
+      h.Voice.listen({ released, ontext() {}, onfinish() {}, onerror() {} });
+      await flush();
+      assert.equal(h.tracks.length, opened, path + ": no microphone while the player's audio is still closing");
+      if (settles) { settle(); await flush(); }
+      else { h.advance(2000); await flush(); }
+      assert.equal(h.tracks.length, opened + 1, path + ": the microphone opens once it closed, or after 2s at most");
+      assert.ok(h.logs.some(line => line.includes(settles ? "player audio released after" : "player audio still closing after")));
+    }
   }
 });
 
 test("a recording cancelled while recording or transcribing sends and starts nothing", async () => {
   for (const when of ["recording", "transcribing"]) {
-    const device = recordingDevice();
     let answer;
     const { sent, Ai } = transcriber(() => new Promise(resolve => { answer = resolve; }));
-    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    const h = recordingHarness({ userAgent: "iPhone" }, Ai);
     await firstRequest(h);
     const capture = h.Voice.listen({ ontext() {}, onfinish: assert.fail, onerror: assert.fail });
-    await Promise.resolve();
-    device.level = 0.2; h.advance(500);
-    if (when === "transcribing") { device.level = 0.002; h.advance(1500); await flush(); assert.equal(sent.length, 1); }
+    await flush();
+    h.device.level = 0.2; await run(h, 900);
+    if (when === "transcribing") { h.device.level = 0.002; await run(h, 2100); assert.equal(sent.length, 1); }
     capture.cancel();
     await flush();
     if (answer) answer("play Late");
@@ -1253,45 +1321,56 @@ test("a recording cancelled while recording or transcribing sends and starts not
     assert.equal(sent.length, when === "recording" ? 0 : 1, when);
     assert.equal(h.Voice.isListening(), false);
     assert.ok(h.tracks.every(track => track.readyState === "ended"), when);
-    assert.ok(device.contexts.every(context => context.state === "closed"), when);
   }
 });
 
 test("a failed transcription and a missing key each say what happened", async () => {
   for (const [failure, code] of [[new Error("HTTP 503"), "transcribe-failed"], [Object.assign(new Error("no key"), { noKey: true }), "no-key"]]) {
-    const device = recordingDevice(), errors = [];
+    const errors = [];
     const Ai = { hasAnyKey: () => true, transcribe: async () => { throw failure; } };
-    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    const h = recordingHarness({ userAgent: "iPhone" }, Ai);
     await firstRequest(h);
     h.Voice.listen({ ontext() {}, onfinish: assert.fail, onerror: value => errors.push(value) });
-    await Promise.resolve();
-    speak(h, device);
+    await flush();
+    await speak(h);
     await flush();
     assert.deepEqual(errors, [code]);
   }
 });
 
 test("without a key a later iPhone request still tries the recognizer, and names the missing key", async () => {
-  const device = recordingDevice(), errors = [];
-  const h = voiceHarness({ userAgent: "iPhone" }, { MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+  const errors = [];
+  const h = recordingHarness({ userAgent: "iPhone" }, undefined);
   await firstRequest(h);
   h.Voice.listen({ ontext() {}, onfinish: assert.fail, onerror: code => errors.push(code) });
-  await Promise.resolve();
+  await flush();
   assert.equal(h.recognitions.length, 2);
-  assert.equal(device.recorders.length, 0);
+  assert.equal(h.device.recorders.length, 0);
   h.recognitions[1].emit("audiostart");
-  h.advance(5000); h.advance(1000); await Promise.resolve();
+  h.advance(5000); h.advance(1000); await flush();
   h.recognitions.at(-1).emit("audiostart");
   h.advance(12000);
   assert.deepEqual(errors, ["no-key"]);
 });
 
 test("Android keeps its recognizer for every request, key or not", async () => {
-  const device = recordingDevice(), { sent, Ai } = transcriber(["unused"]);
-  const h = voiceHarness({ userAgent: "Android" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+  const { sent, Ai } = transcriber(["unused"]);
+  const h = recordingHarness({ userAgent: "Android" }, Ai);
   await firstRequest(h);
   await firstRequest(h);
   assert.equal(h.recognitions.length, 2);
-  assert.equal(device.recorders.length, 0);
+  assert.equal(h.device.recorders.length, 0);
   assert.equal(sent.length, 0);
+});
+
+test("an iPhone reply is skipped unless it is spoken inside a tap", async () => {
+  for (const [userActivation, spoken] of [[undefined, false], [{ isActive: false }, false], [{ isActive: true }, true]]) {
+    let speaks = 0;
+    const local = { lang: "he-IL", localService: true };
+    const { Voice, Store } = harness({ userAgent: "iPhone", userActivation,
+      synth: { getVoices: () => [local], cancel() {}, speak: u => { speaks++; u.onend(); } } });
+    Store.patchSettings({ voiceReply: true });
+    assert.equal(await Voice.reply({ he: "מצאתי" }, "he-IL"), spoken);
+    assert.equal(speaks, spoken ? 1 : 0);
+  }
 });

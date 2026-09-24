@@ -5,6 +5,8 @@
  * @typedef {Object} ListenOptions
  * @property {string} [lang] Recognition language, e.g. "he-IL".
  * @property {boolean} [settle] Let the iOS audio session settle first, after playback.
+ * @property {Promise<void> | null} [released] Settles once the player's audio has been let go;
+ *   the microphone waits for it.
  * @property {(active: boolean) => void} [onlistening] Whether speech is being heard.
  * @property {() => void} [onrecover] The recognizer stopped early and is being restarted.
  * @property {(text: string, final: boolean) => void} [ontext] The transcript so far.
@@ -122,6 +124,24 @@
       } else merged.push({ ...part });
     }
     return merged;
+  }
+
+  // The microphone opens only once the player's audio context has closed (see
+  // Player.releaseForVoice): one still closing leaves an iPhone's capture as silent as a
+  // live one. Bounded, so a close that never completes cannot hold the request.
+  function afterRelease(released, trace, next) {
+    if (!released || typeof released.then !== "function") { next(); return; }
+    const began = Date.now();
+    let done = false;
+    const go = outcome => {
+      if (done) return;
+      done = true;
+      clearTimeout(bound);
+      trace("player audio " + outcome + " after " + (Date.now() - began) + "ms");
+      next();
+    };
+    const bound = setTimeout(() => go("still closing"), 2000);
+    released.then(() => go("released"), () => go("release failed"));
   }
 
   // Keep complete sessions as well as interim results. Submit after two seconds
@@ -411,20 +431,28 @@
     // from the caller). In either case idle the session and let it settle before opening
     // the mic, so the first attempt starts fresh instead of waiting for recover().
     // setTimeout only, never a promise hop on the getUserMedia -> start path tests time.
-    const spokeRecently = !!lastSpokeAt && Date.now() - lastSpokeAt < 8000;
-    if (ios && audioSession && (spokeRecently || options.settle)) {
-      trace("settling audio session before listening, " + (spokeRecently ? "after reply" : "after playback") + ", player " + playerState());
-      try { audioSession.type = "auto"; } catch (e) {}
-      timer = setTimeout(() => { if (!closed && !finishing) arm(); }, 800);
-    } else arm();
+    function open() {
+      const spokeRecently = !!lastSpokeAt && Date.now() - lastSpokeAt < 8000;
+      if (ios && audioSession && (spokeRecently || options.settle)) {
+        trace("settling audio session before listening, " + (spokeRecently ? "after reply" : "after playback") + ", player " + playerState());
+        try { audioSession.type = "auto"; } catch (e) {}
+        timer = setTimeout(() => { if (!closed && !finishing) arm(); }, 800);
+      } else arm();
+    }
+    afterRelease(options.released, trace, () => { if (!closed && !finishing) open(); });
     return { cancel, finish };
   }
 
   // The meter counts a voice at three times the room's own level, learned over the first
   // half second - no stricter than someone speaking close to the phone (VOICE_MAX), and
   // never down in the noise of a quiet room (VOICE_MIN), so a softer voice or a phone in a
-  // car mount is still heard. Float samples: a live microphone never reads exactly zero.
+  // car mount is still heard.
   const VOICE_MIN = 0.015, VOICE_MAX = 0.045;
+  // Levels come from decoding what has been recorded so far in an offline context, which
+  // never touches the audio hardware. A live context would: on an iPhone even a suspended
+  // one left the microphone silent, and WebKit gives a page with any live context a
+  // 128-frame audio buffer. The recording arrives in slices, and each one is measured.
+  const SLICE_MS = 300, METER_RATE = 16000;
   /**
    * Records one request through the page's microphone, ends it on silence and has it
    * transcribed: the iPhone path once the built-in recognizer has run (see recognizerRan).
@@ -435,47 +463,58 @@
   function record(options) {
     const id = ++captureCount;
     const trace = message => log("capture " + id + ": " + message);
-    let closed = false, finishing = false;
+    let closed = false, finishing = false, retried = false;
     /** @type {MediaRecorder | null} */
     let recorder = null;
     /** @type {MediaStream | null} */
     let stream = null;
-    /** @type {AudioContext | null} */
-    let context = null;
-    let levelTimer = null, waitTimer = null, capTimer = null;
-    let signal = false, heard = false, quietTicks = 0, startedAt = 0;
-    let ticks = 0, quietest = Infinity, threshold = VOICE_MAX;
     /** @type {Blob[]} */
-    const chunks = [];
+    let chunks = [];
+    let liveTimer = null, waitTimer = null, capTimer = null;
+    let heard = false, sound = false, startedAt = 0;
+    // The meter: how much of the decoded recording has been measured, the quietest slice of
+    // the first half second, and how long it has been quiet since the voice.
+    const Offline = window.OfflineAudioContext;
+    /** @type {OfflineAudioContext | null} */
+    let decoder = null;
+    let meterBroken = !Offline, decoding = false, measured = 0, room = Infinity, threshold = VOICE_MAX, quiet = 0;
     const audioSession = navigator.audioSession;
     let previousAudioType = null;
     currentCapture = cancel;
     trace("opened on the recording path, the recognizer already ran in this page load; transcript reset");
-    // Recording takes the record category, as the recognizer does; release() hands back the
-    // category the player had, once, before anything is sent or played.
-    try {
-      if (audioSession) { previousAudioType = audioSession.type; audioSession.type = "play-and-record"; }
-    } catch (e) { trace("could not set the audio session for recording"); }
+    function sessionType() {
+      try { return audioSession ? String(audioSession.type) : "none"; } catch (e) { return "unreadable"; }
+    }
     function trackState() {
-      return stream ? stream.getTracks().map(track => (track.readyState || "unknown") + (track.muted ? " muted" : "")).join(", ") : "none";
+      if (!stream) return "no stream";
+      return stream.getTracks().map(track => {
+        let rate = "";
+        try { const settings = track.getSettings ? track.getSettings() : null; if (settings && settings.sampleRate) rate = " " + settings.sampleRate + "Hz"; } catch (e) {}
+        return (track.readyState || "unknown") + (track.muted ? " muted" : "") + (track.enabled === false ? " disabled" : "") + rate;
+      }).join(", ");
+    }
+    function bytes() { return chunks.reduce((sum, chunk) => sum + chunk.size, 0); }
+    function dropRecorder() {
+      if (!recorder) return;
+      const old = recorder;
+      recorder = null;
+      old.ondataavailable = old.onstop = old.onerror = null;
+      try { if (old.state !== "inactive") old.stop(); } catch (e) {}
+    }
+    function dropStream() {
+      if (!stream) return;
+      const tracks = stream.getTracks();
+      stream = null;
+      tracks.forEach(track => track.stop());
+      trace("microphone released, tracks " + tracks.map(track => track.readyState || "stopped").join(", "));
     }
     // Everything that holds the microphone, let go before the recording is sent.
     function release() {
-      clearInterval(levelTimer);
+      clearTimeout(liveTimer);
       clearTimeout(waitTimer);
       clearTimeout(capTimer);
-      levelTimer = null;
-      if (context) {
-        const meter = context;
-        context = null;
-        try { Promise.resolve(meter.close()).catch(() => {}); } catch (e) {}
-      }
-      if (stream) {
-        const tracks = stream.getTracks();
-        stream = null;
-        tracks.forEach(track => track.stop());
-        trace("microphone released, tracks " + tracks.map(track => track.readyState || "stopped").join(", "));
-      }
+      dropRecorder();
+      dropStream();
       if (previousAudioType != null) {
         try { if (audioSession) audioSession.type = previousAudioType; } catch (e) {}
         previousAudioType = null;
@@ -484,10 +523,9 @@
     function cancel() {
       if (closed) return;
       closed = true;
-      if (recorder && recorder.state !== "inactive") { try { recorder.stop(); } catch (e) {} }
       release();
       if (currentCapture === cancel) currentCapture = null;
-      trace("closed, cleanup complete");
+      trace("closed, cleanup complete, session " + sessionType());
     }
     function fail(code) {
       if (closed) return;
@@ -498,21 +536,25 @@
     function finish() {
       if (closed || finishing) return;
       finishing = true;
+      clearTimeout(liveTimer);
+      clearTimeout(waitTimer);
+      clearTimeout(capTimer);
       if (options.onfinishing) options.onfinishing();
       trace("recording stopped after " + (startedAt ? ((Date.now() - startedAt) / 1000).toFixed(1) + "s" : "none") +
-        ", voice heard " + heard + ", signal " + signal);
+        ", " + bytes() + " bytes, voice heard " + heard + ", sound " + sound + (meterBroken ? ", no meter" : ""));
       if (recorder && recorder.state !== "inactive") {
         try { recorder.stop(); return; } catch (e) {}
       }
       send();
     }
-    // Sent only with the microphone closed, and only with a voice in it: given room noise
-    // alone, a transcriber makes words up.
+    // Sent only with the microphone closed, and only with a voice in it when the meter could
+    // tell: given room noise alone, a transcriber makes words up.
     function send() {
       if (closed) return;
+      const blob = new Blob(chunks, { type: (chunks[0] && chunks[0].type) || "audio/mp4" });
       release();
-      const blob = new Blob(chunks, { type: (chunks[0] && chunks[0].type) || (recorder && recorder.mimeType) || "audio/mp4" });
-      if ((signal && !heard) || !blob.size) { fail("recognition-timeout"); return; }
+      if (!blob.size) { fail("recognition-timeout"); return; }
+      if (!meterBroken && !heard) { fail(sound ? "recognition-timeout" : "mic-silent"); return; }
       trace("recorded " + Math.max(1, Math.round(blob.size / 1024)) + "KB, transcribing");
       Promise.resolve().then(() => Ai.transcribe(blob, options.lang || "he-IL")).then(raw => {
         if (closed) return;
@@ -526,58 +568,87 @@
         fail(error && error.noKey ? "no-key" : "transcribe-failed");
       });
     }
-    // Ends the request on a second and a half of quiet after the voice, as the recognizer
-    // does on its own silence.
-    function watchLevel() {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) { trace("no level meter here; the recording ends on its time limits"); return; }
-      try {
-        const meter = context = new AudioCtx();
-        if (meter.state === "suspended") Promise.resolve(meter.resume()).catch(() => {});
-        const analyser = meter.createAnalyser();
-        analyser.fftSize = 1024;
-        meter.createMediaStreamSource(stream).connect(analyser);
-        const samples = new Float32Array(analyser.fftSize);
-        levelTimer = setInterval(() => {
-          if (closed || finishing) return;
-          analyser.getFloatTimeDomainData(samples);
-          let sum = 0;
-          for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
-          const level = Math.sqrt(sum / samples.length);
-          if (level > 0 && !signal) { signal = true; trace("microphone signal arriving, meter " + meter.state); }
-          if (++ticks <= 5) {
-            quietest = Math.min(quietest, level);
-            if (ticks === 5) {
-              threshold = Math.min(VOICE_MAX, Math.max(VOICE_MIN, quietest * 3));
-              trace("voice threshold " + threshold.toFixed(3) + ", room level " + quietest.toFixed(4));
-            }
+    function measure() {
+      if (meterBroken || decoding || closed || finishing || !chunks.length) return;
+      decoding = true;
+      const recording = new Blob(chunks, { type: chunks[0].type || "audio/mp4" });
+      recording.arrayBuffer().then(buffer => {
+        if (!decoder) decoder = new Offline(1, 1, METER_RATE);
+        return decoder.decodeAudioData(buffer);
+      }).then(audio => {
+        decoding = false;
+        if (closed || finishing) return;
+        const samples = audio.getChannelData(0);
+        if (samples.length <= measured) return;
+        let sum = 0;
+        for (let i = measured; i < samples.length; i++) sum += samples[i] * samples[i];
+        const from = measured / audio.sampleRate, seconds = (samples.length - measured) / audio.sampleRate;
+        const level = Math.sqrt(sum / (samples.length - measured));
+        measured = samples.length;
+        if (level > 0 && !sound) { sound = true; trace("sound in the recording"); }
+        if (from < 0.5) {
+          room = Math.min(room, level);
+          if (from + seconds >= 0.5) {
+            threshold = Math.min(VOICE_MAX, Math.max(VOICE_MIN, room * 3));
+            trace("voice threshold " + threshold.toFixed(3) + ", room level " + room.toFixed(4));
           }
-          if (level >= threshold) {
-            if (!heard) trace("voice detected");
-            heard = true;
-            quietTicks = 0;
-          } else if (heard && ++quietTicks >= 15) finish();
-        }, 100);
-      } catch (e) { trace("no level meter, " + ((e && e.name) || "error") + "; the recording ends on its time limits"); }
+        }
+        if (level >= threshold) {
+          if (!heard) trace("voice detected");
+          heard = true;
+          quiet = 0;
+        } else if (heard && (quiet += seconds) >= 1.5) finish();
+      }, error => {
+        decoding = false;
+        if (closed || meterBroken) return;
+        meterBroken = true;
+        trace("no level meter, " + ((error && error.name) || "decoding failed") + "; the recording ends at 8s");
+        clearTimeout(waitTimer);
+        clearTimeout(capTimer);
+        capTimer = setTimeout(finish, Math.max(0, 8000 - (Date.now() - startedAt)));
+      });
+    }
+    // No bytes at all, or only exact silence, means the microphone delivers nothing - the
+    // silent capture an iPhone showed after playback. One new stream is tried first.
+    function noAudio() {
+      if (closed || finishing) return;
+      if (retried) { trace("still no audio, " + trackState() + ", session " + sessionType()); fail("mic-silent"); return; }
+      retried = true;
+      trace("no audio in 2.5s, " + bytes() + " bytes, " + trackState() + ", session " + sessionType() + "; opening a new stream");
+      clearTimeout(waitTimer);
+      clearTimeout(capTimer);
+      dropRecorder();
+      dropStream();
+      chunks = [];
+      measured = 0;
+      openMicrophone();
     }
     function begin() {
-      try { recorder = new window.MediaRecorder(stream); }
+      let current;
+      try { current = recorder = new window.MediaRecorder(stream); }
       catch (e) { trace("recorder unavailable, " + ((e && e.name) || "error")); fail("audio-capture"); return; }
-      recorder.ondataavailable = event => { if (event.data && event.data.size) chunks.push(event.data); };
-      recorder.onstop = () => send();
-      recorder.onerror = () => { trace("recorder failed"); fail("audio-capture"); };
-      try { recorder.start(); }
+      current.ondataavailable = event => {
+        if (recorder !== current || !event.data || !event.data.size) return;
+        if (!chunks.length) trace("audio arriving after " + (Date.now() - startedAt) + "ms");
+        chunks.push(event.data);
+        measure();
+      };
+      current.onstop = () => { if (recorder === current) send(); };
+      current.onerror = () => { if (recorder !== current) return; trace("recorder failed"); fail("audio-capture"); };
+      try { current.start(SLICE_MS); }
       catch (e) { trace("recorder could not start, " + ((e && e.name) || "error")); fail("audio-capture"); return; }
       startedAt = Date.now();
-      trace("recording, " + (recorder.mimeType || "default format") + ", microphone " + trackState());
+      trace("recording in " + SLICE_MS + "ms slices, " + (current.mimeType || "default format") + ", microphone " + trackState());
       if (options.onlistening) options.onlistening(true);
-      watchLevel();
-      // A request nobody speaks into ends here without sending anything; when the meter cannot
-      // hear the microphone at all, the recording is sent for the transcriber to judge.
+      liveTimer = setTimeout(() => {
+        if (!chunks.length || (!meterBroken && measured > 0 && !sound)) noAudio();
+      }, 2500);
+      // A request nobody speaks into ends without sending anything; one the meter cannot
+      // judge is sent at its time limit, for the transcriber to judge.
       waitTimer = setTimeout(() => {
         if (heard) return;
-        if (signal) fail("recognition-timeout");
-        else finish();
+        if (meterBroken) finish();
+        else fail("recognition-timeout");
       }, 10000);
       capTimer = setTimeout(finish, 20000);
     }
@@ -585,20 +656,31 @@
       trace("microphone unavailable, " + ((error && error.name) || "error"));
       fail(error && (error.name === "NotAllowedError" || error.name === "SecurityError") ? "not-allowed" : "audio-capture");
     };
-    trace("microphone requested");
-    try {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then(got => {
-        // Permission may resolve after cancellation or a newer request.
-        if (closed || finishing) {
-          got.getTracks().forEach(track => track.stop());
-          trace("late microphone stream released");
-          return;
-        }
-        stream = got;
-        trace("microphone ready");
-        begin();
-      }, unavailable);
-    } catch (e) { unavailable(e); }
+    function openMicrophone() {
+      trace("microphone requested, session " + sessionType());
+      try {
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(got => {
+          // Permission may resolve after cancellation or a newer request.
+          if (closed || finishing) {
+            got.getTracks().forEach(track => track.stop());
+            trace("late microphone stream released");
+            return;
+          }
+          stream = got;
+          trace("microphone ready, " + trackState());
+          begin();
+        }, unavailable);
+      } catch (e) { unavailable(e); }
+    }
+    afterRelease(options.released, trace, () => {
+      if (closed || finishing) return;
+      // Recording takes the record category, as the recognizer does; release() hands back
+      // the category the player had, once, before anything is sent or played.
+      try {
+        if (audioSession) { previousAudioType = audioSession.type; audioSession.type = "play-and-record"; }
+      } catch (e) { trace("could not set the audio session for recording"); }
+      openMicrophone();
+    });
     return { cancel, finish };
   }
 
@@ -615,6 +697,13 @@
     stopReply();
     const synth = window.speechSynthesis;
     if (!synth || !window.SpeechSynthesisUtterance || !repliesOn()) return Promise.resolve(false);
+    // iOS speaks only inside a tap, and a reply comes seconds after one: it never starts,
+    // holds the song back for the whole eight-second guard, and leaves one more audio client
+    // in front of the next request's microphone. There the reply stays on screen.
+    if (isIOS && !(navigator.userActivation && navigator.userActivation.isActive)) {
+      log("spoken reply skipped: iOS speaks only right after a tap");
+      return Promise.resolve(false);
+    }
     const voices = synth.getVoices().filter(voice => voice.localService === true);
     // Voice tags arrive as "he-IL" on most engines and "he_IL" on some Android builds.
     const langOf = v => String(v.lang || "").replace("_", "-");

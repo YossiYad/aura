@@ -292,15 +292,16 @@
   // ensureSessionKick recreates it on the next play (sessionKick is null again), so the
   // interruption-recovery client returns with playback. The listener is dropped first so the
   // close's own statechange cannot run against a torn-down context.
+  // Settles once the context has closed, or at once without one.
   function releaseSessionKick() {
-    if (!V.sessionKick) return;
+    if (!V.sessionKick) return Promise.resolve();
     const ctx = V.sessionKick;
     V.sessionKick = null;
     V.sessionKickSource = null;
     V.sessionKickResuming = false;
     try { if (ctx.removeEventListener) ctx.removeEventListener("statechange", V.onSessionKickStateChange); } catch (e) {}
     try { ctx.onstatechange = null; } catch (e) {}
-    try { Promise.resolve(ctx.close()).catch(() => {}); } catch (e) {}
+    try { return Promise.resolve(ctx.close()).catch(() => {}); } catch (e) { return Promise.resolve(); }
   }
 
   // iOS lets an <audio> element play only from a user gesture, or once it has already
@@ -361,10 +362,16 @@
   // later play() is still allowed - so a primed element is not primed again: doing that on
   // every request played and stopped the element right in front of each capture. A refused
   // play clears the mark (holdPlaybackPermission), and the next request's tap primes again.
-  // No-op off iOS and off the audio backend.
-  /** On iOS, lets go of the audio element so the microphone can open. */
+  // No-op off iOS and off the audio backend. The context closes asynchronously, and one
+  // still closing leaves the capture as silent as a live one, so the returned promise
+  // settles once it is gone; the microphone waits for it (src/voice.js).
+  /**
+   * On iOS, lets go of the audio element so the microphone can open.
+   * @returns {Promise<void>} Settles once the player's audio context has closed.
+   */
   function releaseForVoice() {
-    if (!V.isIOS || V.backend !== "audio") return;
+    let closed = Promise.resolve();
+    if (!V.isIOS || V.backend !== "audio") return closed;
     if (V.audio.src || V.otherEl().src || V.sessionKick) {
       const track = V.current();
       if (track && V.audio.src) V.restoredPosition = { id: track.id, at: V.audio.currentTime || 0 };
@@ -377,10 +384,11 @@
         el.removeAttribute("src");
         try { el.load(); } catch (e) {}
       });
-      releaseSessionKick();
+      closed = releaseSessionKick();
     }
     if (V.playbackPrimed) V.log("voice", "element already holds playback permission, not priming");
     else primeForPlayback();
+    return closed;
   }
 
   function mediaSessionPause() {
