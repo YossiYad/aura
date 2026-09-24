@@ -211,7 +211,7 @@
       const info = await Api.resolve(prep.id, V.streamOptions(prep.id));
       if (xfadePrep !== prep || revision !== prepRevision || !prepValid()) return;
       keepPreparedSource({ ni: prep.ni, id: prep.id, src: info.url, mime: info.mime, blobUrl: null,
-        duration: info.duration, localKind: null, gain: V.gainFor(V.noteStreamLoudness(prep.id, info.loudnessDb)), repaired: true });
+        duration: info.duration, expiresAt: info.expiresAt, localKind: null, gain: V.gainFor(V.noteStreamLoudness(prep.id, info.loudnessDb)), repaired: true });
     } catch (e) {
       if (xfadePrep === prep && revision === prepRevision) discardPrep();
     }
@@ -243,7 +243,7 @@
       } else {
         const info = await Api.resolve(t.id, V.streamOptions(t.id));
         if (generation !== V.playbackGeneration || startPos !== V.pos || revision !== prepRevision) return;
-        const prep = { ni, id: t.id, src: info.url, mime: info.mime, duration: info.duration,
+        const prep = { ni, id: t.id, src: info.url, mime: info.mime, duration: info.duration, expiresAt: info.expiresAt,
           blobUrl: null, localKind: null, gain: V.gainFor(V.noteStreamLoudness(t.id, info.loudnessDb)) };
         // Hold the resolved source before deciding how to keep it, so a track that
         // ends early can still hand off to the direct stream.
@@ -259,9 +259,21 @@
     }
   }
 
+  // A stream link with an end of its own - a tunnel lasts about a minute and a half - is
+  // no longer worth holding once it is about to expire.
+  function prepExpiring(prep) {
+    if (!prep || prep.blobUrl || !prep.expiresAt || prep.expiresAt > Date.now() + 10000) return false;
+    // A standby element that already holds the whole song needs the link no longer.
+    const el = prep.el;
+    try {
+      if (el && el.duration > 0 && el.buffered.length && el.buffered.end(el.buffered.length - 1) >= el.duration - 0.5) return false;
+    } catch (e) {}
+    return true;
+  }
+
   function prepValid() {
     return !!(xfadePrep && V.queue[xfadePrep.ni] && V.queue[xfadePrep.ni].id === xfadePrep.id && xfadePrep.ni !== V.pos &&
-      !Store.isBlocked(V.queue[xfadePrep.ni]) && !V.failedQueueIds.has(xfadePrep.id));
+      !Store.isBlocked(V.queue[xfadePrep.ni]) && !V.failedQueueIds.has(xfadePrep.id) && !prepExpiring(xfadePrep));
   }
 
   // A standby element streaming the next song leaves the transition waiting on the
@@ -445,6 +457,8 @@
     if (remaining <= Math.max(fade, 2)) V.countListen("reached the end");
     // Held ready in the background too - the screen being off is when continuous playback
     // matters most, and nothing else prepares it there.
+    // One held since the song began may have expired by now; ask for it again in time.
+    if (remaining <= Math.max(fade + 6, 12) && prepExpiring(xfadePrep) && !xfadePrep.repairing) discardPrep();
     if (remaining <= Math.max(fade + 6, 12) && !xfadePrep && !prepBusy) prepNextSource();
     if (document.hidden) {
       if (!V.remotePlaybackActive() && remaining <= 0.75 && prepValid()) playPreparedInstantly();

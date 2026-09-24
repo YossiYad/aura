@@ -327,3 +327,26 @@ test('a track over the size limit is not fetched again through the proxies', asy
   await assert.rejects(api.fetchStreamBlob('one', 60 * 1048576, null), /too large/);
   assert.deepEqual(media, ['https://one/audio.m4a']);
 });
+
+// A cobalt tunnel lasts about a minute and a half and says when in its "exp" parameter.
+// Cached like any other stream it was handed out long after it had stopped working.
+test('a cobalt tunnel is not served from the cache once it is about to expire', async () => {
+  let now = 1700000000000, requests = 0;
+  class FakeDate extends Date { static now() { return now; } }
+  const api = resolver(async url => {
+    if (url === 'config.json') return { ok: true, json: async () => ({ invidiousInstances: ['https://empty'], cobaltInstances: ['https://cobalt'] }) };
+    if (url === 'https://cobalt/') {
+      requests++;
+      return { ok: true, json: async () => ({ status: 'tunnel', url: 'https://cobalt/tunnel?id=abc&exp=' + (now + 90000) + '&sig=x' }) };
+    }
+    return { ok: true, json: async () => ({ adaptiveFormats: [] }) };
+  }, { Date: FakeDate });
+  const first = await api.resolve('one');
+  assert.equal(first.expiresAt, now + 90000);
+  now += 30000;
+  await api.resolve('one');
+  assert.equal(requests, 1, 'a fresh tunnel is still served from the cache');
+  now += 40000;
+  await api.resolve('one');
+  assert.equal(requests, 2, 'one within half a minute of its end is asked for again');
+});

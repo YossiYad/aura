@@ -418,3 +418,59 @@ test('adding a next song to a playing single-track queue prepares it immediately
   assert.equal(h.audio.paused, false);
   h.window.Player.dismiss();
 });
+
+// A next song prepared when this one started holds its stream link to the end of this
+// one. A link that lives about a minute and a half - a cobalt tunnel - was dead by then,
+// and the transition failed on it.
+test('a prepared stream link that has expired by the end of the song is asked for again', async () => {
+  let now = 1700000000000;
+  class FakeDate extends Date { static now() { return now; } }
+  const h = createHarness({ Date: FakeDate, withStorage: true,
+    tracks: ['one', 'two'].map(id => ({ id, title: id, duration: 180 })),
+    settings: { autoplay: false, crossfade: 0, noYtFallback: true } });
+  const asked = [];
+  h.Api.resolve = async id => { asked.push(id); return { url: 'https://cobalt/tunnel?id=' + id + '&n=' + asked.length, expiresAt: now + 90000 }; };
+  h.Api.getSkipSegments = async () => [];
+  h.Api.invalidate = () => {};
+  h.window.Player.playQueue(['one', 'two'].map(id => ({ id, title: id, duration: 180 })), 0);
+  await flushMicrotasks(40);
+  h.audio.dispatch('playing');
+  await flushMicrotasks(80);
+  assert.deepEqual(asked, ['one', 'two']);
+  now += 60000;
+  h.audio.currentTime = 100;
+  h.audio.dispatch('timeupdate');
+  await flushMicrotasks(40);
+  assert.deepEqual(asked, ['one', 'two'], 'a link still alive is kept');
+  now += 110000;
+  h.audio.currentTime = 172;
+  h.audio.dispatch('timeupdate');
+  await flushMicrotasks(80);
+  assert.deepEqual(asked, ['one', 'two', 'two']);
+  h.window.Player.dismiss();
+});
+
+test('a prepared song already buffered whole keeps its expired link', async () => {
+  let now = 1700000000000;
+  class FakeDate extends Date { static now() { return now; } }
+  const h = createHarness({ Date: FakeDate, withStorage: true,
+    tracks: ['one', 'two'].map(id => ({ id, title: id, duration: 180 })),
+    settings: { autoplay: false, crossfade: 0, noYtFallback: true } });
+  const asked = [];
+  h.Api.resolve = async id => { asked.push(id); return { url: 'https://cobalt/tunnel?id=' + id, expiresAt: now + 90000 }; };
+  h.Api.getSkipSegments = async () => [];
+  h.Api.invalidate = () => {};
+  h.window.Player.playQueue(['one', 'two'].map(id => ({ id, title: id, duration: 180 })), 0);
+  await flushMicrotasks(40);
+  h.audio.dispatch('playing');
+  await flushMicrotasks(80);
+  const standby = h.audioElements.find(el => el !== h.window.Aura.player.audio);
+  assert.equal(standby.src, 'https://cobalt/tunnel?id=two');
+  standby.buffered = { length: 1, start: () => 0, end: () => 180 };
+  now += 170000;
+  h.audio.currentTime = 172;
+  h.audio.dispatch('timeupdate');
+  await flushMicrotasks(80);
+  assert.deepEqual(asked, ['one', 'two']);
+  h.window.Player.dismiss();
+});
