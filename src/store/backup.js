@@ -79,7 +79,15 @@
     V.liked = data.liked;
     V.recents = data.recents;
     V.searches = Array.isArray(data.searches) ? data.searches : [];
+    const local = V.settings;
     V.settings = Object.assign({}, V.defaultSettings, data.settings && typeof data.settings === "object" ? data.settings : {});
+    // The server that answered last is this device's own hint, never another's.
+    if (local.lastGoodInstance) V.settings.lastGoodInstance = local.lastGoodInstance;
+    else delete V.settings.lastGoodInstance;
+    // A private session running here ends when the listener ends it. Another device hiding
+    // the feature, adopted through sync, used to switch it off silently - and the plays and
+    // searches after it were recorded and synced again.
+    if (V.privateSession) V.settings.privateSession = local.privateSession;
     V.listeningProfile = data.listeningProfile && typeof data.listeningProfile === "object" ? data.listeningProfile : { tracks: {}, artists: {} };
     if (!V.listeningProfile.tracks || typeof V.listeningProfile.tracks !== "object") V.listeningProfile.tracks = {};
     if (!V.listeningProfile.artists || typeof V.listeningProfile.artists !== "object") V.listeningProfile.artists = {};
