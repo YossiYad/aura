@@ -1131,14 +1131,17 @@ test("a verb with nothing after it asks what to play without searching", async (
 // turns the slices back into that many samples at those levels.
 const SLICE_BYTES = 16;
 function recordingDevice() {
-  const device = { level: 0.002, live: true, undecodable: false, recorders: [], decoders: 0, clock: null };
+  // silentWhen: which ways of opening the microphone record exact silence, by what was asked.
+  const device = { level: 0.002, live: true, undecodable: false, silentWhen: null, recorders: [], decoders: 0, clock: null, constraints: null };
   device.MediaRecorder = class {
     constructor(stream) { this.stream = stream; this.state = "inactive"; this.mimeType = ""; device.recorders.push(this); }
     start(slice) {
       this.state = "recording";
+      const asked = device.constraints.at(-1);
+      const silent = !!(device.silentWhen && device.silentWhen(asked.audio));
       this.timer = device.clock.setInterval(() => {
         // A deaf microphone hands the recorder nothing at all.
-        if (device.live) this.ondataavailable?.({ data: new Blob([String(device.level).padEnd(SLICE_BYTES)], { type: "audio/mp4" }) });
+        if (device.live) this.ondataavailable?.({ data: new Blob([String(silent ? 0 : device.level).padEnd(SLICE_BYTES)], { type: "audio/mp4" }) });
       }, slice);
     }
     stop() {
@@ -1177,6 +1180,7 @@ function recordingHarness(platform, Ai, extra = {}) {
   const device = recordingDevice();
   const h = voiceHarness(platform, { Ai, MediaRecorder: device.MediaRecorder, OfflineAudioContext: device.OfflineAudioContext, ...extra });
   device.clock = h.clock;
+  device.constraints = h.constraints;
   return { ...h, device };
 }
 // The first request of the page load, on the built-in recognizer.
@@ -1227,7 +1231,7 @@ test("after its first request an iPhone records each request and sends the words
   assert.ok(h.logs.some(line => line.startsWith("voice capture 2: opened on the recording path")));
   assert.ok(h.logs.some(line => /^voice capture 2: audio arriving after \d+ms, audio\/mp4, without voice processing$/.test(line)));
   assert.deepEqual(h.constraints.slice(1).map(asked => asked.audio.echoCancellation), [false, false, false],
-    "each recording opens the microphone without voice processing, which worked the time before");
+    "each recording opens the microphone without voice processing first");
 });
 
 test("a soft voice in a quiet room is heard, and a murmur barely above a noisy room is not sent", async () => {
@@ -1264,36 +1268,73 @@ test("a recording nobody speaks into is never sent, and one the meter cannot dec
   }
 });
 
-test("a microphone that delivers nothing is opened the next way, and the way that works goes first after", async () => {
+test("a microphone that delivers nothing is opened the next way within seconds, never shown as listening", async () => {
   // Dead: no bytes at all; silent: bytes of exact digital silence.
   for (const [recovers, silent] of [[false, false], [true, false], [false, true]]) {
     const { sent, Ai } = transcriber(["play Again", "play Next"]);
-    const finished = [], errors = [];
+    const finished = [], errors = [], listening = [];
     const h = recordingHarness({ userAgent: "iPhone" }, Ai);
     await firstRequest(h);
     if (silent) h.device.level = 0; else h.device.live = false;
-    h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
+    h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code),
+      onlistening: value => listening.push(value) });
     await flush();
-    await run(h, 2600);
+    await run(h, 2000);
+    assert.deepEqual(listening, [], "the screen never says it listens on a microphone that delivers nothing");
     if (recovers) { h.device.live = true; await speak(h); }
     else await run(h, 5200);
     await flush();
     assert.deepEqual(finished.concat(errors), [recovers ? "play Again" : "mic-silent"]);
+    assert.deepEqual(listening, recovers ? [true] : []);
     const ways = h.constraints.slice(1).map(asked => asked.audio === true ? "processed" : "raw");
     assert.deepEqual(ways, recovers ? ["raw", "processed"] : ["raw", "processed", "raw"]);
     assert.equal(h.audioSession.type, "playback", "the player's audio session comes back");
     assert.equal(sent.length, recovers ? 1 : 0);
     assert.ok(h.tracks.every(track => track.readyState === "ended"));
-    assert.ok(h.logs.some(line => /no audio in 2\.5s/.test(line)));
+    const dropped = h.logs.filter(line => /^voice capture 2: no audio after \d+ms, (no bytes|\d+ bytes of exact silence),/.test(line));
+    assert.equal(dropped.length, recovers ? 1 : 3);
+    assert.ok(dropped.every(line => Number(line.match(/after (\d+)ms/)[1]) <= (silent ? 1000 : 1500)),
+      "exact silence is dropped within a second, no bytes within a second and a half");
     if (recovers) {
       h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
       await flush();
-      assert.equal(h.constraints.at(-1).audio, true, "the way that worked is tried first");
+      assert.equal(h.constraints.at(-1).audio.echoCancellation, false, "the next request starts from the plainer way again");
       await speak(h);
       await flush();
       assert.equal(finished.at(-1), "play Next");
     }
   }
+});
+
+test("where the plain capture records silence, every later iPhone request is heard through voice processing", async () => {
+  // As on an iPhone after music: the capture without voice processing recorded exact
+  // silence, and voice processing opened right after it delivered the request.
+  const requests = ["play Second", "play Third", "play Fourth", "play Fifth"];
+  const { sent, Ai } = transcriber(requests.slice());
+  const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+  await firstRequest(h);
+  h.device.silentWhen = audio => audio !== true;
+  for (const words of requests) {
+    const finished = [], errors = [], listening = [];
+    const opened = h.constraints.length;
+    h.Voice.listen({ ontext: assert.fail, onfinish: value => finished.push(value), onerror: code => errors.push(code),
+      onlistening: value => listening.push(value) });
+    await flush();
+    await run(h, 700);
+    assert.deepEqual(h.constraints.slice(opened).map(asked => asked.audio === true ? "processed" : "raw"), ["raw", "processed"],
+      words + ": the plain way first, then voice processing");
+    assert.deepEqual(listening, [], words + ": not shown as listening while the silent way was open");
+    await speak(h);
+    await flush();
+    assert.deepEqual(finished.concat(errors), [words]);
+    assert.deepEqual(listening, [true], words + ": listening once the voice-processed microphone delivers");
+    assert.ok(h.tracks.every(track => track.readyState === "ended"), words + ": the microphone is released");
+    assert.equal(h.audioSession.type, "playback");
+  }
+  assert.equal(sent.length, requests.length);
+  const dropped = h.logs.filter(line => /^voice capture \d+: no audio after \d+ms, \d+ bytes of exact silence,/.test(line));
+  assert.equal(dropped.length, requests.length, "each request dropped the silent way once");
+  assert.ok(dropped.every(line => Number(line.match(/after (\d+)ms/)[1]) <= 1000), "within a second");
 });
 
 test("the microphone waits for the player's audio to close, and never for long", async () => {
