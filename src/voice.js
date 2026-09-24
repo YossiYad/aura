@@ -59,16 +59,14 @@
     try { return window.Player && window.Player.captureState ? JSON.stringify(window.Player.captureState()) : "no-player"; }
     catch (e) { return "err"; }
   }
-  let currentCapture = null;
+  // The open capture's cancel, and how many captures this page has opened: each one is
+  // numbered in the log, so the lines of one request can be told from the next one's.
+  let currentCapture = null, captureCount = 0;
   // When a spoken reply last ended. A recognition opened soon after playback can go
   // deaf on iOS (WebKit bug 321436), so listen() settles the audio session first.
   let lastSpokeAt = 0;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
     navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-  // iOS feeds audio to webkitSpeechRecognition only for the FIRST instance created per page
-  // load; a fresh instance for the next request fires audio start but stays deaf (WebKit bug
-  // 321436). So on iOS reuse one recognizer for every capture instead of creating new ones.
-  let sharedRecognition = null;
   // Spoken replies use speechSynthesis, which on iOS leaves WebKit unable to feed the next
   // recognition (WebKit bug 321436): speaking a reply deafens the very next voice request.
   // So default replies off on iOS and on elsewhere; the Spoken replies setting overrides.
@@ -127,33 +125,52 @@
     const Ctor = speechCtor();
     if (!Ctor) throw new Error("Speech recognition is unavailable");
     if (currentCapture) currentCapture();
+    const id = ++captureCount;
+    const trace = message => log("capture " + id + ": " + message);
     let recognition, timer, finishTimer, finishing = false, closed = false;
     let inputTimer, previousAudioType, microphone;
-    let recoveries = 0, runToken = 0;
-    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent || "") ||
-      navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
+    let recoveries = 0, runs = 0;
+    const ios = isIOS;
     const audioSession = navigator.audioSession;
     currentCapture = cancel;
     // The player uses playback for background music. Note that output-only category;
     // arm() releases it for the microphone once any post-reply settle has passed.
     try { if (audioSession) previousAudioType = audioSession.type; }
-    catch (e) { log("could not read microphone audio session"); }
+    catch (e) { trace("could not read microphone audio session"); }
     let silenceTimer = null, speaking = false;
     let committed = [], session = [], emptyEnds = 0;
     const parts = () => transcriptParts(committed.concat(session));
     const text = () => requestStart(parts().map(part => part.text).join(" "));
+    // The audio session and this capture's microphone tracks, for the log. A live track
+    // alone does not prove audio is arriving, so mute and enabled are shown as well.
+    function inputState() {
+      let state = "no audio session";
+      try { if (audioSession) state = "session " + audioSession.type + "/" + (audioSession.state || "unknown"); } catch (e) {}
+      const tracks = microphone ? microphone.getTracks().map(track => (track.readyState || "unknown") +
+        (track.muted ? " muted" : "") + (track.enabled === false ? " disabled" : "")).join(", ") : "none";
+      return state + ", microphone " + tracks;
+    }
+    trace("opened on the " + (ios ? "iOS" : "standard") + " path, transcript reset, " + inputState());
+    // Takes the handlers off the current recognizer, which is never started again, and
+    // aborts it unless it already ended. Whatever its native run still sends reaches no one.
     function detach(ended) {
       if (!recognition) return;
-      recognition.onstart = recognition.onresult = recognition.onerror = recognition.onend = null;
-      recognition.onspeechstart = recognition.onspeechend = null;
-      recognition.onaudiostart = recognition.onaudioend = null;
-      if (!ended) { try { recognition.abort(); } catch (e) {} }
+      const run = recognition;
       recognition = null;
+      run.onstart = run.onresult = run.onerror = run.onend = null;
+      run.onspeechstart = run.onspeechend = null;
+      run.onsoundstart = run.onsoundend = null;
+      run.onaudiostart = run.onaudioend = null;
+      if (ended) return;
+      trace("run " + runs + " aborted");
+      try { run.abort(); } catch (e) {}
     }
     function releaseMicrophone() {
       if (!microphone) return;
-      microphone.getTracks().forEach(track => track.stop());
+      const tracks = microphone.getTracks();
       microphone = null;
+      tracks.forEach(track => track.stop());
+      trace("microphone released, tracks " + tracks.map(track => track.readyState || "stopped").join(", "));
     }
     function cancel() {
       if (closed) return;
@@ -164,15 +181,16 @@
       clearSilence();
       detach();
       releaseMicrophone();
-      currentCapture = null;
+      if (currentCapture === cancel) currentCapture = null;
       try { if (audioSession && previousAudioType != null) audioSession.type = previousAudioType; } catch (e) {}
-      log("capture closed");
+      trace("closed, cleanup complete, " + inputState());
     }
     function watchInput(ms) {
       clearTimeout(inputTimer);
       // Some mobile recognizers start but never return a result, error or end.
       // Bound that empty session without limiting the length of a spoken request.
       if (!text()) inputTimer = setTimeout(() => {
+        trace("no words by the input deadline, " + inputState());
         if (!recover("recognition-timeout")) fail("recognition-timeout");
       }, ios && recognition && !recoveries ? 5000 : ms);
     }
@@ -181,7 +199,7 @@
       // event (bug 321436). Recover once, only before any words have arrived.
       if (!ios || closed || finishing || text() || recoveries || !recognition) return false;
       recoveries++;
-      log("restarting empty recognition after " + reason);
+      trace("restarting empty recognition after " + reason);
       clearTimeout(timer);
       clearTimeout(inputTimer);
       clearSilence();
@@ -191,8 +209,8 @@
       try { if (audioSession) audioSession.type = "auto"; } catch (e) {}
       if (options.onlistening) options.onlistening(false);
       if (options.onrecover) options.onrecover();
-      // Release both capture clients and let the previous native session settle.
-      // The retry uses recognition's own microphone, without another permission call.
+      // Release both capture clients and let the previous native session settle. The retry
+      // is a new recognizer on recognition's own microphone, without another permission call.
       timer = setTimeout(() => {
         if (closed || finishing) return;
         try { if (audioSession) audioSession.type = "play-and-record"; } catch (e) {}
@@ -217,20 +235,21 @@
       if (options.onfinishing) options.onfinishing();
       // Some implementations omit onend after stop. Preserve the latest transcript
       // in that case, while giving a final recognition correction time to arrive.
-      finishTimer = setTimeout(complete, 1500);
+      finishTimer = setTimeout(() => { trace("no end within 1.5s of stop"); complete(); }, 1500);
+      trace(recognition ? "run " + runs + " stop requested" : "finished before recognition started");
       try { recognition.stop(); } catch (e) { complete(); }
     }
     function complete() {
       if (closed) return;
       const value = text();
-      log("capture finished, " + value.length + " characters");
+      trace("finished, " + value.length + " characters");
       cancel();
       options.onfinish(value);
     }
     function fail(code) {
       if (closed) return;
       const value = text();
-      log("capture error: " + code + ", " + value.length + " characters");
+      trace("error " + code + ", " + value.length + " characters");
       cancel();
       options.onerror(code, value);
     }
@@ -238,40 +257,56 @@
       if (closed || finishing) return;
       committed = parts();
       session = [];
-      // Reuse the one iOS recognizer; a second instance would be deaf (bug 321436). A run
-      // token, not instance identity, marks stale callbacks, since the reused object never
-      // changes between a reconnect or a recover and the run it belongs to.
-      const fresh = !ios || !sharedRecognition;
-      try { recognition = ios ? (sharedRecognition || (sharedRecognition = new Ctor())) : new Ctor(); }
-      catch (e) { fail("start-failed"); return; }
-      const run = recognition;
-      const myToken = ++runToken;
-      const active = () => !closed && runToken === myToken;
-      recognition.lang = options.lang || "he-IL";
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 1;
-      recognition.onstart = () => { if (active()) log("recognition started, " + run.lang + ", recovery " + recoveries + (fresh ? "" : ", reused")); };
-      recognition.onaudiostart = () => {
+      // Every run gets a recognizer of its own, on every platform. WebKit hands each native
+      // event to a recognizer object by that object's one client identifier, and accepts
+      // start() only while the object is inactive, after the native end of its last run.
+      // Reused across requests, one object took the previous run's late end, error and
+      // results as the new request's own, and could not start while that run was still
+      // stopping - or ever again, when its end never came. A new object has a new
+      // identifier: the old run's stragglers go to the detached object, and WebKit stops the
+      // old run's capture before this run's begins.
+      let run;
+      try { run = new Ctor(); }
+      catch (e) { trace("recognizer could not be created"); fail("start-failed"); return; }
+      recognition = run;
+      const runId = ++runs;
+      const note = message => trace("run " + runId + " " + message);
+      // Only the current run's own object may change the capture.
+      const active = () => !closed && recognition === run;
+      let audioEnded = false;
+      run.lang = options.lang || "he-IL";
+      run.continuous = true;
+      run.interimResults = true;
+      run.maxAlternatives = 1;
+      run.onstart = () => { if (active()) note("started, " + run.lang + (recoveries ? ", recovery " + recoveries : "")); };
+      run.onaudiostart = () => {
         if (!active() || finishing) return;
-        log("microphone audio started, player " + playerState());
+        note("audio started, " + inputState() + ", player " + playerState());
         watchInput(12000);
         if (options.onlistening) options.onlistening(true);
       };
-      recognition.onaudioend = () => { if (active()) log("microphone audio ended"); };
-      recognition.onspeechstart = () => {
+      run.onaudioend = () => {
+        if (!active()) return;
+        note("audio ended");
+        audioEnded = true;
+        // The microphone is closed even while the run winds down: stop saying it listens.
+        if (!finishing && options.onlistening) options.onlistening(false);
+      };
+      run.onsoundstart = () => { if (active()) note("sound detected"); };
+      run.onsoundend = () => { if (active()) note("sound ended"); };
+      run.onspeechstart = () => {
         if (!active() || finishing) return;
-        log("speech started");
+        note("speech started");
         speaking = true;
         clearSilence();
       };
-      recognition.onspeechend = () => {
+      run.onspeechend = () => {
         if (!active()) return;
-        log("speech ended");
+        note("speech ended");
         speaking = false;
         waitForSilence();
       };
-      recognition.onresult = event => {
+      run.onresult = event => {
         if (!active()) return;
         // Rebuild the current session snapshot, so interim replacements/removals
         // and final corrections never get appended to an older version.
@@ -280,10 +315,10 @@
         if (session.some(part => part.text)) {
           emptyEnds = 0;
           clearTimeout(inputTimer);
-          if (!finishing && options.onlistening) options.onlistening(true);
+          if (!finishing && !audioEnded && options.onlistening) options.onlistening(true);
         }
         const final = !!(event.results.length && event.results[event.results.length - 1].isFinal);
-        log("recognition result, " + text().length + " characters, final " + final);
+        note("result, " + text().length + " characters, final " + final);
         if (final) speaking = false;
         // An unchanged final hypothesis is not more speech. Keep its original
         // silence deadline even if the browser repeats it before disconnecting.
@@ -291,8 +326,9 @@
         options.ontext(text(), final);
         waitForSilence();
       };
-      recognition.onerror = event => {
+      run.onerror = event => {
         if (!active()) return;
+        note("error " + (event.error || "unknown"));
         if (event.error === "no-speech") return;
         // After Finish the words are already in hand; a late network or audio error
         // must not throw the request away and ask for another tap.
@@ -300,9 +336,9 @@
         if (event.error === "audio-capture" && recover(event.error)) return;
         fail(event.error || "network");
       };
-      recognition.onend = () => {
+      run.onend = () => {
         if (!active()) return;
-        log("recognition ended");
+        note("ended");
         if (options.onlistening) options.onlistening(false);
         detach(true);
         if (finishing) { complete(); return; }
@@ -317,7 +353,8 @@
         }
         timer = setTimeout(start, 300);
       };
-      try { recognition.start(); } catch (e) { fail("start-failed"); }
+      note("created, start requested");
+      try { run.start(); } catch (e) { note("start threw " + ((e && e.name) || "an error")); fail("start-failed"); }
       if (active() && !finishing) watchInput(recoveries ? 12000 : 20000);
     }
     function arm() {
@@ -330,14 +367,21 @@
       // stream for this capture, including recognition reconnects, and release it
       // before restoring playback. No recorder or additional upload is involved.
       if (ios && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const unavailable = error => fail(error && (error.name === "NotAllowedError" || error.name === "SecurityError")
-          ? "not-allowed" : "audio-capture");
+        const unavailable = error => {
+          trace("microphone unavailable, " + ((error && error.name) || "error"));
+          fail(error && (error.name === "NotAllowedError" || error.name === "SecurityError") ? "not-allowed" : "audio-capture");
+        };
+        trace("microphone requested, " + inputState());
         try {
           navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
             // Permission may resolve after cancellation, timeout or a newer request.
-            if (closed || finishing) { stream.getTracks().forEach(track => track.stop()); return; }
+            if (closed || finishing) {
+              stream.getTracks().forEach(track => track.stop());
+              trace("late microphone stream released");
+              return;
+            }
             microphone = stream;
-            log("microphone stream ready");
+            trace("microphone ready, " + inputState());
             start();
           }, unavailable);
         } catch (e) { unavailable(e); }
@@ -351,7 +395,7 @@
     // setTimeout only, never a promise hop on the getUserMedia -> start path tests time.
     const spokeRecently = !!lastSpokeAt && Date.now() - lastSpokeAt < 8000;
     if (ios && audioSession && (spokeRecently || options.settle)) {
-      log("settling audio session before listening, " + (spokeRecently ? "after reply" : "after playback") + ", player " + playerState());
+      trace("settling audio session before listening, " + (spokeRecently ? "after reply" : "after playback") + ", player " + playerState());
       try { audioSession.type = "auto"; } catch (e) {}
       timer = setTimeout(() => { if (!closed && !finishing) arm(); }, 800);
     } else arm();

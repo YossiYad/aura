@@ -93,6 +93,9 @@
     // Keep the resolved source, including local blobs. Another URL cannot grant
     // permission, and the next Play must reach audio.play() during the user's tap.
     V.pendingPlaybackPermission = { track, actualTrack: actualTrack || track, src: V.audio.src, resumeAt };
+    // Whatever permission the element was thought to hold is gone: the next voice request's
+    // tap primes it again (releaseForVoice).
+    V.playbackPrimed = false;
     V.wantsPlayback = false;
     V.focusResumePending = false;
     V.focusResumeConfirmed = false;

@@ -238,12 +238,19 @@
       : voice.hearing ? "listening" : voice.recording ? "connecting" : "breathing";
   }
 
+  function voiceLog(message) { if (window.Log) Log.add("voice", message); }
+  // What the orb last showed. Each change is logged, so the log shows what the screen
+  // claimed - listening or not - next to what the recognizer was actually doing.
+  let shownState = "breathing";
+
   // Shows the open request wherever it can be seen: in place on the Ask screen, and as an
   // event for anything else that draws it - driving mode does.
   function voicePaint() {
+    const state = voiceOrbState();
+    if (state !== shownState) { voiceLog("screen " + shownState + " -> " + state); shownState = state; }
     V.paintAskOrb();
     window.dispatchEvent(new CustomEvent("aura-voice", { detail: voice ? {
-      surface: voice.surface, state: voiceOrbState(), status: voice.status,
+      surface: voice.surface, state, status: voice.status,
       text: V.askState.spoken ? V.askState.prompt : ""
     } : null }));
   }
@@ -293,6 +300,7 @@
     Voice.stopReply();
     if (V.askState.spoken) setAskText("", false);
     voice = null;
+    voiceLog("request ended");
     voicePaint();
   }
 
@@ -327,8 +335,11 @@
     Voice.stopReply();
     const input = document.getElementById("ask-prompt");
     if (input) input.blur();
-    if (V.askState.spoken) setAskText("", false);
+    const cleared = V.askState.spoken;
+    if (cleared) setAskText("", false);
     const pauseNeeded = Player.playbackRequested() || !Player.isPaused();
+    voiceLog("request started on " + me.surface + (cleared ? ", previous spoken words cleared" : "") +
+      (pauseNeeded ? ", pausing playback" : ""));
     if (!me.pausedTrack && pauseNeeded) me.pausedTrack = Player.current();
     // An interrupted or buffering player can appear paused while still intending
     // to resume. Clear that intent before microphone audio focus becomes active.
@@ -398,10 +409,12 @@
     voiceHush(false);
     const request = V.askState.prompt.replace(VOICE_DONE, "").trim();
     if (!request) {
+      voiceLog("request empty, nothing submitted");
       voiceSay(tr("לא שמעתי בקשה"));
       voiceResume();
       return;
     }
+    voiceLog("request submitted, " + request.length + " characters");
     me.busy = true;
     voiceSay(tr("מחפש…"));
     const live = () => voice === me;
@@ -445,6 +458,7 @@
         : tr("הבקשה נשלחה לנגן: ")) + result.label);
     } catch (e) {
       if (!live()) return;
+      voiceLog("request not played, its note is shown and the microphone is ready again");
       me.busy = false;
       voiceSay(String(e.message || e));
       voiceAfterNote(me, { he: String(e.message || e), en: "I couldn't find a clear match. Please try the song and artist name." });

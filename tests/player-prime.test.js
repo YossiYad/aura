@@ -120,3 +120,44 @@ test('priming is a no-op on Android, which starts AI playback on its own', async
   assert.equal(h.P.needsPlaybackGesture(), false, 'Android plays without any priming');
   assert.equal(h.P.current().id, requested.id);
 });
+
+// Every voice request's tap releases the element for the microphone (releaseForVoice). iOS
+// keeps playback permission on the element, so only a tap that finds it without one primes:
+// later requests do not play and stop the element in front of their capture, and their
+// songs still start on their own.
+const primes = h => h.logs.filter(l => /primed the audio element/.test(l.message)).length;
+
+test('repeated iOS voice requests all start their songs without a Play tap, priming only once', async () => {
+  const h = setup();
+  iosElement(h.audio);
+  for (const id of ['first', 'second', 'third', 'fourth']) {
+    // The request's tap, as voiceStart makes it: pause what plays, then release.
+    if (h.P.playbackRequested() || !h.P.isPaused()) h.P.pause();
+    h.P.releaseForVoice();
+    assert.equal(h.audio.src, '', 'the element is clear for the microphone');
+    // Seconds later, outside the tap, the resolved song starts.
+    h.P.playQueue([{ ...requested, id }], 0);
+    await flushMicrotasks(70);
+    assert.equal(h.P.needsPlaybackGesture(), false, id + ' request plays without a Play tap');
+    assert.equal(h.P.current().id, id);
+    assert.equal(h.audio.paused, false);
+  }
+  assert.equal(primes(h), 1, 'only the first tap had to prime the element');
+  assert.equal(h.logs.filter(l => /already holds playback permission/.test(l.message)).length, 3);
+  assert.equal(h.events.some(e => e.type === 'playback-permission'), false);
+});
+
+test('a refused iOS play makes the next voice request prime the element again', async () => {
+  const h = setup();
+  iosElement(h.audio);
+  h.P.releaseForVoice();
+  h.P.releaseForVoice();
+  assert.equal(primes(h), 1, 'a primed element is not primed again');
+  // iOS refuses a play all the same: whatever permission the element held is gone.
+  h.audio.play = function () { this.playCalls++; return Promise.reject(denied()); };
+  h.P.playQueue([requested], 0);
+  await flushMicrotasks(70);
+  assert.equal(h.P.needsPlaybackGesture(), true);
+  h.P.releaseForVoice();
+  assert.equal(primes(h), 2, 'the next request primes again');
+});

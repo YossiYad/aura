@@ -101,7 +101,7 @@
     getTime: V.getTime, isPaused: V.isPaused, playbackRequested: () => V.wantsPlayback || V.loadingInProgress, isLoading: () => V.loadingInProgress,
     releaseForVoice: V.releaseForVoice, primeForPlayback: V.primeForPlayback,
     captureState: () => ({ src: !!V.audio.src, paused: V.audio.paused, ended: V.audio.ended,
-      ready: V.audio.readyState, kick: (V.sessionKick && V.sessionKick.state) || "none", backend: V.backend,
+      ready: V.audio.readyState, kick: (V.sessionKick && V.sessionKick.state) || "none", backend: V.backend, primed: V.playbackPrimed,
       tts: !!(window.speechSynthesis && (window.speechSynthesis.speaking || window.speechSynthesis.pending)) }),
     seekTo: V.seekTo, setVolume: V.setVolume, volume: () => V.volume,
     needsPlaybackGesture: () => !!V.pendingPlaybackPermission,

@@ -9,11 +9,21 @@ function harness(options = {}) {
   const { Store } = createStore(options.seed);
   const recognitions = [], timers = new Map();
   let timerId = 0, now = 0;
+  // Modelled on WebKit's recognizer: start() is accepted only while the object is
+  // inactive, and after stop() or abort() it stays busy until its native end arrives
+  // (end()). Native events reach whatever handler the object holds when they arrive
+  // (emit()), exactly as WebKit routes them to the object by its client identifier.
   class Recognition {
-    constructor() { recognitions.push(this); }
-    start() { options.onstart?.(); this.onstart?.(); }
-    stop() { this.stopped = true; }
-    abort() { this.aborted = true; }
+    constructor() { recognitions.push(this); this.state = "inactive"; }
+    start() {
+      if (this.state !== "inactive") throw Object.assign(new Error("Recognition is being started or already started"), { name: "InvalidStateError" });
+      this.state = "running";
+      options.onstart?.(); this.onstart?.();
+    }
+    stop() { this.stopped = true; if (this.state === "running") this.state = "stopping"; }
+    abort() { this.aborted = true; if (this.state !== "inactive") this.state = "aborting"; }
+    end() { this.state = "inactive"; this.onend?.(); }
+    emit(type, event = {}) { this["on" + type]?.(event); }
     result(parts) {
       this.onresult({ results: parts.map(([text, final]) => Object.assign([{ transcript: text }], { isFinal: final })) });
     }
@@ -380,7 +390,7 @@ test("iPhone repeat captures keep a live microphone until completion and release
     advance(2000);
     assert.equal(recognition.stopped, true, 'silence sends the request without a button');
     assert.equal(tracks.at(-1).stopped, false, 'keep audio active until the last result');
-    recognition.onend();
+    recognition.end();
     assert.equal(tracks.at(-1).stopped, true);
     assert.equal(audioSession.type, 'playback');
     assert.equal(Voice.isListening(), false);
@@ -399,9 +409,9 @@ test("iPad microphone stays open over recognition reconnects and closes on every
     await Promise.resolve();
     recognitions[0].onend(); advance(300);
     assert.equal(stopped, false);
-    assert.equal(recognitions.length, 1, 'the one iOS recognizer is reused across the reconnect, not recreated');
+    assert.equal(recognitions.length, 2, 'the reconnect starts a recognizer of its own on the same microphone');
     if (ending === 'cancel') capture.cancel();
-    if (ending === 'error') recognitions[0].onerror({ error: 'network' });
+    if (ending === 'error') recognitions[1].onerror({ error: 'network' });
     if (ending === 'timeout') advance(20000);
     if (ending === 'finish-fallback') { capture.finish(); advance(1500); }
     assert.equal(stopped, true, ending);
@@ -409,23 +419,159 @@ test("iPad microphone stays open over recognition reconnects and closes on every
   }
 });
 
-test("iPhone reuses one recognizer across separate requests, but other browsers make a new one", async () => {
-  // iOS feeds audio only to the first recognizer created per page load; a fresh one for the
-  // next request fires audio start but stays deaf (WebKit 321436), so every capture reuses it.
-  const ios = harness({ userAgent: "iPhone",
-    mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) } });
-  ios.Voice.listen({ ontext() {}, onfinish() {}, onerror() {} });
-  await Promise.resolve();
-  assert.equal(ios.recognitions.length, 1);
-  ios.Voice.listen({ ontext() {}, onfinish() {}, onerror() {} });
-  await Promise.resolve();
-  assert.equal(ios.recognitions.length, 1, "the second request reuses the first recognizer, not a deaf new one");
+// A voice harness that records the log and hands out live microphone tracks, checking
+// that every earlier request's microphone was released before a new one is asked for.
+function voiceHarness(platform) {
+  const tracks = [], logs = [];
+  const h = harness({ ...platform, audioSession: { type: "playback" }, Log: { add: (tag, message) => logs.push(tag + " " + message) },
+    mediaDevices: { getUserMedia: async () => {
+      assert.ok(tracks.every(track => track.readyState === "ended"), "the earlier microphone was released first");
+      const track = { readyState: "live", stop() { this.readyState = "ended"; } };
+      tracks.push(track);
+      return { getTracks: () => [track] };
+    } } });
+  return { ...h, tracks, logs };
+}
+const finalResult = words => ({ results: [Object.assign([{ transcript: words }], { isFinal: true })] });
 
-  const other = harness();
-  other.Voice.listen({ ontext() {}, onfinish() {}, onerror() {} });
-  assert.equal(other.recognitions.length, 1);
-  other.Voice.listen({ ontext() {}, onfinish() {}, onerror() {} });
-  assert.equal(other.recognitions.length, 2, "off iOS each request makes its own recognizer");
+test("every request and every reconnect gets a recognizer of its own, on iPhone as on other browsers", async () => {
+  for (const platform of [{ userAgent: "iPhone" }, { platform: "MacIntel", maxTouchPoints: 5 }, { userAgent: "Android" }]) {
+    const { Voice, recognitions, advance } = voiceHarness(platform);
+    const first = Voice.listen({ ontext() {}, onfinish() {}, onerror() {} });
+    await Promise.resolve();
+    assert.equal(recognitions.length, 1);
+    recognitions[0].end(); advance(300);
+    assert.equal(recognitions.length, 2, "a reconnect starts a new recognizer");
+    first.cancel();
+    assert.equal(recognitions[1].aborted, true);
+    assert.equal(recognitions[1].onresult, null, "the cancelled run's recognizer keeps no handlers");
+    Voice.listen({ ontext() {}, onfinish() {}, onerror() {} });
+    await Promise.resolve();
+    assert.equal(recognitions.length, 3, "the next request starts a new recognizer");
+    assert.equal(recognitions[2].state, "running");
+  }
+});
+
+test("on iPhone a request whose recognizer never ends cannot block the requests after it", async () => {
+  // Reusing one recognizer, the second start() met an object still aborting the first run,
+  // and on a device that never delivers that end, voice input failed until a reload.
+  const errors = [], finished = [];
+  const { Voice, recognitions, advance, tracks } = voiceHarness({ userAgent: "iPhone" });
+  for (const words of ["play First", "play Second", "play Third", "play Fourth"]) {
+    Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
+    await Promise.resolve();
+    const recognition = recognitions.at(-1);
+    assert.equal(recognition.state, "running", "the new request's recognizer started");
+    recognition.emit("audiostart");
+    recognition.result([[words, true]]);
+    advance(2000);
+    assert.equal(recognition.state, "stopping");
+    // No end ever arrives: the capture completes on its fallback and aborts the run.
+    advance(1500);
+    assert.equal(recognition.state, "aborting");
+    assert.equal(tracks.at(-1).readyState, "ended");
+  }
+  assert.deepEqual(errors, []);
+  assert.deepEqual(finished, ["play First", "play Second", "play Third", "play Fourth"]);
+});
+
+test("late events from an earlier request's recognizer never reach the next request", async () => {
+  for (const platform of [{ userAgent: "iPhone" }, { userAgent: "Android" }]) {
+    const heard = [], finished = [], errors = [], listening = [];
+    const { Voice, recognitions, advance } = voiceHarness(platform);
+    // The first request is submitted by the fallback before its run has ended.
+    Voice.listen({ ontext() {}, onfinish() {}, onerror: assert.fail });
+    await Promise.resolve();
+    const old = recognitions[0];
+    old.emit("audiostart");
+    old.result([["play First", true]]);
+    advance(2000); advance(1500);
+    Voice.listen({ ontext: value => heard.push(value), onfinish: value => finished.push(value),
+      onerror: code => errors.push(code), onlistening: value => listening.push(value) });
+    await Promise.resolve();
+    const current = recognitions[1];
+    assert.notEqual(current, old);
+    current.emit("audiostart");
+    // Whatever the first run still sends goes to its own, detached object.
+    old.emit("result", finalResult("play First again"));
+    old.emit("audioend"); old.emit("error", { error: "aborted" }); old.end();
+    assert.deepEqual(heard, [], "no earlier words appear in the new request");
+    assert.deepEqual(errors, []);
+    assert.deepEqual(listening, [true], "the new request still shows it is listening");
+    assert.equal(Voice.isListening(), true);
+    current.result([["play Second", true]]);
+    advance(2000); current.end();
+    assert.deepEqual(heard, ["play Second"]);
+    assert.deepEqual(finished, ["play Second"]);
+  }
+});
+
+test("cancelling a request and asking again at once listens while the cancelled run still aborts", async () => {
+  for (const platform of [{ userAgent: "iPhone" }, { userAgent: "Android" }]) {
+    const finished = [];
+    const { Voice, recognitions, advance } = voiceHarness(platform);
+    const first = Voice.listen({ ontext: assert.fail, onfinish: assert.fail, onerror: assert.fail });
+    await Promise.resolve();
+    recognitions[0].emit("audiostart");
+    first.cancel();
+    assert.equal(recognitions[0].state, "aborting");
+    Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: assert.fail });
+    await Promise.resolve();
+    assert.equal(recognitions[1].state, "running", "the new request does not wait for the old end");
+    recognitions[1].result([["play Again", true]]);
+    advance(2000); recognitions[1].end();
+    recognitions[0].end();
+    assert.deepEqual(finished, ["play Again"]);
+    assert.equal(Voice.isListening(), false);
+  }
+});
+
+test("an iPhone recovery listens on a new recognizer even while the silent one still aborts", async () => {
+  const finished = [];
+  const { Voice, recognitions, advance } = voiceHarness({ userAgent: "iPhone" });
+  Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: assert.fail });
+  await Promise.resolve();
+  recognitions[0].emit("audiostart");
+  advance(5000);
+  assert.equal(recognitions[0].state, "aborting", "the silent run was aborted and has not ended");
+  advance(1000);
+  assert.equal(recognitions.length, 2);
+  assert.equal(recognitions[1].state, "running");
+  recognitions[1].result([["play Retry", true]]);
+  advance(2000); recognitions[1].end();
+  assert.deepEqual(finished, ["play Retry"]);
+});
+
+test("audio end turns the listening indicator off, and a trailing result cannot relight it", () => {
+  const listening = [], heard = [];
+  const { Voice, recognitions } = harness();
+  Voice.listen({ ontext: value => heard.push(value), onfinish() {}, onerror() {}, onlistening: value => listening.push(value) });
+  const recognition = recognitions[0];
+  recognition.emit("audiostart");
+  recognition.result([["play", false]]);
+  recognition.emit("audioend");
+  recognition.result([["play First", true]]);
+  assert.deepEqual(listening, [true, true, false]);
+  assert.deepEqual(heard, ["play", "play First"], "the trailing words still count");
+});
+
+test("each request is logged as its own capture, from opening to cleanup, without its words", async () => {
+  const { Voice, recognitions, advance, logs } = voiceHarness({ userAgent: "iPhone" });
+  for (const words of ["play First", "play Fifth"]) {
+    Voice.listen({ ontext() {}, onfinish() {}, onerror: assert.fail });
+    await Promise.resolve();
+    const recognition = recognitions.at(-1);
+    recognition.emit("audiostart");
+    recognition.result([[words, true]]);
+    advance(2000); recognition.end();
+  }
+  for (const id of [1, 2]) {
+    for (const step of ["opened on the iOS path, transcript reset", "microphone requested", "microphone ready, session play-and-record",
+      "run 1 created, start requested", "run 1 started", "run 1 audio started", "run 1 result, 10 characters, final true",
+      "run 1 stop requested", "run 1 ended", "finished, 10 characters", "microphone released, tracks ended", "closed, cleanup complete"])
+      assert.ok(logs.some(line => line.startsWith("voice capture " + id + ": " + step)), "capture " + id + " logs " + step);
+  }
+  assert.equal(logs.some(line => /First|Fifth/.test(line)), false, "spoken words stay out of the log");
 });
 
 test("late iPhone microphone permission cannot reopen a cancelled request or disturb a retry", async () => {
