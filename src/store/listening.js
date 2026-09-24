@@ -76,6 +76,14 @@
         // be given. Kept so the tile can open the artist instead of guessing at them.
         artistId: track.artistId || artistStat.artistId || null
       };
+      // Held to the same bound as the tracks, and for the same reason: artists outlive the
+      // tracks that brought them in, and an ever-growing map would in time push the synced
+      // copy past the server's limit, after which nothing syncs.
+      const names = Object.keys(V.listeningProfile.artists);
+      if (names.length > V.PROFILE_TRACK_CAP) {
+        names.sort((a, b) => (V.listeningProfile.artists[a].lastPlayed || 0) - (V.listeningProfile.artists[b].lastPlayed || 0));
+        names.slice(0, names.length - V.PROFILE_TRACK_CAP).forEach(name => { delete V.listeningProfile.artists[name]; });
+      }
     }
     V.save("aura.recents", V.recents);
     V.save("aura.listeningProfile", V.listeningProfile);
