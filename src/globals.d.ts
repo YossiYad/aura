@@ -187,6 +187,8 @@ interface AuraAi {
   generatePlaylist(prompt: string, count?: number, historyContext?: string, avoidList?: string[]): Promise<GeneratedPlaylist>;
   interpretPlayback(request: string): Promise<PlaybackIntent>;
   suggestPodcastShows(languageName?: string, followed?: string[]): Promise<{ name: string, host: string }[]>;
+  /** The words of a recorded voice request; empty when nothing was said. */
+  transcribe(blob: Blob, language?: string): Promise<string>;
 }
 
 // ---------------- player.js ----------------

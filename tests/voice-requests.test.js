@@ -30,7 +30,8 @@ function harness(options = {}) {
   }
   const Ai = options.Ai || { hasAnyKey: () => false };
   const Api = options.Api || {};
-  const window = { SpeechRecognition: Recognition, Ai, Log: options.Log };
+  const window = { SpeechRecognition: Recognition, Ai, Log: options.Log,
+    MediaRecorder: options.MediaRecorder, AudioContext: options.AudioContext };
   if (options.synth) {
     window.speechSynthesis = options.synth;
     window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
@@ -39,19 +40,28 @@ function harness(options = {}) {
     window, Store, Ai, Api, Player: { queue: () => [] }, navigator: { onLine: options.online !== false, audioSession: options.audioSession,
       userAgent: options.userAgent, platform: options.platform, maxTouchPoints: options.maxTouchPoints, mediaDevices: options.mediaDevices },
     setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms, at: now + ms }); return id; },
-    clearTimeout: id => timers.delete(id)
+    clearTimeout: id => timers.delete(id),
+    setInterval: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms, at: now + ms, every: ms }); return id; },
+    clearInterval: id => timers.delete(id),
+    Blob
   });
+  // An interval is due again one period later; set before it runs, so it can clear itself.
+  const fire = (id, timer) => {
+    timers.delete(id);
+    if (timer.every) timers.set(id, { ...timer, at: timer.at + timer.every });
+    timer.fn();
+  };
   return {
     Voice: window.Voice, Store, recognitions,
     tick(ms) {
-      for (const [id, timer] of [...timers]) if (timer.ms === ms) { timers.delete(id); timer.fn(); }
+      for (const [id, timer] of [...timers]) if (timer.ms === ms) fire(id, timer);
     },
     advance(ms) {
       const target = now + ms;
       while (true) {
         const next = [...timers].filter(([, t]) => t.at <= target).sort((a, b) => a[1].at - b[1].at)[0];
         if (!next) break;
-        now = next[1].at; timers.delete(next[0]); next[1].fn();
+        now = next[1].at; fire(next[0], next[1]);
       }
       now = target;
     }
@@ -421,16 +431,16 @@ test("iPad microphone stays open over recognition reconnects and closes on every
 
 // A voice harness that records the log and hands out live microphone tracks, checking
 // that every earlier request's microphone was released before a new one is asked for.
-function voiceHarness(platform) {
-  const tracks = [], logs = [];
-  const h = harness({ ...platform, audioSession: { type: "playback" }, Log: { add: (tag, message) => logs.push(tag + " " + message) },
+function voiceHarness(platform, extra = {}) {
+  const tracks = [], logs = [], audioSession = { type: "playback" };
+  const h = harness({ ...platform, audioSession, Log: { add: (tag, message) => logs.push(tag + " " + message) },
     mediaDevices: { getUserMedia: async () => {
       assert.ok(tracks.every(track => track.readyState === "ended"), "the earlier microphone was released first");
       const track = { readyState: "live", stop() { this.readyState = "ended"; } };
       tracks.push(track);
       return { getTracks: () => [track] };
-    } } });
-  return { ...h, tracks, logs };
+    } }, ...extra });
+  return { ...h, tracks, logs, audioSession };
 }
 const finalResult = words => ({ results: [Object.assign([{ transcript: words }], { isFinal: true })] });
 
@@ -566,7 +576,7 @@ test("each request is logged as its own capture, from opening to cleanup, withou
     advance(2000); recognition.end();
   }
   for (const id of [1, 2]) {
-    for (const step of ["opened on the iOS path, transcript reset", "microphone requested", "microphone ready, session play-and-record",
+    for (const step of ["opened on the iOS path", "microphone requested", "microphone ready, session play-and-record",
       "run 1 created, start requested", "run 1 started", "run 1 audio started", "run 1 result, 10 characters, final true",
       "run 1 stop requested", "run 1 ended", "finished, 10 characters", "microphone released, tracks ended", "closed, cleanup complete"])
       assert.ok(logs.some(line => line.startsWith("voice capture " + id + ": " + step)), "capture " + id + " logs " + step);
@@ -1104,4 +1114,167 @@ test("a verb with nothing after it asks what to play without searching", async (
     await assert.rejects(Voice.resolve(request), /איזה שיר, אמן או פלייליסט/, request);
   }
   assert.equal(searched, 0);
+});
+
+// ---- The iPhone recording path ----
+// On iOS only the first recognition of a page load is fed audio, so every later iPhone
+// request is recorded through the page's microphone and transcribed.
+function recordingDevice() {
+  const device = { level: 0.002, recorders: [], contexts: [] };
+  device.MediaRecorder = class {
+    constructor(stream) { this.stream = stream; this.state = "inactive"; this.mimeType = "audio/mp4"; device.recorders.push(this); }
+    start() { this.state = "recording"; }
+    stop() {
+      if (this.state === "inactive") return;
+      this.state = "inactive";
+      Promise.resolve().then(() => {
+        this.ondataavailable?.({ data: new Blob(["recorded voice"], { type: "audio/mp4" }) });
+        this.onstop?.();
+      });
+    }
+  };
+  device.AudioContext = class {
+    constructor() { this.state = "running"; device.contexts.push(this); }
+    createAnalyser() { return { fftSize: 2048, getFloatTimeDomainData: samples => samples.fill(device.level) }; }
+    createMediaStreamSource() { return { connect() {} }; }
+    resume() { this.state = "running"; return Promise.resolve(); }
+    close() { this.state = "closed"; return Promise.resolve(); }
+  };
+  return device;
+}
+const flush = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
+function transcriber(words) {
+  const sent = [];
+  return { sent, Ai: { hasAnyKey: () => true, transcribe: async (blob, lang) => {
+    sent.push({ size: blob.size, type: blob.type, lang });
+    return typeof words === "function" ? words() : " " + words.shift() + " ";
+  } } };
+}
+// The first request of the page load, on the built-in recognizer.
+async function firstRequest(h) {
+  let heard;
+  h.Voice.listen({ ontext() {}, onfinish: value => heard = value, onerror: assert.fail });
+  await Promise.resolve();
+  const recognition = h.recognitions.at(-1);
+  recognition.emit("audiostart");
+  recognition.result([["play First", true]]);
+  h.advance(2000); recognition.end();
+  assert.equal(heard, "play First");
+}
+function speak(h, device) {
+  device.level = 0.2; h.advance(500);
+  device.level = 0.002; h.advance(1500);
+}
+
+test("after its first request an iPhone records each request and sends the words it transcribes", async () => {
+  const device = recordingDevice(), { sent, Ai } = transcriber(["play Second", "play Third", "play Fourth"]);
+  const finished = [], errors = [], listening = [];
+  const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+  await firstRequest(h);
+  for (const words of ["play Second", "play Third", "play Fourth"]) {
+    h.Voice.listen({ ontext: assert.fail, onfinish: value => finished.push(value), onerror: code => errors.push(code),
+      onlistening: value => listening.push(value) });
+    await Promise.resolve();
+    assert.equal(h.recognitions.length, 1, "no second recognizer: it would hear nothing");
+    const recorder = device.recorders.at(-1);
+    assert.equal(recorder.state, "recording");
+    assert.equal(h.audioSession.type, "play-and-record");
+    assert.equal(h.Voice.isListening(), true);
+    speak(h, device);
+    assert.equal(recorder.state, "inactive", "a second and a half of quiet ends the request");
+    await flush();
+    assert.equal(finished.at(-1), words);
+    assert.equal(h.Voice.isListening(), false);
+    assert.equal(h.audioSession.type, "playback");
+    assert.ok(h.tracks.every(track => track.readyState === "ended"), "the microphone is released");
+    assert.ok(device.contexts.every(context => context.state === "closed"), "the level meter is closed");
+  }
+  assert.deepEqual(errors, []);
+  assert.deepEqual(listening, [true, true, true]);
+  assert.deepEqual(sent.map(s => s.lang), ["he-IL", "he-IL", "he-IL"]);
+  assert.equal(sent[0].type, "audio/mp4");
+  assert.equal(h.logs.some(line => /Second|Third|Fourth/.test(line)), false, "spoken words stay out of the log");
+  assert.ok(h.logs.some(line => line.startsWith("voice capture 2: opened on the recording path")));
+});
+
+test("a recording nobody speaks into is never sent, and a meter that hears nothing lets the transcriber judge", async () => {
+  for (const [level, expected] of [[0.002, "recognition-timeout"], [0, "play Quiet"]]) {
+    const device = recordingDevice(), { sent, Ai } = transcriber(["play Quiet"]);
+    const finished = [], errors = [];
+    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    await firstRequest(h);
+    h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
+    await Promise.resolve();
+    device.level = level; h.advance(10000);
+    await flush();
+    if (level) {
+      assert.deepEqual(errors, [expected], "room noise alone is not sent to be turned into words");
+      assert.equal(sent.length, 0);
+    } else {
+      assert.deepEqual(finished, [expected]);
+      assert.equal(sent.length, 1);
+    }
+    assert.ok(h.tracks.every(track => track.readyState === "ended"));
+  }
+});
+
+test("a recording cancelled while recording or transcribing sends and starts nothing", async () => {
+  for (const when of ["recording", "transcribing"]) {
+    const device = recordingDevice();
+    let answer;
+    const { sent, Ai } = transcriber(() => new Promise(resolve => { answer = resolve; }));
+    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    await firstRequest(h);
+    const capture = h.Voice.listen({ ontext() {}, onfinish: assert.fail, onerror: assert.fail });
+    await Promise.resolve();
+    device.level = 0.2; h.advance(500);
+    if (when === "transcribing") { device.level = 0.002; h.advance(1500); await flush(); assert.equal(sent.length, 1); }
+    capture.cancel();
+    await flush();
+    if (answer) answer("play Late");
+    await flush();
+    assert.equal(sent.length, when === "recording" ? 0 : 1, when);
+    assert.equal(h.Voice.isListening(), false);
+    assert.ok(h.tracks.every(track => track.readyState === "ended"), when);
+    assert.ok(device.contexts.every(context => context.state === "closed"), when);
+  }
+});
+
+test("a failed transcription and a missing key each say what happened", async () => {
+  for (const [failure, code] of [[new Error("HTTP 503"), "transcribe-failed"], [Object.assign(new Error("no key"), { noKey: true }), "no-key"]]) {
+    const device = recordingDevice(), errors = [];
+    const Ai = { hasAnyKey: () => true, transcribe: async () => { throw failure; } };
+    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    await firstRequest(h);
+    h.Voice.listen({ ontext() {}, onfinish: assert.fail, onerror: value => errors.push(value) });
+    await Promise.resolve();
+    speak(h, device);
+    await flush();
+    assert.deepEqual(errors, [code]);
+  }
+});
+
+test("without a key a later iPhone request still tries the recognizer, and names the missing key", async () => {
+  const device = recordingDevice(), errors = [];
+  const h = voiceHarness({ userAgent: "iPhone" }, { MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+  await firstRequest(h);
+  h.Voice.listen({ ontext() {}, onfinish: assert.fail, onerror: code => errors.push(code) });
+  await Promise.resolve();
+  assert.equal(h.recognitions.length, 2);
+  assert.equal(device.recorders.length, 0);
+  h.recognitions[1].emit("audiostart");
+  h.advance(5000); h.advance(1000); await Promise.resolve();
+  h.recognitions.at(-1).emit("audiostart");
+  h.advance(12000);
+  assert.deepEqual(errors, ["no-key"]);
+});
+
+test("Android keeps its recognizer for every request, key or not", async () => {
+  const device = recordingDevice(), { sent, Ai } = transcriber(["unused"]);
+  const h = voiceHarness({ userAgent: "Android" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+  await firstRequest(h);
+  await firstRequest(h);
+  assert.equal(h.recognitions.length, 2);
+  assert.equal(device.recorders.length, 0);
+  assert.equal(sent.length, 0);
 });

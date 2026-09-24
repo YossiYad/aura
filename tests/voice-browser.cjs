@@ -4,10 +4,12 @@
 // repeated-request scenarios, on the iPhone path and the Android path. The recognizer
 // behaves as WebKit's does: start() is refused unless the object is inactive, a stopped
 // or aborted run stays busy until its native end, and every event reaches whatever
-// handler the object holds when the event arrives. On the iPhone path an <audio>
-// element may only play once it has been played inside a tap, and keeps that permission
-// afterwards, so a song the request resolves seconds later starts only if the tap that
-// opened the request handed the element its permission.
+// handler the object holds when the event arrives. On the iPhone the built-in recognizer
+// takes the first request of a page load and every later one is recorded, with a meter
+// the test sets to a voice or to room noise, and transcribed by a stand-in. An <audio>
+// element there may only play once it has been played inside a tap, and keeps that
+// permission afterwards, so a song the request resolves seconds later starts only if the
+// tap that opened the request handed the element its permission.
 const { chromium } = require('playwright');
 const http = require('node:http');
 const fs = require('node:fs');
@@ -51,6 +53,10 @@ function simulateDevice(ios) {
   localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'he' }));
   window.recognizers = [];
   window.microphones = [];
+  window.recorders = [];
+  // What the listener says into a recording, in order, and the level the meter reads.
+  window.spoken = [];
+  window.micLevel = 0.002;
   // While set, stop() and abort() never deliver the native end: the run stays busy.
   window.hangEnds = false;
   const later = fn => setTimeout(fn, 5);
@@ -62,6 +68,24 @@ function simulateDevice(ios) {
     };
     Object.defineProperty(navigator, 'audioSession', { configurable: true,
       value: { type: 'auto', state: 'inactive', addEventListener() {} } });
+    window.MediaRecorder = class {
+      constructor(stream) { this.stream = stream; this.state = 'inactive'; this.mimeType = 'audio/mp4'; recorders.push(this); }
+      start() {
+        if (!this.stream.getTracks().some(track => track.readyState === 'live')) throw new DOMException('No live track', 'InvalidStateError');
+        this.state = 'recording';
+      }
+      stop() {
+        if (this.state === 'inactive') return;
+        this.state = 'inactive';
+        later(() => { this.ondataavailable?.({ data: new Blob(['voice'], { type: 'audio/mp4' }) }); this.onstop?.(); });
+      }
+    };
+    // The meter reads the level the test sets; the simulated stream is not a real one.
+    const source = AudioContext.prototype.createMediaStreamSource;
+    AudioContext.prototype.createMediaStreamSource = function (stream) {
+      return stream instanceof MediaStream ? source.call(this, stream) : { connect() {} };
+    };
+    AnalyserNode.prototype.getFloatTimeDomainData = function (samples) { samples.fill(micLevel); };
     // iOS playback permission: granted to an element by a play() inside a tap, kept after.
     let tapping = false;
     for (const type of ['pointerdown', 'pointerup', 'touchend', 'click']) {
@@ -117,7 +141,14 @@ function simulateDevice(ios) {
         Store.patchSettings({ noYtFallback: true, voiceReply: false });
         window.requests = [];
         window.plans = [];
+        window.transcribed = [];
         Voice.reply = async () => false;
+        // A key in Settings, and a transcriber that hears what the listener said.
+        Ai.hasAnyKey = () => true;
+        Ai.transcribe = async (blob, language) => {
+          transcribed.push({ size: blob.size, type: blob.type, language });
+          return spoken.shift() || '';
+        };
         Api.resolve = async () => ({ url: origin + '/test-song.wav' });
         // Stands in for understanding the request: each one follows the plan made for it.
         Voice.resolve = async text => {
@@ -131,31 +162,44 @@ function simulateDevice(ios) {
       }, origin);
 
       const state = () => page.evaluate(() => ({
-        recognizers: recognizers.length, listening: Voice.isListening(), text: document.getElementById('ask-prompt').value,
+        recognizers: recognizers.length, recorders: recorders.length, sent: requests.length,
+        listening: Voice.isListening(), text: document.getElementById('ask-prompt').value,
         hearing: document.getElementById('ask-voice').classList.contains('listening'),
         liveMicrophones: microphones.filter(track => track.readyState === 'live').length,
         detached: recognizers.every((r, i) => i === recognizers.length - 1 && Voice.isListening() || r.onresult == null)
       }));
 
+      // Whether a new request is heard by a recording: on the iPhone every request after the
+      // first of the page load. Android recognizes them all.
+      let asked = 0;
+      const records = () => ios && asked > 0;
+      const opened = ({ before, recording }) => (recording ? recorders.length > before.recorders && recorders.at(-1).state === 'recording'
+        : recognizers.length > before.recognizers) && Voice.isListening() && document.getElementById('ask-voice').classList.contains('listening');
+
       // One spoken request: tap the orb, check it listens with a clear field on a new
-      // recognizer, say the words, and let two seconds of silence send them.
+      // recognizer or recording, say the words, and let the silence after them send them.
       async function ask(words, plan = {}, { touchField = false } = {}) {
+        const recording = records();
+        asked++;
         const before = await state();
-        const sent = await page.evaluate(() => requests.length);
         await page.evaluate(plan => plans.push(plan), plan);
         await page.locator('#ask-voice').tap();
-        await page.waitForFunction(count => recognizers.length === count + 1 && Voice.isListening() &&
-          document.getElementById('ask-voice').classList.contains('listening'), before.recognizers, { timeout: 5000 });
+        await page.waitForFunction(opened, { before, recording }, { timeout: 5000 });
         const open = await state();
         assert.equal(open.text, '', words + ': the field is clear when listening starts');
         if (ios) assert.equal(open.liveMicrophones, 1, words + ': one live microphone, the earlier ones released');
-        await page.evaluate(words => recognizers.at(-1).hear(words), words);
-        assert.equal(await page.locator('#ask-prompt').inputValue(), words, words + ': the field shows this request');
-        if (touchField) {
-          await page.locator('#ask-prompt').tap();
-          assert.equal(await page.evaluate(() => Voice.isListening()), true, 'touching the transcript keeps listening');
+        if (recording) {
+          assert.equal(open.recognizers, before.recognizers, words + ': no recognizer after the first, it would hear nothing');
+          await page.evaluate(words => { spoken.push(words); micLevel = 0.2; setTimeout(() => { micLevel = 0.002; }, 600); }, words);
+        } else {
+          await page.evaluate(words => recognizers.at(-1).hear(words), words);
+          assert.equal(await page.locator('#ask-prompt').inputValue(), words, words + ': the field shows this request');
+          if (touchField) {
+            await page.locator('#ask-prompt').tap();
+            assert.equal(await page.evaluate(() => Voice.isListening()), true, 'touching the transcript keeps listening');
+          }
         }
-        await page.waitForFunction(count => requests.length > count && !Voice.isListening(), sent, { timeout: 8000 });
+        await page.waitForFunction(count => requests.length > count && !Voice.isListening(), before.sent, { timeout: 8000 });
         assert.equal(await page.evaluate(() => requests.at(-1)), words, words + ': the request sent is this one');
         const done = await state();
         assert.equal(done.liveMicrophones, 0, words + ': the microphone is released');
@@ -208,16 +252,21 @@ function simulateDevice(ios) {
       console.log(platform + ' 5: several different requests in a row');
 
       // 6. Start, cancel, start again - with a device whose recognizers never deliver their
-      // end, so the cancelled run is still aborting when the next request starts, and every
-      // later run completes on the stop fallback.
+      // end, so a cancelled run is still aborting when the next request starts, and every
+      // later run completes on the stop fallback. On the iPhone the cancelled request is a
+      // recording, which is dropped without being sent.
       await page.evaluate(() => { hangEnds = true; });
-      const count = (await state()).recognizers;
+      const before = await state(), recording = records();
       await page.locator('#ask-voice').tap();
-      await page.waitForFunction(count => recognizers.length === count + 1 && Voice.isListening(), count, { timeout: 5000 });
+      await page.waitForFunction(opened, { before, recording }, { timeout: 5000 });
       await page.locator('#ask-voice').tap();
       await note('ההאזנה נעצרה');
       assert.equal(await page.evaluate(() => Voice.isListening()), false, 'cancelled');
-      assert.equal(await page.evaluate(() => recognizers.at(-1).state), 'aborting', 'the cancelled run has not ended');
+      if (recording) {
+        assert.equal(await page.evaluate(() => recorders.at(-1).state), 'inactive', 'the cancelled recording stopped');
+        assert.equal(await page.evaluate(() => transcribed.length), asked - 1, 'and was not sent');
+      } else assert.equal(await page.evaluate(() => recognizers.at(-1).state), 'aborting', 'the cancelled run has not ended');
+      assert.equal((await state()).liveMicrophones, 0, 'the cancelled request released the microphone');
       await ask('play After Cancel', { id: 'after-cancel' });
       await playing('after-cancel');
       console.log(platform + ' 6: start, cancel, start again');
@@ -235,7 +284,10 @@ function simulateDevice(ios) {
       if (ios) {
         assert.equal(await page.evaluate(() => refusedPlays), 0, 'iOS never refused a play');
         assert.equal(await page.evaluate(() => primePlays), 1, 'only the first request primed the element');
-      }
+        const sent = await page.evaluate(() => transcribed);
+        assert.equal(sent.length, asked - 1, 'every request after the first was recorded and transcribed');
+        assert.ok(sent.every(item => item.language === 'he-IL' && item.type === 'audio/mp4' && item.size > 0));
+      } else assert.equal(await page.evaluate(() => recorders.length + transcribed.length), 0, 'Android never records');
       assert.equal(logs.some(line => /Misheard|Answer|Cancel/.test(line)), false, 'spoken words stay out of the log');
       console.log(platform + ': every request listened, showed its own words and started its song');
       await page.close();

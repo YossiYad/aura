@@ -124,3 +124,60 @@ test('Gemini key diagnostics find a supported model beyond the first page', asyn
   }
   assert.equal(pages[1].searchParams.get('pageToken'), 'page+/two');
 });
+
+// An iPhone records voice requests after its first one and has them transcribed.
+function aiTranscribe(fetch, stored) {
+  const data = new Map(Object.entries(stored));
+  const window = {};
+  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
+  vm.runInNewContext(readModule('ai'), { window, localStorage: storage, fetch, AbortController, URL, FormData, Blob, btoa,
+    setTimeout: (fn, ms) => setTimeout(fn, Math.min(ms, 1)), clearTimeout, console, navigator: { onLine: true } });
+  return window.Ai;
+}
+const bothKeys = { 'aura.aiKeys.gemini': '["gemini-key"]', 'aura.aiKeys.groq': '["groq-key"]' };
+const recording = () => new Blob([Uint8Array.from([1, 2, 3, 250])], { type: 'audio/mp4' });
+
+test('a recorded request goes to Whisper on Groq first, in the language it was spoken in', async () => {
+  const calls = [];
+  const Ai = aiTranscribe(async (url, options) => {
+    calls.push({ url: String(url), options });
+    return { ok: true, status: 200, json: async () => ({ text: ' תשים שיר של אייל גולן ' }) };
+  }, bothKeys);
+  assert.equal(await Ai.transcribe(recording(), 'he-IL'), 'תשים שיר של אייל גולן');
+  assert.equal(calls.length, 1, 'Gemini is not asked once Groq answered');
+  assert.equal(calls[0].url, 'https://api.groq.com/openai/v1/audio/transcriptions');
+  assert.equal(calls[0].options.headers.Authorization, 'Bearer groq-key');
+  const form = calls[0].options.body;
+  assert.equal(form.get('model'), 'whisper-large-v3-turbo');
+  assert.equal(form.get('language'), 'he');
+  assert.equal(form.get('file').name, 'request.m4a');
+  assert.equal(form.get('file').size, 4);
+});
+
+test('Gemini transcribes the recording itself when Groq cannot', async () => {
+  const calls = [];
+  const Ai = aiTranscribe(async (url, options) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes('groq')) return { ok: false, status: 503, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'play Song' }] } }] }) };
+  }, bothKeys);
+  assert.equal(await Ai.transcribe(recording(), 'he-IL'), 'play Song');
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].url, /generativelanguage\.googleapis\.com\/v1beta\/models\/.+:generateContent\?key=gemini-key$/);
+  assert.equal(calls[1].options.headers['Content-Type'], 'text/plain', 'no CORS preflight, as with every Gemini call');
+  const audio = JSON.parse(calls[1].options.body).contents[0].parts[1].inlineData;
+  assert.equal(audio.mimeType, 'audio/mp4');
+  assert.equal(audio.data, Buffer.from([1, 2, 3, 250]).toString('base64'));
+});
+
+test('the provider chosen in Settings limits transcription too, and no key says so', async () => {
+  let groq = 0;
+  const Ai = aiTranscribe(async url => {
+    if (String(url).includes('groq')) groq++;
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'play Song' }] } }] }) };
+  }, { ...bothKeys, 'aura.aiMode': 'gemini' });
+  assert.equal(await Ai.transcribe(recording(), 'he-IL'), 'play Song');
+  assert.equal(groq, 0, 'Gemini only means Groq is never sent the recording');
+  const none = aiTranscribe(async () => assert.fail('nothing is sent without a key'), {});
+  await assert.rejects(none.transcribe(recording(), 'he-IL'), error => error.noKey === true);
+});
