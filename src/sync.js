@@ -190,6 +190,7 @@
       notifyListeners();
       return;
     }
+    let announce = false;
     if (state.dirty && !bare) {
       const revision = changeRevision;
       try {
@@ -205,15 +206,17 @@
         });
         if (!res.ok) throw Object.assign(new Error("HTTP " + res.status), { status: res.status });
         conflictOnServer = true;
+        // The copy just left is this device's own until the adopt below completes; if
+        // that adopt fails, the next attempt has to be able to name it to replace it.
+        let saved = null;
+        try { saved = await res.json(); } catch (e) {}
+        writeState(Object.assign(readState(), { ownConflict: (saved && saved.stamp) || 0 }));
         if (revision !== changeRevision) {
-          let saved = null;
-          try { saved = await res.json(); } catch (e) {}
-          writeState(Object.assign(readState(), { ownConflict: (saved && saved.stamp) || 0 }));
           lastError = "Local changes continued during sync; retrying without replacing them";
           schedulePush(PUSH_DEBOUNCE_MS);
           return;
         }
-        if (window.Views && Views.toast) Views.toast("Updated from your other devices - a copy of this device's newer changes is kept under Settings");
+        announce = true;
       } catch (e) {
         log("could not save a conflict copy: " + String((e && e.message) || e));
         // Adopting now would destroy this device's newer changes with no copy of them
@@ -246,6 +249,7 @@
       size: body.size || 0,
       dirty: false
     });
+    if (announce && window.Views && Views.toast) Views.toast("Updated from your other devices - a copy of this device's newer changes is kept under Settings");
     // A push armed before this adopt would upload the copy just adopted, moving the
     // server stamp and making every other device adopt and reload once more.
     clearTimeout(pushTimer);
