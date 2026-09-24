@@ -62,11 +62,13 @@
   let barSwiping = false;
   let barSwipeFrame = 0;
   let barSwipedAt = 0;
-  // Dragged up, the bar pulls the full player in from the bottom under the finger, and
-  // the player is dragged back down the same way (controls.js). Let go past the threshold
-  // or with a flick and it settles open; short of that it drops back behind the bar.
+  // Dragged up, the bar grows into the full player: the player's top edge starts where the
+  // bar is and follows the finger, filling everything below it as it rises; it is dragged
+  // back down the same way (controls.js). Let go past the threshold or with a flick and it
+  // settles open; short of that it drops back behind the bar.
   let barPulling = false;
   let barPullHeight = 0;
+  let barPullStart = 0;
   let barPullY = 0;
   let fpSettleTimer = null;
 
@@ -79,9 +81,15 @@
     fullPlayer.classList.remove("closing");
     fullPlayer.classList.add("dragging", "drag-settled");
     fullPlayer.scrollTop = 0;
-    fullPlayer.style.transform = "translate3d(0,100%,0)";
+    // Measured untransformed, before anything is painted: where the player's top sits at
+    // rest, and how far below that the bar's top is. The pull starts from the bar.
+    fullPlayer.style.transform = "none";
     fullPlayer.hidden = false;
     barPullHeight = fullPlayer.offsetHeight || window.innerHeight || 640;
+    const restTop = fullPlayer.getBoundingClientRect().top;
+    const barTop = playerBar.getBoundingClientRect().top;
+    barPullStart = Math.max(0, Math.min(barPullHeight, barTop - restTop)) || barPullHeight;
+    fullPlayer.style.transform = "translate3d(0," + barPullStart + "px,0)";
     barPulling = true;
     V.refreshBar();
     V.refreshTime(true);
@@ -152,7 +160,7 @@
     const dx = touch.clientX - barStartX;
     const dy = touch.clientY - barStartY;
     if (barPulling) {
-      barPullY = Math.min(barPullHeight, Math.max(0, barPullHeight + dy));
+      barPullY = Math.min(barPullStart, Math.max(0, barPullStart + dy));
       if (!fpDragFrame) fpDragFrame = requestAnimationFrame(paintBarPull);
       e.preventDefault();
       return;
@@ -164,7 +172,7 @@
       if (Math.abs(dy) >= Math.abs(dx)) {
         if (dy > 0) { resetBarSwipe(); return; }
         startBarPull();
-        barPullY = Math.min(barPullHeight, Math.max(0, barPullHeight + dy));
+        barPullY = Math.min(barPullStart, Math.max(0, barPullStart + dy));
         if (!fpDragFrame) fpDragFrame = requestAnimationFrame(paintBarPull);
         e.preventDefault();
         return;
@@ -191,7 +199,7 @@
       // Same as below: the lift's click must not land on the bar under the player.
       barSwipedAt = Date.now();
       const touch = e.changedTouches && e.changedTouches[0];
-      finishBarPull(touch ? touch.clientY - barStartY : barPullY - barPullHeight);
+      finishBarPull(touch ? touch.clientY - barStartY : barPullY - barPullStart);
       return;
     }
     if (!barSwiping) return;
