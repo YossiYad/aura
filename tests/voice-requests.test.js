@@ -1132,7 +1132,8 @@ test("a verb with nothing after it asks what to play without searching", async (
 const SLICE_BYTES = 16;
 function recordingDevice() {
   // silentWhen: which ways of opening the microphone record exact silence, by what was asked.
-  const device = { level: 0.002, live: true, undecodable: false, silentWhen: null, recorders: [], decoders: 0, clock: null, constraints: null };
+  // endOnStop: a stopped recognizer's native end arrives at the next step of run().
+  const device = { level: 0.002, live: true, undecodable: false, silentWhen: null, endOnStop: true, recorders: [], decoders: 0, clock: null, constraints: null };
   device.MediaRecorder = class {
     constructor(stream) { this.stream = stream; this.state = "inactive"; this.mimeType = ""; device.recorders.push(this); }
     start(slice) {
@@ -1168,7 +1169,13 @@ function recordingDevice() {
 }
 // Lets blob reads, decodes and transcriptions finish between fake timer steps.
 const flush = async () => { for (let i = 0; i < 4; i++) await new Promise(resolve => setImmediate(resolve)); };
-async function run(h, ms) { for (let t = 0; t < ms; t += 100) { h.advance(100); await flush(); } }
+async function run(h, ms) {
+  for (let t = 0; t < ms; t += 100) {
+    h.advance(100);
+    if (h.device && h.device.endOnStop) for (const recognition of h.recognitions) if (recognition.state === "stopping") recognition.end();
+    await flush();
+  }
+}
 function transcriber(words) {
   const sent = [];
   return { sent, Ai: { hasAnyKey: () => true, transcribe: async (blob, lang) => {
@@ -1199,22 +1206,42 @@ async function speak(h, level = 0.2) {
   h.device.level = level; await run(h, 900);
   h.device.level = 0.002; await run(h, 2100);
 }
+// Runs until the recognizer alongside the recording has started, once the microphone
+// delivers sound, and returns it.
+async function recognizerAlongside(h, before) {
+  for (let t = 0; t < 3000 && h.recognitions.length === before; t += 100) await run(h, 100);
+  assert.equal(h.recognitions.length, before + 1, "the recognizer starts alongside once the microphone delivers");
+  return h.recognitions.at(-1);
+}
+// Speaks into the recording while the recognizer alongside hears the words as they come,
+// a word at a time, then its final result, then quiet.
+async function speakHeard(h, recognition, words) {
+  h.device.level = 0.002; await run(h, 600);
+  recognition.emit("speechstart");
+  h.device.level = 0.2;
+  const said = words.split(" ");
+  for (let i = 1; i <= said.length; i++) { recognition.result([[said.slice(0, i).join(" "), false]]); await run(h, 300); }
+  recognition.result([[words, true]]);
+  h.device.level = 0.002; await run(h, 2100);
+}
 
-test("after its first request an iPhone records each request and sends the words it transcribes", async () => {
+test("after its first request, an iPhone whose recognizer hears nothing has each recording transcribed", async () => {
   const { sent, Ai } = transcriber(["play Second", "play Third", "play Fourth"]);
   const finished = [], errors = [], listening = [];
   const h = recordingHarness({ userAgent: "iPhone" }, Ai);
   await firstRequest(h);
   for (const words of ["play Second", "play Third", "play Fourth"]) {
+    const recognizers = h.recognitions.length;
     h.Voice.listen({ ontext: assert.fail, onfinish: value => finished.push(value), onerror: code => errors.push(code),
       onlistening: value => listening.push(value) });
     await flush();
-    assert.equal(h.recognitions.length, 1, "no second recognizer: it would hear nothing");
+    assert.equal(h.recognitions.length, recognizers, "no recognizer before the microphone delivers");
     const recorder = h.device.recorders.at(-1);
     assert.equal(recorder.state, "recording");
     assert.equal(h.audioSession.type, "play-and-record");
     assert.equal(h.Voice.isListening(), true);
     await speak(h);
+    assert.equal(h.recognitions.length, recognizers + 1, "the recognizer listened alongside, and heard nothing");
     assert.equal(recorder.state, "inactive", "a second and a half of quiet after the voice ends the request");
     await flush();
     assert.equal(finished.at(-1), words);
@@ -1374,6 +1401,8 @@ test("a recording cancelled while recording or transcribing sends and starts not
     assert.equal(sent.length, when === "recording" ? 0 : 1, when);
     assert.equal(h.Voice.isListening(), false);
     assert.ok(h.tracks.every(track => track.readyState === "ended"), when);
+    assert.ok(h.recognitions.slice(1).every(recognition => recognition.onresult == null && recognition.state !== "running"),
+      when + ": the recognizer alongside is let go");
   }
 });
 
@@ -1391,19 +1420,129 @@ test("a failed transcription and a missing key each say what happened", async ()
   }
 });
 
-test("without a key a later iPhone request still tries the recognizer, and names the missing key", async () => {
-  const errors = [];
+test("without a key a later iPhone request is heard by the recognizer, and names the key only when it heard nothing", async () => {
+  const finished = [], errors = [];
   const h = recordingHarness({ userAgent: "iPhone" }, undefined);
   await firstRequest(h);
-  h.Voice.listen({ ontext() {}, onfinish: assert.fail, onerror: code => errors.push(code) });
-  await flush();
-  assert.equal(h.recognitions.length, 2);
-  assert.equal(h.device.recorders.length, 0);
-  h.recognitions[1].emit("audiostart");
-  h.advance(5000); h.advance(1000); await flush();
-  h.recognitions.at(-1).emit("audiostart");
-  h.advance(12000);
+  for (const hears of [true, false]) {
+    const before = h.recognitions.length;
+    h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
+    await flush();
+    const recognition = await recognizerAlongside(h, before);
+    if (hears) await speakHeard(h, recognition, "play Keyless");
+    else await speak(h);
+    await flush();
+  }
+  assert.deepEqual(finished, ["play Keyless"]);
   assert.deepEqual(errors, ["no-key"]);
+  assert.ok(h.tracks.every(track => track.readyState === "ended"));
+});
+
+test("a later iPhone request is heard by the built-in recognizer, like the first, and its recording is never sent", async () => {
+  const { sent, Ai } = transcriber(["unused"]);
+  const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+  await firstRequest(h);
+  // As on the device: the plain capture records silence, and voice processing delivers.
+  h.device.silentWhen = audio => audio !== true;
+  for (const words of ["play Second", "play Third", "play Fourth", "play Fifth"]) {
+    const shown = [], finished = [], errors = [], listening = [];
+    const before = h.recognitions.length;
+    h.Voice.listen({ ontext: value => shown.push(value), onfinish: value => finished.push(value), onerror: code => errors.push(code),
+      onlistening: value => listening.push(value) });
+    await flush();
+    await run(h, 700);
+    assert.equal(h.recognitions.length, before, words + ": no recognizer while the microphone delivers nothing");
+    const recognition = await recognizerAlongside(h, before);
+    assert.equal(h.constraints.at(-1).audio, true, words + ": it listens alongside the voice-processed microphone");
+    assert.deepEqual(listening, [true]);
+    await speakHeard(h, recognition, words);
+    await flush();
+    assert.deepEqual(finished.concat(errors), [words]);
+    assert.equal(shown.at(-1), words, words + ": the words show as they are heard");
+    assert.ok(shown.length >= 2, words + ": the first words show before the rest");
+    assert.equal(recognition.stopped, true, words + ": the recognizer is stopped when the request ends");
+    assert.equal(recognition.onresult, null, words + ": and keeps no handlers");
+    assert.ok(h.tracks.every(track => track.readyState === "ended"), words + ": the microphone is released");
+    assert.equal(h.audioSession.type, "playback");
+  }
+  assert.equal(sent.length, 0, "no recording is sent while the recognizer hears");
+  assert.equal(h.logs.filter(line => /the request is the recognizer's, \d+ characters; the recording is not sent$/.test(line)).length, 4);
+  assert.equal(h.logs.some(line => /Second|Third|Fourth|Fifth/.test(line)), false, "spoken words stay out of the log");
+});
+
+test("the recognizer's words end a request the level cannot judge, two seconds after they stop", async () => {
+  const { sent, Ai } = transcriber(["unused"]);
+  const finished = [];
+  const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+  await firstRequest(h);
+  h.device.undecodable = true;
+  const before = h.recognitions.length;
+  h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: assert.fail });
+  await flush();
+  const recognition = await recognizerAlongside(h, before);
+  recognition.emit("speechstart");
+  recognition.result([["play Undecoded", false]]);
+  await run(h, 500);
+  recognition.result([["play Undecoded", true]]);
+  await run(h, 1900);
+  assert.deepEqual(finished, [], "not before two seconds without new words");
+  await run(h, 200);
+  await flush();
+  assert.deepEqual(finished, ["play Undecoded"]);
+  assert.equal(sent.length, 0);
+});
+
+test("words still arriving keep a request open through a quiet level, and a recognizer that never ends cannot hold it", async () => {
+  const { sent, Ai } = transcriber(["unused"]);
+  const finished = [];
+  const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+  await firstRequest(h);
+  h.device.endOnStop = false;
+  const before = h.recognitions.length;
+  h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: assert.fail });
+  await flush();
+  const recognition = await recognizerAlongside(h, before);
+  recognition.emit("speechstart");
+  h.device.level = 0.2; await run(h, 600);
+  // The level drops, but the recognizer still hears new words.
+  h.device.level = 0.002;
+  for (const words of ["play Long", "play Long Song", "play Long Song Name", "play Long Song Name Here"]) {
+    recognition.result([[words, false]]);
+    await run(h, 700);
+  }
+  assert.equal(h.device.recorders.at(-1).state, "recording", "still listening while words arrive");
+  recognition.result([["play Long Song Name Here", true]]);
+  await run(h, 1300);
+  assert.equal(recognition.stopped, true, "stopped once the words stopped changing");
+  assert.deepEqual(finished, [], "waiting for the recognizer's last words");
+  // Its native end never arrives: the request goes on without it 1.5s after the stop.
+  await run(h, 1600);
+  await flush();
+  assert.deepEqual(finished, ["play Long Song Name Here"]);
+  assert.equal(recognition.aborted, true);
+  assert.equal(sent.length, 0);
+});
+
+test("a recognizer run that ends by itself is replaced, keeping the words it heard", async () => {
+  const { sent, Ai } = transcriber(["unused"]);
+  const finished = [];
+  const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+  await firstRequest(h);
+  const before = h.recognitions.length;
+  h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: assert.fail });
+  await flush();
+  const first = await recognizerAlongside(h, before);
+  first.result([["play Split", true]]);
+  first.end();
+  await run(h, 300);
+  const second = h.recognitions.at(-1);
+  assert.notEqual(second, first, "a new run takes over");
+  assert.equal(second.state, "running");
+  second.result([["Song", true]]);
+  await run(h, 2100);
+  await flush();
+  assert.deepEqual(finished, ["play Split Song"]);
+  assert.equal(sent.length, 0);
 });
 
 test("Android keeps its recognizer for every request, key or not", async () => {
