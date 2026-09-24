@@ -1197,6 +1197,23 @@ test("after its first request an iPhone records each request and sends the words
   assert.ok(h.logs.some(line => line.startsWith("voice capture 2: opened on the recording path")));
 });
 
+test("a soft voice in a quiet room is heard, and a murmur barely above a noisy room is not sent", async () => {
+  for (const [room, voice, expected] of [[0.002, 0.025, "play Soft"], [0.012, 0.03, "recognition-timeout"]]) {
+    const device = recordingDevice(), { sent, Ai } = transcriber(["play Soft"]);
+    const finished = [], errors = [];
+    const h = voiceHarness({ userAgent: "iPhone" }, { Ai, MediaRecorder: device.MediaRecorder, AudioContext: device.AudioContext });
+    await firstRequest(h);
+    h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
+    await Promise.resolve();
+    device.level = room; h.advance(500);
+    device.level = voice; h.advance(500);
+    device.level = room; h.advance(10000);
+    await flush();
+    assert.deepEqual(finished.concat(errors), [expected], "room " + room + ", voice " + voice);
+    assert.equal(sent.length, expected === "play Soft" ? 1 : 0);
+  }
+});
+
 test("a recording nobody speaks into is never sent, and a meter that hears nothing lets the transcriber judge", async () => {
   for (const [level, expected] of [[0.002, "recognition-timeout"], [0, "play Quiet"]]) {
     const device = recordingDevice(), { sent, Ai } = transcriber(["play Quiet"]);
