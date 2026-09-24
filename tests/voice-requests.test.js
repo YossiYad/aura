@@ -437,15 +437,16 @@ test("iPad microphone stays open over recognition reconnects and closes on every
 // A voice harness that records the log and hands out live microphone tracks, checking
 // that every earlier request's microphone was released before a new one is asked for.
 function voiceHarness(platform, extra = {}) {
-  const tracks = [], logs = [], audioSession = { type: "playback" };
+  const tracks = [], logs = [], constraints = [], audioSession = { type: "playback" };
   const h = harness({ ...platform, audioSession, Log: { add: (tag, message) => logs.push(tag + " " + message) },
-    mediaDevices: { getUserMedia: async () => {
+    mediaDevices: { getUserMedia: async asked => {
+      constraints.push(asked);
       assert.ok(tracks.every(track => track.readyState === "ended"), "the earlier microphone was released first");
       const track = { readyState: "live", stop() { this.readyState = "ended"; } };
       tracks.push(track);
       return { getTracks: () => [track] };
     } }, ...extra });
-  return { ...h, tracks, logs, audioSession };
+  return { ...h, tracks, logs, constraints, audioSession };
 }
 const finalResult = words => ({ results: [Object.assign([{ transcript: words }], { isFinal: true })] });
 
@@ -1224,7 +1225,9 @@ test("after its first request an iPhone records each request and sends the words
   assert.ok(h.device.decoders > 0, "levels come from an offline decode, not a live audio context");
   assert.equal(h.logs.some(line => /Second|Third|Fourth/.test(line)), false, "spoken words stay out of the log");
   assert.ok(h.logs.some(line => line.startsWith("voice capture 2: opened on the recording path")));
-  assert.ok(h.logs.some(line => /^voice capture 2: audio arriving after \d+ms$/.test(line)));
+  assert.ok(h.logs.some(line => /^voice capture 2: audio arriving after \d+ms, audio\/mp4, without voice processing$/.test(line)));
+  assert.deepEqual(h.constraints.slice(1).map(asked => asked.audio.echoCancellation), [false, false, false],
+    "each recording opens the microphone without voice processing, which worked the time before");
 });
 
 test("a soft voice in a quiet room is heard, and a murmur barely above a noisy room is not sent", async () => {
@@ -1261,26 +1264,35 @@ test("a recording nobody speaks into is never sent, and one the meter cannot dec
   }
 });
 
-test("a microphone that delivers nothing gets one new stream, then says so", async () => {
+test("a microphone that delivers nothing is opened the next way, and the way that works goes first after", async () => {
+  // Dead: no bytes at all; silent: bytes of exact digital silence.
   for (const [recovers, silent] of [[false, false], [true, false], [false, true]]) {
-    const { sent, Ai } = transcriber(["play Again"]);
+    const { sent, Ai } = transcriber(["play Again", "play Next"]);
     const finished = [], errors = [];
     const h = recordingHarness({ userAgent: "iPhone" }, Ai);
     await firstRequest(h);
-    // Dead: no bytes at all; silent: bytes of exact digital silence.
     if (silent) h.device.level = 0; else h.device.live = false;
     h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
     await flush();
     await run(h, 2600);
-    assert.equal(h.tracks.length, 3, "the first stream was replaced by a new one");
-    assert.equal(h.tracks[1].readyState, "ended");
     if (recovers) { h.device.live = true; await speak(h); }
-    else await run(h, 2600);
+    else await run(h, 5200);
     await flush();
     assert.deepEqual(finished.concat(errors), [recovers ? "play Again" : "mic-silent"]);
+    const ways = h.constraints.slice(1).map(asked => asked.audio === true ? "processed" : "raw");
+    assert.deepEqual(ways, recovers ? ["raw", "processed"] : ["raw", "processed", "raw"]);
+    assert.equal(h.audioSession.type, "playback", "the player's audio session comes back");
     assert.equal(sent.length, recovers ? 1 : 0);
     assert.ok(h.tracks.every(track => track.readyState === "ended"));
     assert.ok(h.logs.some(line => /no audio in 2\.5s/.test(line)));
+    if (recovers) {
+      h.Voice.listen({ ontext() {}, onfinish: value => finished.push(value), onerror: code => errors.push(code) });
+      await flush();
+      assert.equal(h.constraints.at(-1).audio, true, "the way that worked is tried first");
+      await speak(h);
+      await flush();
+      assert.equal(finished.at(-1), "play Next");
+    }
   }
 });
 

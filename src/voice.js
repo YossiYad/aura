@@ -453,6 +453,19 @@
   // one left the microphone silent, and WebKit gives a page with any live context a
   // 128-frame audio buffer. The recording arrives in slices, and each one is measured.
   const SLICE_MS = 300, METER_RATE = 16000;
+  // Ways to open the microphone for a recording, tried in turn while one delivers no audio;
+  // the one that last did goes first next time. The default capture on an iPhone runs
+  // through voice processing - the unit WebKit's own recognizer captures with - and after
+  // music had played it delivered nothing at all, twice in a row, on a live track. Without
+  // voice processing iOS captures through a different, plainer unit.
+  const RAW_AUDIO = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+  /** @type {{ name: string, audio: MediaTrackConstraints | boolean, session: AudioSession["type"] }[]} */
+  const MICROPHONES = [
+    { name: "without voice processing", audio: RAW_AUDIO, session: "play-and-record" },
+    { name: "with voice processing", audio: true, session: "play-and-record" },
+    { name: "without voice processing, session left to the browser", audio: RAW_AUDIO, session: "auto" }
+  ];
+  let workingMicrophone = 0;
   /**
    * Records one request through the page's microphone, ends it on silence and has it
    * transcribed: the iPhone path once the built-in recognizer has run (see recognizerRan).
@@ -463,7 +476,8 @@
   function record(options) {
     const id = ++captureCount;
     const trace = message => log("capture " + id + ": " + message);
-    let closed = false, finishing = false, retried = false;
+    let closed = false, finishing = false, attempt = 0;
+    const order = MICROPHONES.map((_, i) => (workingMicrophone + i) % MICROPHONES.length);
     /** @type {MediaRecorder | null} */
     let recorder = null;
     /** @type {MediaStream | null} */
@@ -485,12 +499,19 @@
     function sessionType() {
       try { return audioSession ? String(audioSession.type) : "none"; } catch (e) { return "unreadable"; }
     }
+    // Which microphone, in what state: built in or external (a headset or the car), live or
+    // muted, and whether its audio is processed. Never the device's own name.
     function trackState() {
       if (!stream) return "no stream";
       return stream.getTracks().map(track => {
-        let rate = "";
-        try { const settings = track.getSettings ? track.getSettings() : null; if (settings && settings.sampleRate) rate = " " + settings.sampleRate + "Hz"; } catch (e) {}
-        return (track.readyState || "unknown") + (track.muted ? " muted" : "") + (track.enabled === false ? " disabled" : "") + rate;
+        let detail = "";
+        try {
+          const settings = track.getSettings ? track.getSettings() : null;
+          if (settings && settings.sampleRate) detail += " " + settings.sampleRate + "Hz";
+          if (settings && settings.echoCancellation != null) detail += settings.echoCancellation ? " processed" : " unprocessed";
+        } catch (e) {}
+        const kind = !track.label ? "unnamed" : /iphone|ipad|built.?in/i.test(track.label) ? "built-in" : "external";
+        return kind + " " + (track.readyState || "unknown") + (track.muted ? " muted" : "") + (track.enabled === false ? " disabled" : "") + detail;
       }).join(", ");
     }
     function bytes() { return chunks.reduce((sum, chunk) => sum + chunk.size, 0); }
@@ -505,7 +526,7 @@
       if (!stream) return;
       const tracks = stream.getTracks();
       stream = null;
-      tracks.forEach(track => track.stop());
+      tracks.forEach(track => { track.onmute = track.onunmute = null; track.stop(); });
       trace("microphone released, tracks " + tracks.map(track => track.readyState || "stopped").join(", "));
     }
     // Everything that holds the microphone, let go before the recording is sent.
@@ -585,7 +606,7 @@
         const from = measured / audio.sampleRate, seconds = (samples.length - measured) / audio.sampleRate;
         const level = Math.sqrt(sum / (samples.length - measured));
         measured = samples.length;
-        if (level > 0 && !sound) { sound = true; trace("sound in the recording"); }
+        if (level > 0 && !sound) { sound = true; workingMicrophone = order[attempt]; trace("sound in the recording"); }
         if (from < 0.5) {
           room = Math.min(room, level);
           if (from + seconds >= 0.5) {
@@ -609,18 +630,22 @@
       });
     }
     // No bytes at all, or only exact silence, means the microphone delivers nothing - the
-    // silent capture an iPhone showed after playback. One new stream is tried first.
+    // silent capture an iPhone showed after playback. The next way of opening it is tried.
     function noAudio() {
       if (closed || finishing) return;
-      if (retried) { trace("still no audio, " + trackState() + ", session " + sessionType()); fail("mic-silent"); return; }
-      retried = true;
-      trace("no audio in 2.5s, " + bytes() + " bytes, " + trackState() + ", session " + sessionType() + "; opening a new stream");
+      trace("no audio in 2.5s, " + bytes() + " bytes, " + trackState() + ", session " + sessionType());
+      if (attempt + 1 >= order.length) { fail("mic-silent"); return; }
+      attempt++;
       clearTimeout(waitTimer);
       clearTimeout(capTimer);
       dropRecorder();
       dropStream();
       chunks = [];
       measured = 0;
+      room = Infinity;
+      threshold = VOICE_MAX;
+      heard = sound = false;
+      quiet = 0;
       openMicrophone();
     }
     function begin() {
@@ -629,7 +654,12 @@
       catch (e) { trace("recorder unavailable, " + ((e && e.name) || "error")); fail("audio-capture"); return; }
       current.ondataavailable = event => {
         if (recorder !== current || !event.data || !event.data.size) return;
-        if (!chunks.length) trace("audio arriving after " + (Date.now() - startedAt) + "ms");
+        if (!chunks.length) {
+          // Bytes alone may be encoded silence; the meter confirms the way works (measure).
+          if (meterBroken) workingMicrophone = order[attempt];
+          trace("audio arriving after " + (Date.now() - startedAt) + "ms, " + (event.data.type || "untyped") +
+            ", " + MICROPHONES[order[attempt]].name);
+        }
         chunks.push(event.data);
         measure();
       };
@@ -657,9 +687,12 @@
       fail(error && (error.name === "NotAllowedError" || error.name === "SecurityError") ? "not-allowed" : "audio-capture");
     };
     function openMicrophone() {
-      trace("microphone requested, session " + sessionType());
+      const setup = MICROPHONES[order[attempt]];
+      try { if (audioSession) audioSession.type = setup.session; }
+      catch (e) { trace("could not set the audio session for recording"); }
+      trace("microphone requested, attempt " + (attempt + 1) + " of " + order.length + ": " + setup.name + ", session " + sessionType());
       try {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then(got => {
+        navigator.mediaDevices.getUserMedia({ audio: setup.audio }).then(got => {
           // Permission may resolve after cancellation or a newer request.
           if (closed || finishing) {
             got.getTracks().forEach(track => track.stop());
@@ -667,6 +700,10 @@
             return;
           }
           stream = got;
+          got.getTracks().forEach(track => {
+            track.onmute = () => trace("microphone track muted");
+            track.onunmute = () => trace("microphone track unmuted");
+          });
           trace("microphone ready, " + trackState());
           begin();
         }, unavailable);
@@ -676,9 +713,7 @@
       if (closed || finishing) return;
       // Recording takes the record category, as the recognizer does; release() hands back
       // the category the player had, once, before anything is sent or played.
-      try {
-        if (audioSession) { previousAudioType = audioSession.type; audioSession.type = "play-and-record"; }
-      } catch (e) { trace("could not set the audio session for recording"); }
+      try { if (audioSession) previousAudioType = audioSession.type; } catch (e) {}
       openMicrophone();
     });
     return { cancel, finish };
