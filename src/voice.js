@@ -503,7 +503,11 @@
     let speaking = false, fresh = false;
     /** @type {{ text: string, final: boolean }[]} */
     let committed = [], session = [];
-    const words = () => requestStart(transcriptParts(committed.concat(session)).map(part => part.text).join(" "));
+    // Words said once: stopped just as it finishes a sentence on its own, iOS hands the same
+    // final words over twice, and a request said once is never meant twice.
+    const words = () => requestStart(transcriptParts(committed.concat(session))
+      .filter((part, i, all) => !(i && all[i - 1].final && fold(part.text) === fold(all[i - 1].text)))
+      .map(part => part.text).join(" "));
     const audioSession = navigator.audioSession;
     let previousAudioType = null;
     currentCapture = cancel;

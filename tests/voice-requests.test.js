@@ -1545,6 +1545,43 @@ test("a recognizer run that ends by itself is replaced, keeping the words it hea
   assert.equal(sent.length, 0);
 });
 
+test("the same final words handed over twice as the iPhone recognizer stops are one request, not two", async () => {
+  // As on the device: stopped just as it closed the sentence on its own, the recognizer
+  // gave the final words, then the same words again as a second final result. A pause in
+  // the middle of a sentence gives two different final parts, and both are kept.
+  // Each case: the result events after the stop, each a list of [words, final] results.
+  for (const { finals, expected } of [
+    { finals: [[["play Osher Cohen", true]], [["play Osher Cohen", true], ["play Osher Cohen.", true]]], expected: "play Osher Cohen" },
+    { finals: [[["play Osher", true]], [["play Osher", true], ["Cohen", true]]], expected: "play Osher Cohen" }
+  ]) {
+    const { sent, Ai } = transcriber(["unused"]);
+    const shown = [], finished = [];
+    const h = recordingHarness({ userAgent: "iPhone" }, Ai);
+    await firstRequest(h);
+    h.device.endOnStop = false;
+    const before = h.recognitions.length;
+    h.Voice.listen({ ontext: value => shown.push(value), onfinish: value => finished.push(value), onerror: assert.fail });
+    await flush();
+    const recognition = await recognizerAlongside(h, before);
+    recognition.emit("speechstart");
+    h.device.level = 0.2;
+    recognition.result([["play Osher", false]]);
+    await run(h, 300);
+    recognition.result([["play Osher Cohen", false]]);
+    await run(h, 300);
+    // Quiet: the level ends the request before the recognizer has closed the sentence.
+    h.device.level = 0.002;
+    for (let t = 0; t < 3000 && !recognition.stopped; t += 100) await run(h, 100);
+    assert.equal(recognition.stopped, true);
+    for (const results of finals) recognition.result(results);
+    recognition.end();
+    await flush();
+    assert.deepEqual(finished, [expected]);
+    assert.equal(shown.at(-1), expected, "the field shows the request once");
+    assert.equal(sent.length, 0);
+  }
+});
+
 test("Android keeps its recognizer for every request, key or not", async () => {
   const { sent, Ai } = transcriber(["unused"]);
   const h = recordingHarness({ userAgent: "Android" }, Ai);
