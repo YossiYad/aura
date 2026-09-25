@@ -36,10 +36,27 @@ function aiNetwork(fetch, globals = {}) {
   const data = new Map([['aura.aiKeys.gemini', '["gemini-key"]'], ['aura.aiKeys.groq', '["groq-key"]']]);
   const window = { ...globals };
   const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
-  vm.runInNewContext(readModule('ai'), { ...globals, window, localStorage: storage, fetch, AbortController, URL,
+  vm.runInNewContext(readModule('ai'), { Store: { playlists: () => [] }, ...globals, window, localStorage: storage, fetch, AbortController, URL,
     setTimeout: (fn, ms) => setTimeout(fn, Math.min(ms, 1)), clearTimeout, console, navigator: { onLine: true } });
   return window.Ai;
 }
+
+// The other spellings a performer goes by ride along with an artist or latest reading and
+// nowhere else; blank and non-string entries are dropped and at most three are kept.
+test('a playback reading keeps up to three other performer names for artist and latest requests', async () => {
+  let content;
+  const Ai = aiNetwork(async url => String(url).includes('groq')
+    ? { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(content) } }] }) }
+    : { ok: false, status: 503, json: async () => ({}) });
+  content = { kind: 'artist', query: 'עומר אדם', artist: '', names: ['Omer Adam', ' ', 7, 'Omer', 'Adam O', 'extra'], tracks: [] };
+  assert.deepEqual(Array.from((await Ai.interpretPlayback('שיר של עומר אדם')).names), ['Omer Adam', 'Omer', 'Adam O']);
+  content = { kind: 'latest', query: 'עומר אדם', artist: '', names: ['Omer Adam'], tracks: [] };
+  assert.deepEqual(Array.from((await Ai.interpretPlayback('השיר החדש של עומר אדם')).names), ['Omer Adam']);
+  content = { kind: 'song', query: 'Song', artist: 'Omer Adam', names: ['Ignored'], tracks: [] };
+  assert.deepEqual(Array.from((await Ai.interpretPlayback('Song by Omer Adam')).names), []);
+  content = { kind: 'artist', query: 'Queen', artist: '' };
+  assert.deepEqual(Array.from((await Ai.interpretPlayback('songs by Queen')).names), []);
+});
 
 // A key set aside after a quota answer was never asked again for ten minutes, even when
 // every other key failed for reasons of its own.

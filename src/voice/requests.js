@@ -100,6 +100,20 @@
     if (items.length > 1) throw new Error(message);
     return items[0];
   }
+  /**
+   * The names to look a performer up by: the one the listener said, then any other spellings
+   * the model supplied, each once, leaving out any a first pass already looked up.
+   * @param {{ query: string, names?: string[], tried?: string[] }} intent
+   * @returns {string[]}
+   */
+  function performerNames(intent) {
+    const seen = new Set((Array.isArray(intent.tried) ? intent.tried : []).map(V.fold)), out = [];
+    for (const name of [intent.query].concat(Array.isArray(intent.names) ? intent.names : [])) {
+      const key = V.fold(name);
+      if (key && !seen.has(key)) { seen.add(key); out.push(String(name).trim()); }
+    }
+    return out;
+  }
   function artistScore(value, query) {
     const raw = String(value || "");
     const wanted = V.fold(query);
@@ -221,8 +235,15 @@
       if (!hasAI || usedAI) return null;
       const clarified = await understand();
       check();
+      // A reading that only adds other spellings of the same performer is still news: the
+      // spoken name found no channel, and those are what the channel may be called. The
+      // names already looked up are not looked up again on the second pass.
       if (clarified.kind !== intent.kind || V.fold(clarified.query) !== V.fold(intent.query) ||
-          V.fold(clarified.artist) !== V.fold(intent.artist)) return resolve(original, onstatus, active, clarified);
+          V.fold(clarified.artist) !== V.fold(intent.artist) ||
+          performerNames(clarified).length > performerNames(intent).length) {
+        const again = clarified.kind === intent.kind ? { ...clarified, tried: performerNames(intent) } : clarified;
+        return resolve(original, onstatus, active, again);
+      }
       return null;
     }
     if (!interpreted && hasAI && directMix(raw)) { intent = /** @type {PlaybackIntent} */ ({ kind: "mix", query: raw }); usedAI = true; }
@@ -238,6 +259,51 @@
     if (onstatus) onstatus(tr("מחפש את המוזיקה שביקשת…"));
     let tracks = [], label = intent.query;
     const local = playable(Store.library("music").concat(Store.recents("music"), Player.queue()));
+    /**
+     * Every playable upload by the performer called `name`: the saved and recent ones, the
+     * ones a search turns up, and failing those, the uploads of the performer's own channel.
+     * @param {string} name
+     * @returns {Promise<Track[]>}
+     */
+    async function artistTracks(name) {
+      let found = local.filter(t => artistScore(t.artist, name) > 0 && artistUploadLooksLikeMusic(t, name));
+      if (navigator.onLine === false) return found;
+      const result = await Api.search(name, true).catch(error => {
+        if (found.length) return { items: [] };
+        throw error;
+      });
+      check();
+      // Fresh source metadata wins over an old record for the same video ID.
+      const refreshed = new Set(result.items.map(t => t.id));
+      const remote = playable(result.items.filter(t => artistScore(t.artist, name) > 0 && artistUploadLooksLikeMusic(t, name)));
+      found = playable(remote.concat(found.filter(t => !refreshed.has(t.id))))
+        .sort((a, b) => Number(b.artistVerified === true) - Number(a.artistVerified === true));
+      V.log("artist search for " + name + " accepted " + remote.length + " of " + result.items.length + ", local " + (found.length - remote.length));
+      if (found.length) return found;
+      const artists = await Api.searchArtists(name);
+      check();
+      const seen = new Set();
+      const candidates = artists.items.map(artist => ({ artist, score: artistScore(artist.name, name) }))
+        .filter(({ artist, score }) => score > 0 && artist.id && !seen.has(artist.id) && seen.add(artist.id))
+        .sort((a, b) => Number(b.artist.verified === true) - Number(a.artist.verified === true) ||
+          (Number(b.artist.subscribers) || 0) - (Number(a.artist.subscribers) || 0) || b.score - a.score);
+      // Prefer provider verification and audience size, never "Official" in a
+      // display name. Try alternatives if the channel has no eligible music.
+      for (const { artist } of candidates.slice(0, 3)) {
+        check();
+        const info = await Api.getArtist(artist.id, artist).catch(() => ({ videos: [] }));
+        check();
+        // A channel endpoint can return recommendations or a stale response.
+        // Check each upload instead of trusting the requested channel URL.
+        found = playable((info.videos || []).filter(t =>
+          (!t.artistId || t.artistId === artist.id) &&
+          artistScore(t.artist, name) > 0 && artistUploadLooksLikeMusic(t, name, artist)))
+          .map(t => artist.verified === true && t.artistId === artist.id ? { ...t, artistVerified: true } : t);
+        V.log("artist channel " + artist.id + ", accepted " + found.length + " of " + (info.videos || []).length);
+        if (found.length) return found;
+      }
+      return [];
+    }
     if (intent.kind === "liked") {
       tracks = Store.likedTracks("music");
       label = tr("השירים שאהבתי");
@@ -257,44 +323,12 @@
         tracks = info.tracks; label = info.name || match.name;
       }
     } else if (intent.kind === "artist") {
-      const matches = local.filter(t => artistScore(t.artist, intent.query) > 0 && artistUploadLooksLikeMusic(t, intent.query));
-      tracks = matches;
-      if (navigator.onLine !== false) {
-        const result = await Api.search(intent.query, true).catch(error => {
-          if (tracks.length) return { items: [] };
-          throw error;
-        });
-        check();
-        // Fresh source metadata wins over an old record for the same video ID.
-        const refreshed = new Set(result.items.map(t => t.id));
-        const remote = playable(result.items.filter(t => artistScore(t.artist, intent.query) > 0 && artistUploadLooksLikeMusic(t, intent.query)));
-        tracks = playable(remote.concat(tracks.filter(t => !refreshed.has(t.id))))
-          .sort((a, b) => Number(b.artistVerified === true) - Number(a.artistVerified === true));
-        V.log("artist search accepted " + remote.length + " of " + result.items.length + ", local " + (tracks.length - remote.length));
-        if (!tracks.length) {
-          const artists = await Api.searchArtists(intent.query);
-          check();
-          const seen = new Set();
-          const candidates = artists.items.map(artist => ({ artist, score: artistScore(artist.name, intent.query) }))
-            .filter(({ artist, score }) => score > 0 && artist.id && !seen.has(artist.id) && seen.add(artist.id))
-            .sort((a, b) => Number(b.artist.verified === true) - Number(a.artist.verified === true) ||
-              (Number(b.artist.subscribers) || 0) - (Number(a.artist.subscribers) || 0) || b.score - a.score);
-          // Prefer provider verification and audience size, never "Official" in a
-          // display name. Try alternatives if the channel has no eligible music.
-          for (const { artist } of candidates.slice(0, 3)) {
-            check();
-            const info = await Api.getArtist(artist.id, artist).catch(() => ({ videos: [] }));
-            check();
-            // A channel endpoint can return recommendations or a stale response.
-            // Check each upload instead of trusting the requested channel URL.
-            tracks = playable((info.videos || []).filter(t =>
-              (!t.artistId || t.artistId === artist.id) &&
-              artistScore(t.artist, intent.query) > 0 && artistUploadLooksLikeMusic(t, intent.query, artist)))
-              .map(t => artist.verified === true && t.artistId === artist.id ? { ...t, artistVerified: true } : t);
-            V.log("artist channel " + artist.id + ", accepted " + tracks.length + " of " + (info.videos || []).length);
-            if (tracks.length) { label = intent.query; break; }
-          }
-        }
+      // The spoken name first, then the other spellings the model knows the performer by:
+      // an Israeli singer's channel is often named in Latin letters while the request
+      // came in Hebrew, and the name test above would turn every upload away.
+      for (const name of performerNames(intent)) {
+        tracks = await artistTracks(name);
+        if (tracks.length) break;
       }
     } else if (intent.kind === "latest") {
       // The newest release by one artist. Its date is read from the feed YouTube publishes
@@ -307,11 +341,13 @@
       // A name from the listening history is one the listener already plays - trusted the
       // same way a followed channel is, so its feed needs only the music test, not provenance.
       if (!channelId) { const known = Store.artistIdFor(intent.query); if (known) { channelId = known; trusted = true; } }
-      if (!channelId && navigator.onLine !== false) {
-        const found = await Api.searchArtists(intent.query);
+      // The spoken name first, then the other spellings the model knows the performer by.
+      for (const name of performerNames(intent)) {
+        if (channelId || navigator.onLine === false) break;
+        const found = await Api.searchArtists(name);
         check();
         const seen = new Set();
-        const best = found.items.map(a => ({ a, score: artistScore(a.name, intent.query) }))
+        const best = found.items.map(a => ({ a, score: artistScore(a.name, name) }))
           .filter(({ a, score }) => score > 0 && a.id && !seen.has(a.id) && seen.add(a.id))
           .sort((x, y) => Number(y.a.verified === true) - Number(x.a.verified === true) ||
             (Number(y.a.subscribers) || 0) - (Number(x.a.subscribers) || 0) || y.score - x.score)[0];

@@ -25,6 +25,9 @@
  * @property {string} query Song title, artist, playlist or mix name, or the question to ask back.
  * @property {string} artist Performer, when a song names one.
  * @property {SuggestedSong[]} tracks The songs of a mix; empty for every other kind.
+ * @property {string[]} [names] Other spellings the performer goes by on YouTube, for artist and
+ * latest requests: the Latin name of a Hebrew one and the other way round. Tried in turn when
+ * the spoken name finds no channel.
  */
 
 /**
@@ -735,6 +738,7 @@
         kind: { type: "STRING", enum: ["song", "artist", "latest", "playlist", "liked", "mix", "clarify"] },
         query: { type: "STRING" },
         artist: { type: "STRING" },
+        names: { type: "ARRAY", items: { type: "STRING" } },
         tracks: { type: "ARRAY", items: { type: "OBJECT", properties: {
           title: { type: "STRING" }, artist: { type: "STRING" }
         }, required: ["title", "artist"] } }
@@ -746,7 +750,7 @@
       "Requests may mix Hebrew and English. Recognize English music names transcribed phonetically in Hebrew " +
       "and use their canonical English spelling when confident, e.g. 'בוהמיאן רפסודי של קווין' means " +
       "song Bohemian Rhapsody by Queen. Likewise handle Hebrew names inside English requests. " +
-      "Return only JSON: {\"kind\":\"song|artist|latest|playlist|liked|mix|clarify\",\"query\":\"name\",\"artist\":\"artist or empty\",\"tracks\":[]}. " +
+      "Return only JSON: {\"kind\":\"song|artist|latest|playlist|liked|mix|clarify\",\"query\":\"name\",\"artist\":\"artist or empty\",\"names\":[],\"tracks\":[]}. " +
       "song means one specific song (query is its title, artist is the performer if specified); " +
       "When a song request names no performer, identify the ORIGINAL recording artist if confidently known, " +
       "and put that name in artist. Never substitute a more popular cover. If a performer was explicitly requested, " +
@@ -757,6 +761,10 @@
       "recent song rather than a specific title (query is the artist's name, artist empty). Examples: 'the new song " +
       "of X', 'X's latest single', in Hebrew 'השיר החדש של X', 'השיר הכי חדש של X', 'החדש של X', 'השיר האחרון של X'. " +
       "Only use latest when the request names no specific title, just an artist plus a new/newest/latest/recent cue; " +
+      "for artist and latest, query is the name as the listener said it, and names lists up to three other spellings " +
+      "the same performer's YouTube channel and uploads are known by - the Latin spelling of a Hebrew name " +
+      "(e.g. 'עומר אדם' is also 'Omer Adam'), the Hebrew spelling of a Latin one, or a stage name - only ones you are " +
+      "confident of, never a guess; for every other kind names is empty. " +
       "playlist means an existing named playlist; " +
       "liked means the listener's liked songs; mix means a mood, genre, combination of artists/songs, " +
       "or a request with selection constraints such as only quiet songs or excluding live versions. " +
@@ -775,7 +783,9 @@
     const tracks = (Array.isArray(out.tracks) ? out.tracks : []).filter(t => t &&
       typeof t.title === "string" && t.title.trim() && typeof t.artist === "string" && t.artist.trim());
     if (out.kind === "mix" && !tracks.length) throw new Error("No mix suggestions returned");
-    return { kind: out.kind, query: out.query.trim(), artist: out.artist.trim(), tracks };
+    const names = (out.kind === "artist" || out.kind === "latest") && Array.isArray(out.names)
+      ? out.names.filter(n => typeof n === "string" && n.trim()).map(n => n.trim()).slice(0, 3) : [];
+    return { kind: out.kind, query: out.query.trim(), artist: out.artist.trim(), tracks, names };
   }
 
   // ---------------- Transcription ----------------
