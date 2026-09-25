@@ -257,6 +257,54 @@ test("artist requests deal the same songs out in a different order each time", a
   assert.ok(orders.size > 1, "the queue came out in the same order every request");
 });
 
+test("a Hebrew artist request reaches a channel named in Latin letters through the model's other spellings", async () => {
+  const uploads = ["a", "b"].map(id => ({ ...song, id, title: "עומר אדם - שיר", artist: "Omer Adam", artistId: "omer", artistVerified: true }));
+  let calls = 0; const searches = [], channelSearches = [];
+  const { Voice } = harness({
+    Ai: { hasAnyKey: () => true, interpretPlayback: async () => { calls++; return { kind: "artist", query: "עומר אדם", artist: "", names: ["Omer Adam", "עומר אדם"] }; } },
+    Api: {
+      search: async q => { searches.push(q); return { items: uploads }; },
+      searchArtists: async q => { channelSearches.push(q); return { items: [] }; },
+      looksLikeMusic: () => true
+    }
+  });
+  const result = await Voice.resolve("תשים לי שיר של עומר אדם");
+  assert.deepEqual(Array.from(result.tracks, t => t.id).sort(), ["a", "b"]);
+  assert.equal(result.label, "עומר אדם");
+  assert.equal(calls, 1);
+  // The spoken name is tried in full first, the model is asked once, then the Latin name.
+  assert.deepEqual(searches, ["עומר אדם", "Omer Adam"]);
+  assert.deepEqual(channelSearches, ["עומר אדם"]);
+});
+
+test("a reading without other spellings does not look the same name up twice", async () => {
+  let calls = 0; const searches = [];
+  const { Voice } = harness({
+    Ai: { hasAnyKey: () => true, interpretPlayback: async () => { calls++; return { kind: "artist", query: "עומר אדם", artist: "", names: [] }; } },
+    Api: { search: async q => { searches.push(q); return { items: [{ ...song, artist: "Omer Adam", artistVerified: true }] }; },
+      searchArtists: async () => ({ items: [] }), looksLikeMusic: () => true }
+  });
+  await assert.rejects(Voice.resolve("תשים לי שיר של עומר אדם"), /לא נמצאו שירים/);
+  assert.equal(calls, 1); assert.deepEqual(searches, ["עומר אדם"]);
+});
+
+test("the newest song of a Hebrew name finds a channel named in Latin letters through the model's other spellings", async () => {
+  const channelSearches = [];
+  const { Voice } = harness({
+    Ai: { hasAnyKey: () => true, interpretPlayback: async () => ({ kind: "latest", query: "עומר אדם", artist: "", names: ["Omer Adam"] }) },
+    Api: {
+      searchArtists: async q => { channelSearches.push(q); return { items: q === "Omer Adam" ? [{ id: "omer", name: "Omer Adam", verified: true, subscribers: 10 }] : [] }; },
+      channelFeed: async id => { assert.equal(id, "omer"); return [
+        { ...song, id: "old", title: "ישן", artist: "Omer Adam", artistId: "omer", published: 1 },
+        { ...song, id: "new", title: "חדש", artist: "Omer Adam", artistId: "omer", published: 2 }]; },
+      looksLikeMusic: () => true, notMusic: () => false, looksLikePodcast: () => false
+    }
+  });
+  const result = await Voice.resolve("שים לי את השיר החדש של עומר אדם");
+  assert.equal(result.tracks[0].id, "new");
+  assert.deepEqual(channelSearches, ["עומר אדם", "Omer Adam"]);
+});
+
 test("Hebrew artist requests match bilingual channel names without AI or channel lookup", async () => {
   const { Voice } = harness({ Ai: { hasAnyKey: () => true, interpretPlayback: assert.fail }, Api: {
     search: async () => ({ items: [
