@@ -126,6 +126,21 @@
     const seen = new Set();
     return tracks.filter(t => t && t.id && (!Store.mediaKind || Store.mediaKind(t) === "music") && !Store.isBlocked(t) && !seen.has(t.id) && seen.add(t.id));
   }
+  /**
+   * A copy of the list in random order (Fisher-Yates), so an artist request does not open
+   * with the same song every time.
+   * @template T
+   * @param {T[]} items
+   * @returns {T[]}
+   */
+  function shuffled(items) {
+    const out = items.slice();
+    for (let i = out.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
   function artistUploadLooksLikeMusic(track, query, channel) {
     if (!track || !Api.looksLikeMusic(track)) return false;
     const title = V.fold(track.title);
@@ -362,6 +377,10 @@
     if (intent.kind === "artist" && tracks.some(t => t.artistVerified === true)) {
       tracks = tracks.filter(t => t.artistVerified === true);
     }
+    // "A song by X" means any song by X. Search ranks the same hit first every time, so
+    // the whole list is dealt out at random - nothing is remembered between requests,
+    // the order is simply different each time.
+    if (intent.kind === "artist") tracks = shuffled(tracks);
     if (!tracks.length && hasAI && !usedAI) {
       // A phonetic name or an ambiguous short request gets one interpretation only
       // after a direct lookup failed. Never call the model for a successful lookup.
