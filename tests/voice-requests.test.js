@@ -244,6 +244,19 @@ test("artist playback excludes unrelated channels, speech and blocked tracks", a
   assert.deepEqual(Array.from((await Voice.resolve("play songs by Queen")).tracks, t => t.id), ["topic"]);
 });
 
+test("artist requests deal the same songs out in a different order each time", async () => {
+  const items = ["a", "b", "c", "d", "e", "f"].map(id => ({ ...song, id, artist: "Queen - Topic", artistVerified: true }));
+  const { Voice } = harness({ Api: { search: async () => ({ items }), looksLikeMusic: () => true, searchArtists: assert.fail } });
+  const firsts = new Set(), orders = new Set();
+  for (let i = 0; i < 40; i++) {
+    const ids = Array.from((await Voice.resolve("play songs by Queen")).tracks, t => t.id);
+    assert.deepEqual(ids.slice().sort(), ["a", "b", "c", "d", "e", "f"]);
+    firsts.add(ids[0]); orders.add(ids.join(","));
+  }
+  assert.ok(firsts.size > 1, "the same song opened every request");
+  assert.ok(orders.size > 1, "the queue came out in the same order every request");
+});
+
 test("Hebrew artist requests match bilingual channel names without AI or channel lookup", async () => {
   const { Voice } = harness({ Ai: { hasAnyKey: () => true, interpretPlayback: assert.fail }, Api: {
     search: async () => ({ items: [
