@@ -67,8 +67,9 @@ case "$AURA_AUTO_UPDATE" in yes|no) ;; *) fail "AURA_AUTO_UPDATE is yes or no." 
 
 apt_install() {
   command -v apt-get >/dev/null 2>&1 || fail "install $* yourself, then run this again (automatic installs need Debian or Ubuntu)."
-  DEBIAN_FRONTEND=noninteractive apt-get update -qq
-  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null
+  DEBIAN_FRONTEND=noninteractive apt-get update -qq || true
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" >/dev/null ||
+    fail "could not install $* with apt. Install it yourself, then run this again."
 }
 
 step "Checking the tools"
@@ -80,7 +81,10 @@ if [ "$AURA_AUTO_UPDATE" = yes ] && ! command -v crontab >/dev/null 2>&1; then M
 
 if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
   step "Installing Docker"
-  curl -fsSL https://get.docker.com | sh
+  curl -fsSL https://get.docker.com | sh || true
+  if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+    fail "Docker did not install. Install it with https://docs.docker.com/engine/install/ and run this again."
+  fi
 fi
 if ! docker info >/dev/null 2>&1; then
   command -v systemctl >/dev/null 2>&1 && systemctl enable --now docker >/dev/null 2>&1 || true
@@ -114,6 +118,7 @@ if [ "$AURA_PROXY" = caddy ]; then
       fail "could not download Caddy's package list from dl.cloudsmith.io. Check this server's internet access and run this again."
     chmod o+r /usr/share/keyrings/caddy-stable-archive-keyring.gpg /etc/apt/sources.list.d/caddy-stable.list
     apt_install caddy
+    command -v caddy >/dev/null 2>&1 || fail "Caddy did not install. Install it with https://caddyserver.com/docs/install and run this again."
   fi
 fi
 
