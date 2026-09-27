@@ -46,6 +46,10 @@ const server = http.createServer((req, res) => {
         // A spoken request runs on the Ask screen itself: the words arrive in its own field.
         Views.showTab('ai');
         Views.startVoice('ask');
+      });
+      // The recognizer is made once the microphone is open, a moment after the tap.
+      await page.waitForFunction(() => captures.length && captures[0].onresult);
+      await page.evaluate(() => {
         captures[0].onresult({ results: [Object.assign([{ transcript: 'תשים לי ואיך בשמים' }], { isFinal: true })] });
         window.frameBeforeKeyboard = document.documentElement.style.getPropertyValue('--app-height');
       });
@@ -88,10 +92,6 @@ const server = http.createServer((req, res) => {
       assert(beforeTyping.actionsBottom <= beforeTyping.viewportBottom, mode + ': actions above keyboard');
       await page.locator('#ask-prompt').fill('תשים לי ואיך בשמים של אייל גולן');
       assert.equal(await page.locator('#ask-prompt').inputValue(), 'תשים לי ואיך בשמים של אייל גולן');
-      await page.evaluate(() => { viewportTest.offsetTop += 25; viewportTest.dispatchEvent(new Event('scroll')); });
-      await page.waitForTimeout(100);
-      const afterPan = await measure();
-      assert(afterPan.inputTop >= afterPan.visibleTop && afterPan.inputBottom <= afterPan.visibleBottom, mode + ': input follows viewport pan');
       await page.evaluate(() => {
         document.getElementById('tabs').style.removeProperty('top');
         document.getElementById('tabs').style.removeProperty('position');
@@ -127,8 +127,53 @@ const server = http.createServer((req, res) => {
       await page.waitForTimeout(1600);
       assert.equal(await page.locator('#ask-prompt').inputValue(), 'תשים לי שיר אחר');
       assert.equal(await page.evaluate(() => Views.voiceOpen()), true, 'typing cancels automatic submission: the request is still open, unsent');
+      // The Ask field is part of the page, so a pan moves it with everything else. A dialog
+      // is re-anchored to the part of the screen the keyboard leaves, and its focused field
+      // has to stay in that part as it pans.
+      await page.evaluate(() => {
+        window.frameBeforeDialog = document.documentElement.style.getPropertyValue('--app-height');
+        Aura.views.promptModal('New playlist', '', () => {});
+      });
+      await page.locator('#modal-input').tap();
+      assert.equal(await page.locator('#modal-input').evaluate(el => el === document.activeElement), true, 'the dialog field is focused');
+      await page.evaluate(mode => {
+        Object.assign(viewportTest, { height: 350, inner: mode === 'visual-only' ? 793 : 350, offsetTop: mode === 'visual-only' ? 142 : 0 });
+        viewportTest.dispatchEvent(new Event('resize'));
+      }, mode);
+      await page.waitForTimeout(100);
+      const measureDialog = () => page.evaluate(() => {
+        const input = document.getElementById('modal-input');
+        const dialog = input.closest('.modal');
+        const box = input.getBoundingClientRect(), panel = dialog.getBoundingClientRect();
+        const actions = dialog.querySelector('.modal-actions').getBoundingClientRect();
+        return {
+          keyboard: document.documentElement.classList.contains('keyboard-open'),
+          inputTop: box.top, inputBottom: box.bottom,
+          visibleTop: Math.max(viewportTest.offsetTop, panel.top),
+          visibleBottom: Math.min(viewportTest.offsetTop + viewportTest.height, panel.bottom, actions.top),
+          actionsBottom: actions.bottom, viewportBottom: viewportTest.offsetTop + viewportTest.height,
+          frame: document.documentElement.style.getPropertyValue('--app-height'), before: frameBeforeDialog
+        };
+      });
+      const dialogOpen = await measureDialog();
+      assert.equal(dialogOpen.keyboard, true, mode + ': keyboard detected in a dialog');
+      assert.equal(dialogOpen.frame, dialogOpen.before, mode + ': no frame inflation in a dialog');
+      assert(dialogOpen.inputTop >= dialogOpen.visibleTop && dialogOpen.inputBottom <= dialogOpen.visibleBottom, mode + ': dialog input visible ' + JSON.stringify(dialogOpen));
+      assert(dialogOpen.actionsBottom <= dialogOpen.viewportBottom, mode + ': dialog actions above keyboard');
+      // Far enough that a field left where it was would be above the visible part.
+      const pan = Math.ceil(dialogOpen.inputTop - dialogOpen.visibleTop) + 25;
+      await page.evaluate(pan => { viewportTest.offsetTop += pan; viewportTest.dispatchEvent(new Event('scroll')); }, pan);
+      await page.waitForTimeout(100);
+      const afterPan = await measureDialog();
+      assert(afterPan.inputTop >= afterPan.visibleTop && afterPan.inputBottom <= afterPan.visibleBottom, mode + ': dialog input follows viewport pan ' + JSON.stringify(afterPan));
+      await page.evaluate(() => {
+        Object.assign(viewportTest, { height: 793, inner: 793, offsetTop: 0 });
+        viewportTest.dispatchEvent(new Event('resize'));
+      });
+      await page.locator('#modal-cancel').tap();
+      await page.waitForFunction(() => document.getElementById('modal').hidden);
       assert.deepEqual(errors, []);
-      console.log(mode + ': visible input, typing, actions, panning, frame restoration and zoom passed');
+      console.log(mode + ': visible input, typing, actions, dialog panning, frame restoration and zoom passed');
       await page.close();
     }
     const page = await browser.newPage({ viewport: { width: 393, height: 793 }, serviceWorkers: 'block', userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15' });
