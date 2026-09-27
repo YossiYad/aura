@@ -13,7 +13,7 @@ Built with vanilla JavaScript, with optional AI features and self-hosting.
 [![Progressive Web App](https://img.shields.io/badge/app-PWA-8b5cf6)](#quick-start)
 [![No build step](https://img.shields.io/badge/build-none-22c55e)](#development)
 
-[Website](https://yossiyad.github.io/aura/) · [Features](#features) · [Quick start](#quick-start) · [Self-hosting](#self-hosting) · [Documentation](#documentation) · [Contributing](#contributing)
+[Website](https://yossiyad.github.io/aura/) · [Features](#features) · [Quick start](#quick-start) · [Install](INSTALL.md) · [Self-hosting](#self-hosting) · [Documentation](#documentation) · [Contributing](#contributing)
 
 </div>
 
@@ -166,6 +166,10 @@ setting requires an actual relay service; a static file server does not provide 
 Choose the setup that fits your needs. A static host serves the app; an Invidious or
 Piped instance supplies search results and streams. The full server setup also provides
 sign-in, sync and shared listening.
+
+**The quickest way is [INSTALL.md](INSTALL.md):** one block, pasted into a terminal on
+your server, installs everything in Option 2 below - Invidious included - and sets up
+HTTPS. The options below explain each step, for doing it by hand.
 
 <details>
 <summary><strong>Option 1: Upload the app to a static HTTPS host</strong></summary>
