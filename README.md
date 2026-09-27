@@ -64,7 +64,12 @@ You can also request a song, artist or playlist by voice in Hebrew or English, w
 commands to play now, play next or add to the queue. Basic named requests work without
 an AI key. Playlist generation and more complex requests use your own
 [Gemini or Groq key](docs/ai-providers.md). Voice input depends on browser support;
-typed requests are also available.
+typed requests are also available. On iPhone and iPad, Safari's speech recognizer can
+miss requests after the first one since the app opened, so Aura also records those
+requests; if the recognizer heard nothing, the recording is transcribed with your Groq
+or Gemini key. An artist request plays their songs in a new order each time, and with an
+AI key it also finds artists whose channel spells the name another way, such as a Hebrew
+name written in Latin letters.
 
 ### Offline listening
 
@@ -350,7 +355,9 @@ crossfade. Custom Google Cast receivers need the additional setup in the
   privacy policies; private sessions only affect Aura's local listening records.
 - **AI and voice:** AI requests go to the provider you configure. Keys are excluded
   from library sync and backup exports. Browser speech recognition may send audio to
-  its speech service; Aura does not save recordings.
+  its speech service. On iPhone and iPad, a voice request after the first one since
+  the app opened is sent as audio to your Groq or Gemini provider for transcription,
+  only when the built-in recognizer heard nothing. Aura does not save recordings.
 - **Your server:** optional sync stores library metadata on your server. Server mixes
   can also send it an AI key; this is enabled by default on self-hosted installations
   and can be switched off in Settings.
