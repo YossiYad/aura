@@ -27,6 +27,8 @@ const server = http.createServer((req, res) => {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => route.request().url().startsWith(origin) ? route.continue() : route.abort());
+    // A saved language, so the first-launch language question does not cover the player.
+    await page.addInitScript(() => localStorage.setItem('aura.settings', JSON.stringify({ interfaceLanguage: 'en' })));
     await page.goto(origin);
     await page.waitForFunction(() => window.Views && window.Player);
     await page.evaluate(() => {
