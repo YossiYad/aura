@@ -1,63 +1,65 @@
-# הקמת שרת Cobalt פרטי ל-Aura (חינם, ב-Koyeb)
+# Setting up a private Cobalt server for Aura (free, on Koyeb)
 
-מדריך זה מקים שרת חילוץ אודיו פרטי משלך, כדי ש-Aura תנגן ללא פרסומות וברקע גם כשהשרתים הציבוריים חסומים. חינם לחלוטין, מתאים ל-10 משתמשים בקלות.
+This guide sets up your own private audio extraction server, so Aura plays without ads and in the background even when the public servers are blocked. It is completely free and easily handles 10 users.
 
-## למה צריך את זה
+> Koyeb has started asking for a credit card. To avoid that, use [Hugging Face Spaces](cobalt-huggingface-setup.md) instead.
 
-YouTube חוסם מדי פעם את כל שרתי החילוץ הציבוריים (Piped / Invidious / Cobalt) בבת אחת. שרת פרטי עם IP נקי ונפח נמוך כמעט לא נחסם. Aura תפנה אליו ראשון, ורק אם הוא נופל תיפול לציבוריים.
+## Why you need it
 
-## שלב 1 - הרשמה ל-Koyeb
+YouTube sometimes blocks all the public extraction servers (Piped / Invidious / Cobalt) at once. A private server with a clean IP address and little traffic is almost never blocked. Aura tries it first, and falls back to the public ones only if it fails.
 
-1. היכנס ל-https://www.koyeb.com
-2. לחץ **Sign up** והתחבר עם GitHub או Google (בלי כרטיס אשראי).
+## Step 1 - Sign up for Koyeb
 
-## שלב 2 - יצירת השירות
+1. Go to https://www.koyeb.com
+2. Click **Sign up** and sign in with GitHub or Google.
 
-1. בדשבורד לחץ **Create Service** (או **Create Web Service**).
-2. בבחירת המקור בחר **Docker**.
-3. בשדה ה-image הדבק:
+## Step 2 - Create the service
+
+1. In the dashboard, click **Create Service** (or **Create Web Service**).
+2. For the source, choose **Docker**.
+3. In the image field, paste:
    ```
    ghcr.io/imputnet/cobalt:10
    ```
-4. **Ports / Exposing:** ודא שה-port הוא **9000** (ברירת המחדל של Cobalt). אם יש שדה health check path, השאר `/`.
-5. **Instance type:** בחר את התוכנית החינמית (**Free** / **Eco** / nano - הכי קטנה).
-6. **Region:** בחר את הקרוב אליך (Frankfurt / Washington).
+4. **Ports / Exposing:** make sure the port is **9000** (Cobalt's default). If there is a health check path field, leave it as `/`.
+5. **Instance type:** choose the free plan (**Free** / **Eco** / nano - the smallest one).
+6. **Region:** choose the one closest to you (Frankfurt / Washington).
 
-## שלב 3 - משתני סביבה (Environment variables)
+## Step 3 - Environment variables
 
-הוסף את המשתנים הבאים (Add variable):
+Add these variables (Add variable):
 
 | Key | Value |
 |-----|-------|
 | `API_URL` | `https://<APP-NAME>-<ORG>.koyeb.app/` |
 | `API_PORT` | `9000` |
 
-- את `API_URL` תדע רק אחרי שהשירות נוצר וקיבל URL. אפשר:
-  1. ליצור קודם עם ערך זמני, לראות את ה-URL שקיבלת, ואז לערוך את `API_URL` לערך הנכון ולעשות redeploy. **חובה** ש-`API_URL` יהיה בדיוק ה-URL הציבורי של השירות עם `/` בסוף - אחרת ה-tunnel לא יעבוד.
+- You only know `API_URL` once the service has been created and given a URL. You can:
+  1. Create it first with a temporary value, see which URL you got, then change `API_URL` to the right value and redeploy. `API_URL` **must** be exactly the service's public URL with a trailing `/`, or the tunnel will not work.
 
-## שלב 4 - Deploy
+## Step 4 - Deploy
 
-1. לחץ **Deploy**.
-2. חכה 1-3 דקות עד שהסטטוס **Healthy** (ירוק).
-3. פתח בדפדפן את ה-URL שקיבלת (למשל `https://your-app-your-org.koyeb.app/`). אם תראה JSON עם `"cobalt"` ו-`"version"` - השרת עובד.
+1. Click **Deploy**.
+2. Wait 1-3 minutes until the status is **Healthy** (green).
+3. Open the URL you got in a browser (for example `https://your-app-your-org.koyeb.app/`). If you see JSON with `"cobalt"` and `"version"`, the server is working.
 
-## שלב 5 - חיבור ל-Aura
+## Step 5 - Connect it to Aura
 
-1. פתח את Aura, לך ל-**הגדרות** (אייקון גלגל שיניים).
-2. בשדה **"Your private Cobalt server"** הדבק את ה-URL המלא (עם `/` בסוף):
+1. Open Aura and go to **Settings** (the gear icon).
+2. In the **"Your private Cobalt server"** field, paste the full URL (with the trailing `/`):
    ```
    https://your-app-your-org.koyeb.app/
    ```
-3. לחץ **Save**.
-4. נגן שיר. פתח **Show logs** - אתה אמור לראות `[cobalt] stream OK via <השרת שלך>` ושהניגון מגיע ממנו.
+3. Click **Save**.
+4. Play a song and open **Show logs**. You should see `[cobalt] stream OK via <your server>`, and the song should be playing from it.
 
-## אם YouTube חוסם את השרת שלך (נדיר)
+## If YouTube blocks your server (rare)
 
-אם אחרי כמה שבועות מתחילות שגיאות `youtube.login`:
+If `youtube.login` errors start appearing after a few weeks:
 
-1. ב-Koyeb, ערוך את השירות והוסף משתנה סביבה `COOKIE_PATH` עם קובץ cookies של YouTube (מיוצא עם תוסף "Get cookies.txt"). זה מחזיר את השרת לעבוד.
-2. פירוט מלא: https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md
+1. In Koyeb, edit the service and add a `COOKIE_PATH` environment variable pointing to a YouTube cookies file (exported with the "Get cookies.txt" extension). That gets the server working again.
+2. Full details: https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md
 
-## עלות
+## Cost
 
-$0. התוכנית החינמית של Koyeb מספיקה ל-10 משתמשים. השירות עשוי להירדם אחרי חוסר פעילות ממושך - הבקשה הראשונה אחרי שינה תהיה איטית (~30 שניות), אחר כך מהיר.
+$0. Koyeb's free plan is enough for 10 users. The service may go to sleep after a long period without activity; the first request after that is slow (about 30 seconds), and after that it is fast.

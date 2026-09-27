@@ -374,7 +374,7 @@ See [third-party notices](THIRD-PARTY-NOTICES.md) for the services and component
 | [Shared queues](docs/shared-queue.md) | QR invitations, guest permissions and host controls. |
 | [TV playback](docs/tv-playback.md) | AirPlay, Google Cast and custom receiver setup. |
 | [Audio interruptions](docs/audio-interruptions.md) | Background playback behavior and device troubleshooting. |
-| [Cobalt hosting](docs/cobalt-huggingface-setup.md) | Optional stream fallback on Hugging Face, with a [Koyeb alternative](docs/cobalt-koyeb-setup.md) (Hebrew). |
+| [Cobalt hosting](docs/cobalt-huggingface-setup.md) | Optional stream fallback on Hugging Face, with a [Koyeb alternative](docs/cobalt-koyeb-setup.md). |
 
 ## Development
 
