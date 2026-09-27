@@ -26,8 +26,21 @@ function fixture(t) {
   stub('caddy', 'exit 0');
   stub('ss', 'exit 0');
   stub('ufw', 'echo "Status: inactive"');
+  // HTTPS is off for the first CERT_AFTER reads, as on a tailnet that has not enabled it.
+  stub('tailscale', [
+    'case "$1" in',
+    '  status)',
+    '    if [ "$2" = --json ]; then',
+    '      n=$(cat "$TS_COUNT" 2>/dev/null || echo 0); echo $((n + 1)) > "$TS_COUNT"',
+    '      if [ "$n" -lt "${CERT_AFTER:-0}" ]; then certs=null; else certs=\'["box.tail1234.ts.net"]\'; fi',
+    '      printf \'{"BackendState": "Running", "Self": {"HostName": "box", "DNSName": "box.tail1234.ts.net."}, "CertDomains": %s}\\n\' "$certs"',
+    '    fi',
+    '    exit 0 ;;',
+    'esac',
+    'exit 0'].join('\n'));
   const calls = path.join(root, 'calls');
   const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH, CALLS: calls,
+    TS_COUNT: path.join(root, 'ts-count'), TS_AUTHKEY: '',
     CADDYFILE: path.join(root, 'Caddyfile'), AURA_PROXY: '', AURA_AUTO_UPDATE: '',
     AURA_DOMAIN: 'music.example.test', GOOGLE_CLIENT_ID: '1234-abc.apps.googleusercontent.com',
     GOOGLE_CLIENT_SECRET: 'GOCSPX-secret_value', AURA_EMAILS: 'listener@mail.test, second@mail.test' };
@@ -120,6 +133,20 @@ test('install stops before changing anything when a detail is missing or wrong',
     assert.equal(fs.existsSync(path.join(f.repo, '.local')), false);
     assert.equal(fs.existsSync(path.join(f.repo, 'selfhost/private-app/oauth.env')), false);
   }
+});
+
+test('install without a domain gets a free address from Tailscale and publishes it with Funnel', t => {
+  const f = fixture(t);
+  // The domain line of the block may be left as it is: Tailscale names the server.
+  const run = f.run({ AURA_PROXY: 'tailscale', AURA_DOMAIN: 'music.example.com', CERT_AFTER: '1' });
+  assert.equal(run.status, 0, run.stdout + run.stderr);
+  assert.match(run.stdout, /Enable HTTPS/, 'it waits for the tailnet to turn HTTPS on');
+  assert.deepEqual(JSON.parse(f.read('config.json')).invidiousInstances, ['https://box.tail1234.ts.net']);
+  assert.match(f.read('selfhost/private-app/.env'), /^PUBLIC_HOST=box\.tail1234\.ts\.net$/m);
+  assert.match(f.calls(), /tailscale funnel --bg 4180/);
+  assert.doesNotMatch(f.calls(), /caddy|systemctl (reload|enable --now) caddy/);
+  assert.equal(fs.existsSync(path.join(f.root, 'Caddyfile')), false);
+  assert.match(run.stdout, /https:\/\/box\.tail1234\.ts\.net\/oauth2\/callback/);
 });
 
 test('install leaves the HTTPS proxy alone when told to', t => {

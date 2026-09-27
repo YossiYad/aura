@@ -171,7 +171,8 @@ sign-in, sync and shared listening.
 
 **The quickest way is [INSTALL.md](INSTALL.md):** one block, pasted into a terminal on
 your server, installs everything in Option 2 below - Invidious included - and sets up
-HTTPS. The options below explain each step, for doing it by hand.
+HTTPS, on your own domain or, without one, on a free address from Tailscale. The options
+below explain each step, for doing it by hand.
 
 <details>
 <summary><strong>Option 1: Upload the app to a static HTTPS host</strong></summary>
