@@ -34,7 +34,22 @@
 <button id="clear">Clear log</button>
 <textarea id="log" dir="ltr" readonly aria-label="Check log"></textarea>
 <p><a href="./">Back to Aura</a></p>
+<!-- The network layer, as index.html loads it; src/api/public.js publishes Api. Not src/log.js:
+     it saves under the app's own key and would replace the app's diagnostic log. -->
 <script src="src/api.js"></script>
+<script src="src/api/normalize.js"></script>
+<script src="src/api/search-servers.js"></script>
+<script src="src/api/artists.js"></script>
+<script src="src/api/search.js"></script>
+<script src="src/api/relays.js"></script>
+<script src="src/api/import.js"></script>
+<script src="src/api/match.js"></script>
+<script src="src/api/classify.js"></script>
+<script src="src/api/streams.js"></script>
+<script src="src/api/blobs.js"></script>
+<script src="src/api/segments.js"></script>
+<script src="src/api/lyrics.js"></script>
+<script src="src/api/public.js"></script>
 <script>
 (() => {
   "use strict";
