@@ -223,7 +223,7 @@
     // A verb and nothing after it - a pause right after "תשים לי" - names nothing to look
     // for. Searching for the empty string only failed slowly, or matched an artist with no
     // name in the library.
-    if (!interpreted && intent.kind !== "liked" && !intent.query) throw new Error("איזה שיר, אמן או פלייליסט לנגן?");
+    if (!interpreted && intent.kind !== "liked" && !intent.query) throw new Error(tr("איזה שיר, אמן או פלייליסט לנגן?"));
     const cacheKey = raw + JSON.stringify(Store.playlists().map(p => p.name));
     async function understand() {
       if (onstatus) onstatus(tr("מבין את הבקשה…"));
