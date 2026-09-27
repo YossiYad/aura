@@ -1,14 +1,20 @@
 #!/bin/sh
 # Installs the whole self-hosted Aura on one Linux server: Docker, Invidious, the app's
-# services behind Google sign-in, and Caddy for HTTPS. INSTALL.md has the one block that
-# runs it. Everything it asks for comes in as variables:
+# services behind Google sign-in, and HTTPS - Caddy on your own domain, or Tailscale on a
+# free *.ts.net address. INSTALL.md has the blocks that run it. Everything it asks for
+# comes in as variables:
 #
-#   AURA_DOMAIN           the domain whose DNS points at this server, e.g. music.example.com
+#   AURA_PROXY            caddy (default): HTTPS for AURA_DOMAIN, with Caddy
+#                         tailscale: a free https://<machine>.<tailnet>.ts.net address,
+#                         published with Tailscale Funnel; no domain or open ports needed
+#                         none: an HTTPS proxy of your own
+#   AURA_DOMAIN           the domain whose DNS points at this server, e.g. music.example.com;
+#                         not used with tailscale, which names the server itself
 #   GOOGLE_CLIENT_ID      the Google OAuth client (Web application) for sign-in
 #   GOOGLE_CLIENT_SECRET
 #   AURA_EMAILS           the Google accounts allowed to sign in, separated by spaces
-#   AURA_PROXY            caddy (default), or none to keep an HTTPS proxy of your own
 #   AURA_AUTO_UPDATE      yes to pull and apply updates every minute; no (default)
+#   TS_AUTHKEY            optional, with tailscale: an auth key, to join without a link
 #
 # Running it again is safe. What an earlier run set up is kept: Invidious keeps its keys
 # and database, and a sign-in configuration already on this machine is not overwritten,
@@ -26,6 +32,7 @@ GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-}"
 AURA_EMAILS="${AURA_EMAILS:-}"
 AURA_PROXY="${AURA_PROXY:-caddy}"
 AURA_AUTO_UPDATE="${AURA_AUTO_UPDATE:-no}"
+TS_AUTHKEY="${TS_AUTHKEY:-}"
 CADDYFILE="${CADDYFILE:-/etc/caddy/Caddyfile}"
 
 step() { printf '\n==> %s\n' "$*"; }
@@ -34,13 +41,16 @@ fail() { printf '\nInstall stopped: %s\n' "$*" >&2; exit 1; }
 # ---- What the installer was given, checked before anything changes ----
 
 [ "$(id -u)" -eq 0 ] || fail "run it as root, with sudo (see INSTALL.md)."
-case "$AURA_DOMAIN" in
-  http://*|https://*|*/*|*:*) fail "AURA_DOMAIN is only the name, such as music.example.com - no https://, port or path." ;;
-  *[!A-Za-z0-9.-]*) fail "AURA_DOMAIN may hold only letters, digits, dots and hyphens." ;;
-esac
-if ! printf '%s\n' "$AURA_DOMAIN" | LC_ALL=C grep -Eq '^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$' ||
-   [ "${#AURA_DOMAIN}" -gt 253 ] || [ "$AURA_DOMAIN" = "music.example.com" ]; then
-  fail "set AURA_DOMAIN to your own domain, such as music.example.com."
+case "$AURA_PROXY" in caddy|tailscale|none) ;; *) fail "AURA_PROXY is caddy, tailscale or none." ;; esac
+if [ "$AURA_PROXY" != tailscale ]; then
+  case "$AURA_DOMAIN" in
+    http://*|https://*|*/*|*:*) fail "AURA_DOMAIN is only the name, such as music.example.com - no https://, port or path." ;;
+    *[!A-Za-z0-9.-]*) fail "AURA_DOMAIN may hold only letters, digits, dots and hyphens." ;;
+  esac
+  if ! printf '%s\n' "$AURA_DOMAIN" | LC_ALL=C grep -Eq '^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?$' ||
+     [ "${#AURA_DOMAIN}" -gt 253 ] || [ "$AURA_DOMAIN" = "music.example.com" ]; then
+    fail "set AURA_DOMAIN to your own domain, such as music.example.com."
+  fi
 fi
 if [ ! -f "$APP_DIR/oauth.env" ]; then
   case "$GOOGLE_CLIENT_ID" in
@@ -60,7 +70,6 @@ if [ ! -f "$APP_DIR/authenticated-emails.txt" ]; then
   done
   set +f
 fi
-case "$AURA_PROXY" in caddy|none) ;; *) fail "AURA_PROXY is caddy or none." ;; esac
 case "$AURA_AUTO_UPDATE" in yes|no) ;; *) fail "AURA_AUTO_UPDATE is yes or no." ;; esac
 
 # ---- The tools ----
@@ -120,6 +129,47 @@ if [ "$AURA_PROXY" = caddy ]; then
     apt_install caddy
     command -v caddy >/dev/null 2>&1 || fail "Caddy did not install. Install it with https://caddyserver.com/docs/install and run this again."
   fi
+fi
+
+if [ "$AURA_PROXY" = tailscale ]; then
+  command -v systemctl >/dev/null 2>&1 || fail "setting up Tailscale needs systemd. Install Tailscale yourself, or run with AURA_PROXY=none (see INSTALL.md)."
+  if ! command -v tailscale >/dev/null 2>&1; then
+    step "Installing Tailscale"
+    curl -fsSL https://tailscale.com/install.sh | sh || true
+    command -v tailscale >/dev/null 2>&1 ||
+      fail "Tailscale did not install. Install it with https://tailscale.com/download/linux and run this again."
+  fi
+  systemctl enable --now tailscaled >/dev/null 2>&1 || true
+  step "Connecting to Tailscale"
+  if ! tailscale status >/dev/null 2>&1; then
+    if [ -n "$TS_AUTHKEY" ]; then
+      tailscale up --authkey="$TS_AUTHKEY"
+    else
+      echo "Open the link below and sign in to add this server to your tailnet:"
+      tailscale up
+    fi
+  fi
+  tailscale status >/dev/null 2>&1 || fail "this server is not connected to Tailscale. Run this again to get a new sign-in link."
+  # The certificate for the server's *.ts.net name comes from the tailnet's HTTPS setting,
+  # which only its admin can turn on. Waited for here, since everything after needs it.
+  has_cert() { tailscale status --json 2>/dev/null | tr -d ' \n\t' | grep -q '"CertDomains":\["'; }
+  if ! has_cert; then
+    echo "Turn on HTTPS for your tailnet: open https://login.tailscale.com/admin/dns, make sure"
+    echo "MagicDNS is on, and press Enable HTTPS. This waits for it."
+    waited=0
+    until has_cert; do
+      [ "$waited" -lt 900 ] || fail "HTTPS is still off for your tailnet. Enable it, then run this again."
+      sleep 5; waited=$((waited + 5))
+    done
+  fi
+  if command -v jq >/dev/null 2>&1; then
+    AURA_DOMAIN=$(tailscale status --json | jq -r '.Self.DNSName')
+  else
+    AURA_DOMAIN=$(tailscale status --json | tr ',' '\n' | grep -m1 '"DNSName"' | cut -d'"' -f4)
+  fi
+  AURA_DOMAIN=${AURA_DOMAIN%.}
+  case "$AURA_DOMAIN" in *.ts.net) ;; *) fail "could not read this server's Tailscale name." ;; esac
+  echo "This server is https://$AURA_DOMAIN"
 fi
 
 # ---- Invidious ----
@@ -227,6 +277,12 @@ EOF
   fi
   if systemctl is-active --quiet caddy; then systemctl reload caddy; else systemctl enable --now caddy; fi
 fi
+if [ "$AURA_PROXY" = tailscale ]; then
+  step "Publishing https://$AURA_DOMAIN with Tailscale Funnel"
+  # Funnel can print a link to allow it for this tailnet, so this runs where it is seen.
+  tailscale funnel --bg "$OAUTH_PORT" ||
+    fail "Tailscale Funnel is not allowed for this server. Allow it for your tailnet when the link above asks, or in the admin console, then run this again."
+fi
 
 # ---- Updates ----
 
@@ -243,7 +299,7 @@ fi
 
 # ---- Done ----
 
-if [ "$AURA_PROXY" = caddy ]; then
+if [ "$AURA_PROXY" != none ]; then
   step "Checking https://$AURA_DOMAIN"
   code=000; waited=0
   while [ "$waited" -lt 90 ]; do
@@ -253,7 +309,11 @@ if [ "$AURA_PROXY" = caddy ]; then
   done
   case "$code" in
     2??|3??|401|403) echo "It answers over HTTPS." ;;
-    *) echo "It does not answer over HTTPS yet. Check that $AURA_DOMAIN points at this server's public address and that ports 80 and 443 reach it; Caddy gets the certificate by itself once they do. Its log: journalctl -u caddy --since -10min" ;;
+    *) if [ "$AURA_PROXY" = tailscale ]; then
+         echo "It does not answer over HTTPS yet. Funnel can take a minute to reach a new address; check it with: tailscale funnel status"
+       else
+         echo "It does not answer over HTTPS yet. Check that $AURA_DOMAIN points at this server's public address and that ports 80 and 443 reach it; Caddy gets the certificate by itself once they do. Its log: journalctl -u caddy --since -10min"
+       fi ;;
   esac
 else
   step "Point your HTTPS proxy at the app"
@@ -264,7 +324,7 @@ cat <<EOF
 
 Aura is installed.
   Open:          https://$AURA_DOMAIN
-  Google sign-in redirect URI (must be on your OAuth client exactly):
+  Google sign-in redirect URI (add it to your OAuth client, exactly):
                  https://$AURA_DOMAIN/oauth2/callback
   Update later:  cd $REPO_DIR && sudo git pull --ff-only && sudo sh selfhost/private-app/setup.sh
 EOF
