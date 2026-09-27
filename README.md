@@ -385,6 +385,34 @@ Aura uses vanilla JavaScript modules loaded by `index.html`, with a service work
 updates and offline caching. There is no frontend framework or bundler. Optional
 backend services live under `selfhost/`.
 
+Each file is a plain script that hands its API to the next through one global on
+`window`, loaded in order by `index.html`. A module that grew too large is split into a
+folder beside its first file, such as `src/views.js` and `src/views/`; its files share
+`window.Aura.<module>`, and the first file's header explains how.
+
+| File | What it owns |
+| --- | --- |
+| `src/api.js`, `src/api/` | Instances, search, streams, matching, lyrics, SponsorBlock |
+| `src/store.js`, `src/store/` | Everything persisted, and the only thing that writes `localStorage` |
+| `src/player.js`, `src/player/` | The audio element, queue, crossfade, media session |
+| `src/cast.js` | TV receiver connection, artwork, media controls and queue |
+| `src/voice.js`, `src/voice/` | Continuous dictation and playback request resolution |
+| `src/thinking-orbs/` | The AI's thinking orb: the `<thinking-orb>` element in `orbs.js`, around the thinking-orbs engine in `vendor/` |
+| `src/views.js`, `src/views/` | Every screen |
+| `src/ai.js` | Gemini and Groq, key handling, prompts, voice transcription |
+| `src/sync.js`, `src/sync/` | Talking to a self-hosted `aura-sync` |
+| `src/shared-queue.js` | AuraShare on the host's side: the session, guest approvals and QR invitations |
+| `src/push.js` | Web Push subscription |
+| `src/nightly.js` | The daily prep scheduler |
+| `src/progress.js` | The wavy song timeline in the players, driving mode and the TV |
+| `src/orientation.js` | The portrait lock setting |
+| `src/log.js` | The in-app diagnostic log |
+| `src/main.js`, `src/main/` | Wiring it together |
+| `guest/` | The AuraShare page guests open from the QR code |
+| `guest/i18n.js` | The interface language and its English translations, used by the app and the guest page |
+| `tv/` | The custom Google Cast receiver |
+| `sw.js` | Service worker: cache-first shell, offline, background wake-ups |
+
 Run the unit and integration suite with Node.js 22 or newer:
 
 ```sh
