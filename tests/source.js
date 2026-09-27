@@ -2,7 +2,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 // How the tests read the client code. A module is src/<name>.js together with any files
-// under src/<name>/ and any third-party code in src/vendor/ it wraps, joined in the order
+// under src/<name>/, or every file in a folder of its own (see FOLDERS), joined in the order
 // index.html loads them - the same code, in the same order, the browser runs. A module
 // that is split into smaller files therefore reads exactly as it did when it was one, and
 // a test that pulls a function out by name finds it whichever of the files it moved to.
@@ -18,15 +18,16 @@ function pageScripts(page = "index.html") {
     .map(src => path.posix.normalize(src.startsWith("/") ? src.slice(1) : path.posix.join(dir, src)));
 }
 
-// Third-party code under src/vendor/, by the module that wraps it. It opens that module's
-// namespace and is read as the module's first file.
-const VENDORED = { orbs: ["src/vendor/thinking-orbs.js"] };
+// Modules kept in a folder of their own, named after the third-party code at their heart,
+// which sits in that folder's vendor/ and is read as the module's first file: it opens the
+// module's namespace.
+const FOLDERS = { orbs: "src/thinking-orbs/" };
 
 // The files that make up one module, in load order. Accepts "views" or "src/views.js".
 function moduleFiles(name) {
   const id = String(name).replace(/^src\//, "").replace(/\.js$/, "");
-  const vendored = VENDORED[id] || [];
-  const own = file => file === "src/" + id + ".js" || file.startsWith("src/" + id + "/") || vendored.includes(file);
+  const folder = FOLDERS[id];
+  const own = file => folder ? file.startsWith(folder) : file === "src/" + id + ".js" || file.startsWith("src/" + id + "/");
   const loaded = pageScripts().filter(own);
   if (loaded.length) return loaded;
   // Not loaded by the phone app (the TV page has its own), so there is no order to follow.

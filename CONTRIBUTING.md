@@ -38,10 +38,11 @@ git-ignored `config.json`, using `config.example.json` as a starting point.
   file to make that so. The header of each module's first file (`src/views.js`,
   `src/player.js`, `src/api.js`, `src/main.js`, `src/store.js`, `src/sync.js`,
   `src/voice.js`) has the details.
-- Third-party code lives in `src/vendor/`, kept exactly as upstream publishes it and listed
-  in `THIRD-PARTY-NOTICES.md`; VS Code opens it read-only (`.vscode/settings.json`).
-  Change the code of ours that wraps it instead, such as the `<thinking-orb>` element in
-  `src/orbs.js` around `src/vendor/thinking-orbs.js`.
+- Third-party code lives in a `vendor/` folder inside the folder of the code of ours that
+  uses it, kept exactly as upstream publishes it and listed in `THIRD-PARTY-NOTICES.md`;
+  VS Code opens it read-only (`.vscode/settings.json`). Change the code of ours that wraps
+  it instead, such as the `<thinking-orb>` element in `src/thinking-orbs/orbs.js` around
+  `src/thinking-orbs/vendor/thinking-orbs.js`.
 - Add regression coverage for behavior changes. Use invented fixtures and example
   addresses instead of personal data, credentials or copied lyrics.
 - Keep private configuration, cookies, logs and downloaded media out of commits.

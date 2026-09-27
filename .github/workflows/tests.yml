@@ -23,5 +23,5 @@ jobs:
       - run: node --test tests/*.test.js
       # The client is plain JavaScript typed with JSDoc and src/*.d.ts. TypeScript checks
       # those types without building anything (jsconfig.json), and a type error fails the
-      # run the way a failing test does. Third-party code in src/vendor/ is not checked.
+      # run the way a failing test does. Third-party code in a vendor/ folder is not checked.
       - run: npx --yes --package typescript@5.9.3 tsc -p jsconfig.json

@@ -326,8 +326,10 @@ test('nginx allows only published client assets and denies server files',()=>{
  for(const path of ['/index.html','/config.json','/app-revision.txt','/src/main.js','/src/views.js','/sw.js','/icon-180.png'])assert.equal(allowed(path),true,path);
  // A module split into smaller files is served without another edit to the rule...
  for(const path of ['/src/views/home.js','/src/player/downloads.js','/src/app.css'])assert.equal(allowed(path),true,path);
- // ...but only scripts and stylesheets, and no deeper than one folder.
- for(const path of ['/src/globals.d.ts','/jsconfig.json','/src/views/home.js.map','/src/a/b/c.js','/src/../selfhost/private-app/ai.env','/src/.env','/src/views/.hidden.js'])assert.equal(allowed(path),false,path);
+ // ...and so is third-party code in that folder's vendor/...
+ for(const path of ['/src/thinking-orbs/vendor/thinking-orbs.js','/src/thinking-orbs/orbs.js'])assert.equal(allowed(path),true,path);
+ // ...but only scripts and stylesheets, and no deeper than one folder and its vendor/.
+ for(const path of ['/src/globals.d.ts','/jsconfig.json','/src/views/home.js.map','/src/a/b/c.js','/src/a/vendor/b/c.js','/src/a/b/vendor/c.js','/src/../selfhost/private-app/ai.env','/src/.env','/src/views/.hidden.js'])assert.equal(allowed(path),false,path);
  assert(source.includes('location / { return 404; }'));
 });
 // src/progress.js and src/progress.css joined the pages and the shell without joining the

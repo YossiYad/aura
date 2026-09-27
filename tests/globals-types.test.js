@@ -26,7 +26,7 @@ const MODULES = [
   ["src/voice.js", "window.Voice = {", "AuraVoice"],
   ["src/shared-queue.js", "window.SharedQueue = {", "AuraSharedQueue"],
   ["src/progress.js", "return { create", "AuraSongProgress"],
-  ["src/orbs.js", "return { engine", "AuraOrbs"],
+  ["src/thinking-orbs/orbs.js", "return { engine", "AuraOrbs"],
   ["src/orientation.js", "window.AppOrientation = {", "AuraAppOrientation"],
   ["src/views.js", "window.Views = {", "AuraViews"]
 ];
