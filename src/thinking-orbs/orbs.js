@@ -2,7 +2,7 @@
    each thing the app can honestly say it is doing - listening, searching, composing.
 
    The drawing engine is thinking-orbs, third-party code kept as published with its MIT
-   licence in src/vendor/thinking-orbs.js and loaded just before this file. This file is
+   licence in vendor/thinking-orbs.js beside it and loaded just before this file. This file is
    Aura's own: the <thinking-orb> element, which reaches the engine through V,
    window.Aura.orbs. */
 window.Orbs = (function () {

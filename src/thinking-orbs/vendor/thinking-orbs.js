@@ -4,7 +4,7 @@
    TypeScript types, the modules were joined in dependency order and the long dashes in the
    comments became hyphens. No number or formula was retyped, and tests/orbs.test.js holds
    what it draws to upstream's own golden vectors. Left out are the React component, its
-   theme hooks and the MODE_DRAWS table, which the <thinking-orb> element in src/orbs.js
+   theme hooks and the MODE_DRAWS table, which the <thinking-orb> element in src/thinking-orbs/orbs.js
    stands in for. The closure around it is Aura's: it hands the element what it uses
    through V, window.Aura.orbs, published below.
 
@@ -31,7 +31,7 @@
    SOFTWARE. */
 (function () {
   const V = (window.Aura = window.Aura || {}).orbs = {};
-  // Published on V for the other files of this module; see src/orbs.js.
+  // Published on V for the other files of this module; see ../orbs.js.
   Object.defineProperties(V, {
     MODE_FRAMES: { get: () => MODE_FRAMES },
     paintFrame: { get: () => paintFrame },

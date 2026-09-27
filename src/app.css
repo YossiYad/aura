@@ -2947,7 +2947,7 @@ html.ios-standalone:not(.ios-system-gap) .player {
 }
 
 /* The Ask screen is one orb and two lines of text, and the orb is the AI: the dotted
-   thought-orb from src/orbs.js, drawn on a canvas. It breathes at rest and changes to
+   thought-orb from src/thinking-orbs/orbs.js, drawn on a canvas. It breathes at rest and changes to
    whatever the request is doing, so the wait is reported by the thing being waited on
    rather than by a spinner beside it. Nothing is drawn around it - no disc, no rim: the
    button is only the orb's own square, and the orb floats free on the page. */

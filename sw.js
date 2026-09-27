@@ -1,4 +1,4 @@
-const CACHE = "aura-v205";
+const CACHE = "aura-v206";
 const SHELL = [
   "./",
   "./index.html",
@@ -72,8 +72,8 @@ const SHELL = [
   "./src/voice.js",
   "./src/voice/requests.js",
   "./src/shared-queue.js",
-  "./src/vendor/thinking-orbs.js",
-  "./src/orbs.js",
+  "./src/thinking-orbs/vendor/thinking-orbs.js",
+  "./src/thinking-orbs/orbs.js",
   "./src/views.js",
   "./src/views/covers.js",
   "./src/views/home.js",

@@ -8,13 +8,13 @@ when a server is built, and the services the app talks to while it runs.
 
 ### thinking-orbs
 
-- **What:** the dotted-orb engine in `src/vendor/thinking-orbs.js`. It is upstream's
+- **What:** the dotted-orb engine in `src/thinking-orbs/vendor/thinking-orbs.js`. It is upstream's
   `src/engine/*` and `src/presets.ts`, version 0.3.1 at commit `de85557`, with the
   TypeScript types stripped and the modules joined into one file. The `<thinking-orb>`
-  element in `src/orbs.js` is Aura's own.
+  element in `src/thinking-orbs/orbs.js` is Aura's own.
 - **From:** <https://github.com/Jakubantalik/thinking-orbs>
 - **Licence:** MIT, Copyright (c) 2026 Jakub Antalik. The full text also sits at the top
-  of `src/vendor/thinking-orbs.js`, so it travels with the file.
+  of `src/thinking-orbs/vendor/thinking-orbs.js`, so it travels with the file.
 
 ### spotify-clone (design reference)
 
