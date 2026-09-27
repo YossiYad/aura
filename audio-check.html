@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="he" dir="rtl">
+<html lang="en" dir="ltr">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Aura | בדיקת חזרה לניגון</title>
+<title>Aura | Playback recovery check</title>
 <style>
   :root { color-scheme: dark; font: 17px system-ui, sans-serif; background: #13151b; color: #f2f3f8; }
   body { max-width: 680px; margin: auto; padding: 24px 18px; line-height: 1.65; }
@@ -15,25 +15,25 @@
   textarea { box-sizing: border-box; width: 100%; height: 300px; margin-top: 16px; font: 12px monospace; background: #20232c; color: #f2f3f8; }
   a { color: #b9c8ff; }
 </style>
-<h1>בדיקת חזרה לניגון אחרי הפרעה</h1>
-<p>עצרו את הניגון ב־Aura לפני הבדיקה. טענו את שיר הבדיקה ואז לחצו על ▶ בנגן שמתחת.</p>
-<button id="stream">טען את שיר הבדיקה</button>
-<label>לבדיקה נפרדת, אפשר לבחור קובץ אודיו מהמכשיר. הקובץ אינו מועלה לשרת.
+<h1>Playback recovery after an interruption</h1>
+<p>Stop playback in Aura before the check. Load the test song, then press ▶ in the player below.</p>
+<button id="stream">Load the test song</button>
+<label>For a separate check, you can choose an audio file from this device. The file is not uploaded anywhere.
   <input id="file" type="file" accept="audio/*">
 </label>
-<p id="status" role="status">ממתין לבחירת אודיו.</p>
+<p id="status" role="status">Waiting for audio to be chosen.</p>
 <audio id="audio" controls playsinline preload="auto"></audio>
 <ol>
-  <li>ודאו ששומעים מוזיקה, ואז עברו לאינסטגרם או ענו לשיחת טלפון.</li>
-  <li>המתינו לפחות 30 שניות בריל, או המשיכו לשיחה של כמה דקות.</li>
-  <li>צאו מהריל או סיימו את השיחה. הישארו מחוץ לדף כ־10 שניות ובדקו אם המוזיקה חזרה.</li>
-  <li>חזרו לכאן, העתיקו את הלוג וציינו איזו הפרעה בדקתם והאם שמעתם מוזיקה לפני שחזרתם.</li>
+  <li>Make sure music is playing, then switch to Instagram or answer a phone call.</li>
+  <li>Stay on a reel for at least 30 seconds, or keep the call going for a few minutes.</li>
+  <li>Leave the reel or end the call. Stay away from this page for about 10 seconds and listen for whether the music comes back.</li>
+  <li>Come back here, copy the log, and note which interruption you tested and whether you heard music before you came back.</li>
 </ol>
-<p>הבדיקה משתמשת בנגן הדפדפן. היא מתעדת אירועים וזמן ניגון ואינה מנסה להפעיל מחדש אודיו אחרי הפרעה.</p>
-<button id="copy">העתק לוג</button>
-<button id="clear">נקה לוג</button>
-<textarea id="log" dir="ltr" readonly aria-label="לוג הבדיקה"></textarea>
-<p><a href="./">חזרה ל־Aura</a></p>
+<p>The check uses the browser's own player. It records events and playback time, and never tries to restart audio after an interruption.</p>
+<button id="copy">Copy log</button>
+<button id="clear">Clear log</button>
+<textarea id="log" dir="ltr" readonly aria-label="Check log"></textarea>
+<p><a href="./">Back to Aura</a></p>
 <script src="src/api.js"></script>
 <script>
 (() => {
@@ -114,12 +114,12 @@
     audio.src = url;
     audio.load();
     snapshot("source selected");
-    status.textContent = "האודיו נבחר. לחצו על ▶ בנגן כדי להתחיל.";
+    status.textContent = "Audio chosen. Press ▶ in the player to start.";
   }
   stream.addEventListener("click", async () => {
     const request = ++generation;
     stream.disabled = true;
-    status.textContent = "טוען את שיר הבדיקה…";
+    status.textContent = "Loading the test song…";
     log("resolving test track xjsrJa3oNFY");
     try {
       const resolved = await Api.resolve("xjsrJa3oNFY", { receiverCompatible: true });
@@ -130,7 +130,7 @@
       if (request !== generation) return;
       // Do not copy signed media URLs or server responses into the diagnostic log.
       log("stream lookup failed: " + err.name);
-      status.textContent = "לא ניתן לטעון את השיר. אפשר לנסות שוב או לבחור קובץ מהמכשיר.";
+      status.textContent = "The song could not be loaded. Try again or choose a file from this device.";
     } finally { stream.disabled = false; }
   });
   file.addEventListener("change", () => {
@@ -148,12 +148,12 @@
   document.getElementById("copy").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(output.value);
-      status.textContent = "הלוג הועתק.";
+      status.textContent = "Log copied.";
     } catch (err) {
       output.focus();
       output.select();
       output.setSelectionRange(0, output.value.length);
-      status.textContent = "בחרו העתקה בתפריט הטקסט כדי להעתיק את הלוג המסומן.";
+      status.textContent = "Choose Copy from the text menu to copy the selected log.";
     }
   });
 })();

@@ -5,7 +5,7 @@ AuraShare lets invited guests choose music without an application account.
 The guest interface uses Aura's dark palette, green actions, artwork and search layout.
 Its hamburger menu opens two views: Home, with approved song cards and proposals to vote
 on, and Search and add, with live search and an action beside every song. Direct guests
-see “הוסף”; guests who need approval see “בקש להוסיף”. Pending or approved songs show
+see **Add**; guests who need approval see **Request to add** (“הוסף” and “בקש להוסיף” in Hebrew). Pending or approved songs show
 their status and cannot be submitted again. Navigation preserves the current search.
 Voting-only guests see Home without search or add controls. Permission changes update
 the interface on the next state refresh, including while a search is in progress.

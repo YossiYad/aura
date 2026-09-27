@@ -1,28 +1,28 @@
-# הקמת שרת Cobalt פרטי ל-Aura (חינם, בלי כרטיס אשראי) - Hugging Face Spaces
+# Setting up a private Cobalt server for Aura (free, no credit card) - Hugging Face Spaces
 
-Koyeb התחילו לדרוש כרטיס אשראי. **Hugging Face Spaces** חינם לגמרי, בלי כרטיס אשראי, ומריץ Docker. זו הדרך המומלצת עכשיו.
+Koyeb has started asking for a credit card. **Hugging Face Spaces** is completely free, needs no credit card, and runs Docker. This is now the recommended way.
 
-## שלב 1 - הרשמה
+## Step 1 - Sign up
 
-1. היכנס ל-https://huggingface.co/join
-2. הירשם עם אימייל או GitHub. אין צורך בכרטיס אשראי.
-3. אמת את האימייל.
+1. Go to https://huggingface.co/join
+2. Sign up with an email address or GitHub. No credit card is needed.
+3. Confirm your email address.
 
-## שלב 2 - יצירת Space
+## Step 2 - Create a Space
 
-1. לך ל-https://huggingface.co/new-space
-2. **Space name:** `aura-cobalt` (או כל שם).
-3. **License:** אפשר להשאיר ריק / mit.
-4. **Select the SDK:** בחר **Docker** → ואז **Blank** (תבנית ריקה).
-5. **Hardware:** השאר **CPU basic - free**.
-6. **Visibility:** Public (חינם; Private דורש הגדרה נוספת).
-7. לחץ **Create Space**.
+1. Go to https://huggingface.co/new-space
+2. **Space name:** `aura-cobalt` (or any name).
+3. **License:** can be left empty, or mit.
+4. **Select the SDK:** choose **Docker**, then **Blank** (the empty template).
+5. **Hardware:** leave **CPU basic - free**.
+6. **Visibility:** Public (free; Private needs extra setup).
+7. Click **Create Space**.
 
-## שלב 3 - העלאת שני קבצים
+## Step 3 - Add two files
 
-ב-Space החדש, לשונית **Files** → **Add file** → **Create a new file**. צור שני קבצים:
+In the new Space, open the **Files** tab → **Add file** → **Create a new file**. Create two files:
 
-### קובץ 1: `Dockerfile`
+### File 1: `Dockerfile`
 ```
 FROM ghcr.io/imputnet/cobalt:10
 
@@ -32,7 +32,7 @@ ENV API_LISTEN_ADDRESS=0.0.0.0
 EXPOSE 7860
 ```
 
-### קובץ 2: `README.md`
+### File 2: `README.md`
 ```
 ---
 title: Aura Cobalt
@@ -47,37 +47,37 @@ pinned: false
 Private Cobalt instance for Aura.
 ```
 
-(שני הקבצים כבר מוכנים ב-repo תחת `deploy/cobalt-hf/` - אפשר פשוט להעתיק משם.)
+(Both files are ready in this repository under `deploy/cobalt-hf/`, so you can copy them from there.)
 
-## שלב 4 - הגדרת API_URL
+## Step 4 - Set API_URL
 
-1. אחרי יצירת הקבצים, ה-Space יתחיל לבנות (Building). חכה שיעלה.
-2. ה-URL הציבורי של ה-Space הוא בפורמט: `https://<USERNAME>-aura-cobalt.hf.space`
-   (רואים אותו בכפתור **⋮** → **Embed this Space**, או פשוט מרכיבים: שם-משתמש + מקף + שם-Space).
-3. לך ל-**Settings** של ה-Space → **Variables and secrets** → **New variable**:
+1. Once the files are created, the Space starts building. Wait for it to come up.
+2. The Space's public URL looks like `https://<USERNAME>-aura-cobalt.hf.space`
+   (shown under the **⋮** button → **Embed this Space**, or put it together yourself: user name, a hyphen, then the Space name).
+3. Go to the Space's **Settings** → **Variables and secrets** → **New variable**:
    - **Name:** `API_URL`
-   - **Value:** ה-URL המלא עם `/` בסוף, למשל `https://your-name-aura-cobalt.hf.space/`
-4. **Restart** ל-Space (Settings → Factory reboot / Restart).
+   - **Value:** the full URL with a trailing `/`, for example `https://your-name-aura-cobalt.hf.space/`
+4. **Restart** the Space (Settings → Factory reboot / Restart).
 
-**קריטי:** `API_URL` חייב להיות בדיוק ה-URL הציבורי עם `/` בסוף, אחרת ה-tunnel לא יעבוד.
+**Important:** `API_URL` must be exactly the public URL with a trailing `/`, or the tunnel will not work.
 
-## שלב 5 - בדיקה
+## Step 5 - Check it
 
-פתח בדפדפן: `https://<USERNAME>-aura-cobalt.hf.space/`
-אם רואה JSON עם `"cobalt"` ו-`"version"` - השרת עובד.
+Open `https://<USERNAME>-aura-cobalt.hf.space/` in a browser.
+If you see JSON with `"cobalt"` and `"version"`, the server is working.
 
-## שלב 6 - חיבור ל-Aura
+## Step 6 - Connect it to Aura
 
-1. Aura → **הגדרות** → שדה **"Your private Cobalt server"**.
-2. הדבק את ה-URL עם `/` בסוף.
-3. **Save**, נגן שיר, פתח **Show logs** - אמור להופיע `[cobalt] stream OK via <ה-Space שלך>`.
+1. In Aura, open **Settings** and find the **"Your private Cobalt server"** field.
+2. Paste the URL with the trailing `/`.
+3. Click **Save**, play a song and open **Show logs**. You should see `[cobalt] stream OK via <your Space>`.
 
-## הערות
+## Notes
 
-- **חינם לגמרי, בלי כרטיס.** מתאים ל-10 משתמשים.
-- Space חינמי נרדם אחרי ~48 שעות חוסר פעילות. הבקשה הראשונה אחרי שינה איטית (~30ש'), אחר כך מהיר.
-- אם YouTube חוסם אחרי כמה שבועות (`youtube.login`): הוסף cookies של YouTube דרך משתנה סביבה, פירוט: https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md
+- **Completely free, no card.** Enough for about 10 users.
+- A free Space goes to sleep after about 48 hours without activity. The first request after it wakes is slow (about 30 seconds); after that it is fast.
+- If YouTube starts blocking it after a few weeks (`youtube.login`), add YouTube cookies through an environment variable. The [cookie converter](../deploy/cobalt-hf/cookies-converter.html) turns an exported cookies.txt into the format Cobalt expects. Details: https://github.com/imputnet/cobalt/blob/main/docs/run-an-instance.md
 
-## חלופה בלי כרטיס: Render
+## Another option without a card: Render
 
-גם https://render.com מציע web service חינמי בלי כרטיס אשראי. שם צריך repo עם ה-Dockerfile (אפשר לפצל את `deploy/cobalt-hf/` לריפו נפרד ולחבר). Hugging Face פשוט יותר, לכן הוא המומלץ.
+https://render.com also offers a free web service without a credit card. It needs a repository containing the Dockerfile (you can split `deploy/cobalt-hf/` into its own repository and connect that). Hugging Face is simpler, which is why it is the recommended option.
