@@ -9,6 +9,8 @@
 Music, podcasts and playlists in an installable web app.\
 Built with vanilla JavaScript, with optional AI features and self-hosting.
 
+[![Install on your server](https://img.shields.io/badge/Install_on_your_server-one_block-1ed760?style=for-the-badge&logo=gnubash&logoColor=white&labelColor=181818)](INSTALL.md)
+
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSE)
 [![Progressive Web App](https://img.shields.io/badge/app-PWA-8b5cf6)](#quick-start)
 [![No build step](https://img.shields.io/badge/build-none-22c55e)](#development)
