@@ -370,7 +370,7 @@ See [third-party notices](THIRD-PARTY-NOTICES.md) for the services and component
 | --- | --- |
 | [Private server](selfhost/private-app/README.md) | Installation, authentication, sync, notifications and updates. |
 | [Invidious](selfhost/invidious/README.md) | Running your own search and playback backend. |
-| [AI providers](docs/ai-providers.md) | Gemini and Groq setup and connection troubleshooting (Hebrew). |
+| [AI providers](docs/ai-providers.md) | Gemini and Groq setup, key testing, voice transcription on iPhone and connection troubleshooting. |
 | [Shared queues](docs/shared-queue.md) | QR invitations, guest permissions and host controls. |
 | [TV playback](docs/tv-playback.md) | AirPlay, Google Cast and custom receiver setup. |
 | [Audio interruptions](docs/audio-interruptions.md) | Background playback behavior and device troubleshooting. |
