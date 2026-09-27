@@ -73,3 +73,31 @@ test('speech follows interface language until explicitly selected', () => {
   h.I18n.setLanguage('he');
   assert.equal(h.I18n.speechLanguage(), 'he-IL');
 });
+
+// Messages that reach the listener as Hebrew literals - the voice errors, the shared
+// queue server's refusals and the voice request errors - each need an English line, or
+// an English interface shows them in Hebrew.
+const hebrew = /[֐-׿]/;
+const read = file => fs.readFileSync(require.resolve('../' + file), 'utf8');
+
+test('every voice error and shared queue refusal has an English translation', () => {
+  const { I18n } = language();
+  const search = read('src/views/search.js');
+  const start = search.indexOf('const VOICE_ERRORS');
+  const voiceErrors = [...search.slice(start, search.indexOf('};', start)).matchAll(/"([^"]*)"/g)].map(m => m[1]);
+  const refusals = [...read('selfhost/private-app/queue/server.js').matchAll(/fail\(\d+,\s*([^;]*?)\);/g)]
+    .flatMap(m => [...m[1].matchAll(/'([^']*)'/g)].map(s => s[1]));
+  const messages = voiceErrors.concat(refusals).filter(text => hebrew.test(text));
+  assert(messages.length > 20, 'the messages were found');
+  assert.deepEqual(messages.filter(text => hebrew.test(I18n.t(text))), []);
+});
+
+test('Hebrew voice request errors go through the translation', () => {
+  const { I18n } = language();
+  for (const file of ['src/views/search.js', 'src/voice/requests.js']) {
+    const source = read(file);
+    assert.deepEqual([...source.matchAll(/new Error\("([^"]*)"\)/g)].map(m => m[1]).filter(text => hebrew.test(text)), [], file);
+    const wrapped = [...source.matchAll(/tr\("([^"]*)"\)/g)].map(m => m[1]).filter(text => hebrew.test(text));
+    assert.deepEqual(wrapped.filter(text => hebrew.test(I18n.t(text))), [], file);
+  }
+});

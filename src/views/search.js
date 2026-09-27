@@ -448,7 +448,7 @@
         // behind it out of order. A shared queue files each contribution after the
         // earlier ones, so there the list goes in first-first.
         if (!queued) {
-          if (!Player.playQueue(tracks, 0)) throw new Error("לא ניתן לנגן את השירים האלה.");
+          if (!Player.playQueue(tracks, 0)) throw new Error(tr("לא ניתן לנגן את השירים האלה."));
         } else if (Player.shareSession && Player.shareSession()) tracks.forEach(track => Player.playNext(track));
         else tracks.slice().reverse().forEach(track => Player.playNext(track));
       } else if (append) {
