@@ -181,10 +181,10 @@ nothing for 31 s until reopening, when the overdue tick, the pending context
 `resume()`, one `play()` and confirmed progress all arrived within half a second.
 Nothing the platform sends during a long interruption reaches a page in that state.
 
-### The two timelines, re-checked against WebKit trunk (2026-09-28)
+### The three timelines, re-checked against WebKit trunk (2026-09-28)
 
-A short and a long interruption are identical until WebKit's audible timer runs
-out; the file and line references are trunk as of that date.
+Every interruption starts the same way; what happens next depends on how long the
+other app keeps the audio. The file and line references are trunk as of that date.
 
 - The other app activates its session. `AudioSessionIOS.mm` observes the
   `AVAudioSessionInterruptionNotification` and `AudioSession::beginInterruption`
@@ -194,14 +194,36 @@ out; the file and line references are trunk as of that date.
   `WebPageProxy::updateThrottleState` starts the `audibleActivityClearDelay`
   timer, still `10_s` (`WebPageProxy.cpp`). Aura records the hold with the
   listener's intent kept and pauses nothing (`pauseIfRunning`).
-- Short interruption, the end arrives inside those ten seconds: the `ended`
-  notification with `ShouldResume` reaches `AudioSession::endInterruption`, the
-  element's `endInterruption` restores `Playing`, and
-  `HTMLMediaElement::mayResumePlayback(true)` calls `play()` itself. That is the
-  automatic resume the listener sees; Aura's `play` handler only verifies that the
-  clock advances afterwards.
-- Long interruption: the timer fires, `clearAudibleActivity` drops the process's
-  last assertion, `ProcessThrottler` sends `PrepareToSuspend`
+- The end arrives within about five seconds: the `ended` notification with
+  `ShouldResume` reaches `AudioSession::endInterruption`, the element's
+  `endInterruption` restores `Playing`, and
+  `HTMLMediaElement::mayResumePlayback(true)` calls `play()` itself. Playback
+  continues; Aura's `play` handler only verifies that the clock advances.
+- The end arrives later, but before the process is suspended (an 8.0 s reel,
+  iPhone, 2026-09-28): the page runs throughout (`hold hidden 8.0s until native
+  play event: page ran throughout`), WebKit's own resume fires `play`, the session
+  event and the context's `running` follow within ten milliseconds, and the clock
+  never moves. The pause/play restart and the decoder reload change nothing; after
+  the reload the element reaches only `HAVE_METADATA` and reports `stalled`.
+  Reopening the app and one `play()` gave progress within 300 ms. This is the
+  shape of WebKit bug 323022 (unpaused and frozen, `load()` restores no audio),
+  whose reporter placed the broken state in the page's audio session. The page
+  cannot repair that session: after an interruption WebKit never re-issues the
+  platform activation. `RemoteAudioSessionProxyManager::tryToSetActiveForProcess`
+  resolves without calling `setActive:YES` while its proxy is already active and
+  no longer interrupted, and the interruption observer only forwards the end. A
+  real activation follows only `processDidResume` after a suspension, or a
+  deactivation first, which `maybeDeactivateAudioSession` allows only with no
+  session left in the process (`removeSession` checks `hasNoSession()`), no
+  declared session type and no interruption in progress; a page with a media
+  element and `navigator.mediaSession` never has no session, and
+  `MediaSessionManageriOS::sessionWillEndPlayback` skips deactivation in the
+  background. Whether a re-activation would even help is untested; the log lines
+  now carry the element's ready and network states, its buffered end, and the
+  helper context's own clock, so the next log says whether the session rendered
+  anything at all (`ctx running 12.34s` advancing) while the element stood still.
+- The end arrives after the suspension: the timer fires, `clearAudibleActivity`
+  drops the process's last assertion, `ProcessThrottler` sends `PrepareToSuspend`
   (`WebProcess::prepareToSuspend`, then `processWillSuspend` on every page) and
   the process is suspended; measured as 13.9 s of ticks on the device. The
   `ended` notification is now an IPC message waiting for a process that runs no
@@ -209,19 +231,19 @@ out; the file and line references are trunk as of that date.
   `processDidResume` re-activates the session, which is why recovery always lands
   within half a second of the reopen. A timer armed by the page ("resume after N
   seconds") is subject to the same suspension, so it could not fire either.
-- The helper context is not a way out. Web Audio is
+- The helper context is not a way out of either case. Web Audio is
   `BackgroundProcessPlaybackRestricted` on iOS (`MediaSessionManagerIOS.mm`); the
   context keeps running while the app is hidden only because the page declares
   `navigator.audioSession.type = "playback"`
   (`AudioContext::shouldOverrideBackgroundPlaybackRestriction` via
   `hasPlayBackAudioSession`). Its looped silence does not count as playing audio
   for throttling (`DefaultAudioDestinationNode::setIsSilent` clears
-  `isPlayingAudio`), so it never holds the process, and during the interruption it
-  cannot render at all.
-- Trunk's `maybeDeactivateAudioSession` now skips deactivation while the session
-  is interrupted and whenever a session type is declared, so the interruption's
-  end is queued for the suspended process rather than lost; the reopen recovery
-  above is the same on either reading.
+  `isPlayingAudio`), so it never holds the process, and its `running` report says
+  the audio unit started, not that the element's session renders.
+- Trunk's `maybeDeactivateAudioSession` skips deactivation while the session is
+  interrupted and whenever a session type is declared, so the interruption's end
+  is queued for the suspended process rather than lost; the reopen recovery above
+  is the same on either reading.
 
 ### Why the page cannot keep itself alive
 
@@ -290,7 +312,7 @@ On Android Chrome/installed PWA and iPhone Safari/installed PWA, verify:
 | Incoming call; answer and remain connected | Music stops; no recovery while talking. On browsers with a readable session state, reopening Aura stays paused; where the state is unknowable, reopening makes bounded resume attempts the OS rejects while the call holds audio |
 | Hang up or reject the call while Aura remains hidden/locked | Resume the same track and position only after focus returns; no double start |
 | Another app takes the audio (Instagram video, voice memo) and later releases it | Playback intent survives; music resumes when focus returns, or at the latest when Aura is reopened |
-| Exit an Instagram reel quickly, then repeat after 7-10 seconds and after 30 seconds | Check both background return and reopening Aura, with the same track and position retained; repeat on iPhone installed PWA and Android Chrome/installed PWA. The `hold hidden` line on reopening shows how long the page ran after the interruption: ticks stopping a fixed interval after the pause mean the process was suspended, not that a platform signal went missing |
+| Exit an Instagram reel quickly, then repeat after 7-10 seconds and after 30 seconds | Check both background return and reopening Aura, with the same track and position retained; repeat on iPhone installed PWA and Android Chrome/installed PWA. The `hold hidden` line on reopening shows how long the page ran after the interruption: ticks stopping a fixed interval after the pause mean the process was suspended, not that a platform signal went missing. A `page ran throughout` hold followed by `play event after interruption` with no `playing event` or progress is the frozen-element case: compare `buffered` and the `ctx` clock across the lines, and repeat once with a downloaded track |
 | A second call during recovery | Hold again until the second interruption releases focus |
 | Pause in Aura during the call | Remain paused after the call |
 | Lock-screen pause with no interruption | Committed as an explicit pause; reopening Aura does not restart it |

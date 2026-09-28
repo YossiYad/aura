@@ -27,6 +27,13 @@
     el.addEventListener("ended", () => { if (el.ended) V.handleAudioEnd(el, "event"); });
     el.addEventListener("playing", () => {
       if (V.preparedStart && V.preparedStart.el === el) V.preparedStart.confirm();
+      // Whether the engine ever reports playing after an interruption, and with what
+      // data, is the missing line in the 8-second reel log: play arrived, progress
+      // never did, and nothing said which stage the resume stopped at.
+      if (el === V.audio && V.nativeResumeCheck && V.nativeResumeCheck.target === el) {
+        V.log("background", "playing event after interruption at " + (el.currentTime || 0).toFixed(2) + "s, " +
+          (document.hidden ? "in background" : "in foreground") + ", " + V.describeElementState());
+      }
       if (el === V.audio && V.backend === "audio") V.refreshMediaSessionControls();
     });
     el.addEventListener("play", () => {
@@ -49,7 +56,8 @@
         return;
       }
       if (V.platformPaused || V.focusResumePending) {
-        V.log("background", "play event after interruption at " + (el.currentTime || 0).toFixed(2) + "s");
+        V.log("background", "play event after interruption at " + (el.currentTime || 0).toFixed(2) + "s, " +
+          (document.hidden ? "in background" : "in foreground") + ", " + V.describeElementState());
         V.reportBackgroundHold("native play event");
         // A native resume can arrive on a still-inactive session. Request the
         // session alongside it so the decoder has audio to render into.

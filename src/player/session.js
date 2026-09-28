@@ -7,6 +7,7 @@
     clearMediaSessionPauseExpectation: { get: () => clearMediaSessionPauseExpectation },
     configureAudioSession: { get: () => configureAudioSession },
     confirmNativeResumeProgress: { get: () => confirmNativeResumeProgress },
+    describeElementState: { get: () => describeElementState },
     ensureSessionKick: { get: () => ensureSessionKick },
     holdNativeResume: { get: () => holdNativeResume },
     onSessionKickStateChange: { get: () => onSessionKickStateChange },
@@ -62,6 +63,25 @@
       if (generation !== V.audioSessionGeneration || !canResumeYtPlatformPause()) return;
       resumeYtPlatformPause(reason + " retry", generation);
     }, delay);
+  }
+
+  // One line of element and context facts for the interruption log entries. The
+  // 8-second reel on the iPhone (2026-09-28) showed WebKit's own resume arriving
+  // with the page running and the clock frozen; whether the element had data,
+  // and whether the helper context's own clock moved, is what separates a session
+  // that renders nothing from an element that cannot buffer. Every read is
+  // guarded: the harness elements carry only some of these fields.
+  function describeElementState() {
+    const el = V.audio;
+    let buffered = "none";
+    try {
+      const ranges = el.buffered;
+      if (ranges && ranges.length) buffered = ranges.end(ranges.length - 1).toFixed(2) + "s";
+    } catch (e) {}
+    const ctx = V.sessionKick;
+    const ctxTime = ctx && typeof ctx.currentTime === "number" ? " " + ctx.currentTime.toFixed(2) + "s" : "";
+    return "ready " + el.readyState + ", network " + el.networkState + ", buffered " + buffered +
+      ", ctx " + (ctx ? ctx.state + ctxTime : "none");
   }
 
   // Chrome has no Audio Session at all, and some Safari builds dispatch its
@@ -176,7 +196,7 @@
     V.sessionKickResuming = false;
     V.log("background", "audio context " + ctx.state + ", paused " + V.isPaused() +
       ", held " + V.platformPaused + ", intent " + V.wantsPlayback +
-      ", at " + (V.audio.currentTime || 0).toFixed(2) + "s");
+      ", at " + (V.audio.currentTime || 0).toFixed(2) + "s, " + describeElementState());
     reportBackgroundHold("audio context " + ctx.state);
     syncSessionKick();
     if (ctx.state !== "running") return;
@@ -289,7 +309,7 @@
     if (!check || check.target !== V.audio || check.token !== V.loadingToken || check.source !== V.audio.src ||
         V.audio.paused || V.audio.seeking || (V.audio.currentTime || 0) - check.position < 0.2) return false;
     V.log("background", "playback progress confirmed after interruption at " + V.audio.currentTime.toFixed(2) +
-      "s, " + (document.hidden ? "in background" : "in foreground"));
+      "s, " + (document.hidden ? "in background" : "in foreground") + ", " + describeElementState());
     stopNativeResumeCheck();
     return true;
   }
@@ -309,7 +329,7 @@
     V.audio.pause();
     V.log("background", "interruption recovery " + reason + " at " + check.position.toFixed(2) +
       "s, " + (document.hidden ? "in background" : "in foreground") +
-      ", ready " + V.audio.readyState + ", network " + V.audio.networkState + "; source and position retained");
+      ", " + describeElementState() + "; source and position retained");
     V.updatePlaybackState();
     V.emit({ type: "state" });
   }
@@ -341,7 +361,7 @@
       check.reloaded = reload;
       V.log("background", "play event without progress at " + check.position.toFixed(2) + "s; " +
         (reload ? "reloading the same source once" : "restarting once") +
-        ", " + (document.hidden ? "in background" : "in foreground"));
+        ", " + (document.hidden ? "in background" : "in foreground") + ", " + describeElementState());
       // Ask the platform for the session back before touching the element: on
       // the failing build play() succeeds without it and stays silent.
       resumeSessionKick(reload ? "decoder reload" : "interruption restart");
@@ -437,7 +457,8 @@
           V.updatePlaybackState();
           return;
         }
-        V.log("background", reason + ": unpaused playback stuck at " + position.toFixed(2) + "s; restarting once");
+        V.log("background", reason + ": unpaused playback stuck at " + position.toFixed(2) + "s; restarting once, " +
+          describeElementState());
         // Reuse the permitted element and source, retaining the listening position.
         V.audio.pause();
       }

@@ -68,6 +68,22 @@ second. Reopening always recovers; leaving the page hidden never does.
   allowances in `WebPageProxy` (title changes, notifications, muted capture) do
   not apply to an audio player on iPhone.
 
+## A second failure mode, before the suspension
+
+Measured on the same device with an 8-second reel (2026-09-28): the page ran
+throughout (one-second ticks, no gap), the interruption's end arrived, the element
+fired `play` and reported `paused == false`, the Audio Session `statechange` and an
+`AudioContext` `statechange` to `running` followed within ten milliseconds, and
+`currentTime` never advanced. A script `pause()`/`play()` one second later changed
+nothing; `load()` on the same URL with `currentTime` restored reached
+`HAVE_METADATA` and then fired `stalled`. Bringing the page to the foreground and
+calling `play()` once produced progress within 300 ms. This is the state described
+in bug 323022. Reading trunk, nothing re-activates the platform session when an
+interruption ends: `AudioSessionIOS`'s observer only forwards the end, and
+`RemoteAudioSessionProxyManager::tryToSetActiveForProcess` returns without calling
+`-[AVAudioSession setActive:YES]` while its proxy is already marked active and no
+longer interrupted, so a page cannot request one either.
+
 ## Suggested fix
 
 Treat a page whose media session is interrupted with playback to restore like an
