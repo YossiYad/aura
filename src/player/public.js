@@ -69,6 +69,8 @@
   // pick them up with.
   if (navigator.onLine === false) window.addEventListener("online", V.resumeDownloadQueue, { once: true });
   else setTimeout(V.resumeDownloadQueue, 1500);
+  // Cached songs age out even when nothing new is cached, so the check runs at launch too.
+  V.evictCache().catch(() => {});
 
   // A wifi-blocked queue resumes on any of these, whichever the browser offers.
   window.addEventListener("online", V.wakeDownloadQueue);

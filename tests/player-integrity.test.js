@@ -224,3 +224,27 @@ test('clearing the audio cache waits for commit and reports storage failure', as
  write.onabort();
  await rejected;
 });
+function cacheDb(entries){
+ const cache=new Map(entries);
+ function request(result){const req={result};Promise.resolve().then(()=>{if(req.onsuccess)req.onsuccess();});return req;}
+ return {cache,db:{objectStoreNames:{contains:()=>true},transaction(name){
+  const map=name==='cache'?cache:new Map();
+  const tx={objectStore:()=>({get:key=>request(map.get(key)||null),put:(value,key)=>{map.set(key,value);return request();},delete:key=>{map.delete(key);return request();},getAllKeys:()=>request([...map.keys()]),
+   openCursor(){const keys=[...map.keys()];let i=0;const req={};const step=()=>Promise.resolve().then(()=>{const key=keys[i++];req.result=key===undefined?null:{key,value:map.get(key),continue:step};if(req.onsuccess)req.onsuccess();});step();return req;}})};
+  Promise.resolve().then(()=>{if(tx.oncomplete)tx.oncomplete();});return tx;
+ }}};
+}
+test('cached songs not played for 30 days are removed at launch even under the limit',async()=>{
+ const day=24*3600*1000,now=Date.now();
+ const {cache,db}=cacheDb([['old',{blob:{size:1024},at:now-31*day,size:1024}],['recent',{blob:{size:1024},at:now-2*day,size:1024}]]);
+ const h=createHarness({withStorage:true,storageDb:db});
+ await flushMicrotasks(80);
+ assert.deepEqual([...cache.keys()],['recent']);
+});
+test('a cache limit left on Unlimited is held to the default',async()=>{
+ const now=Date.now(),mb=1024*1024;
+ const {cache,db}=cacheDb([['a',{at:now-3000,size:300*mb}],['b',{at:now-2000,size:300*mb}]]);
+ const h=createHarness({withStorage:true,storageDb:db,settings:{cacheLimitMB:0}});
+ await flushMicrotasks(80);
+ assert.deepEqual([...cache.keys()],['b']);
+});

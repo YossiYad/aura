@@ -18,11 +18,19 @@
 
   const TRACK_MAX_BYTES = 60 * 1024 * 1024;
 
+  // The cache always has a ceiling. "Unlimited" used to be a choice, and with it the
+  // songs heard in passing piled up on the device for good; a setting left on it from
+  // then gets the default.
+  const DEFAULT_CACHE_LIMIT_MB = 400;
   function cacheLimitBytes() {
     const s = window.Store ? Store.settings() : {};
     const mb = parseInt(s.cacheLimitMB, 10);
-    return mb > 0 ? mb * 1024 * 1024 : Infinity;
+    return (mb > 0 ? mb : DEFAULT_CACHE_LIMIT_MB) * 1024 * 1024;
   }
+
+  // A cached song not played for this long is no longer part of the listening, so it
+  // goes even while the cache is under its limit. Playing a song renews its date.
+  const CACHE_MAX_AGE_MS = 30 * 24 * 3600 * 1000;
 
   // A blob handed back by IndexedDB is only a reference: iOS can drop the bytes behind
   // it while the record stays intact, and the loss then surfaces minutes later as the
@@ -101,10 +109,10 @@
     });
     let total = entries.reduce((a, e) => a + e.size, 0);
     const max = cacheLimitBytes();
-    if (total <= max) return;
+    const staleBefore = Date.now() - CACHE_MAX_AGE_MS;
     entries.sort((a, b) => a.at - b.at);
     for (const e of entries) {
-      if (total <= max) break;
+      if (total <= max && e.at >= staleBefore) break;
       await new Promise((res) => {
         const tx = d.transaction("cache", "readwrite").objectStore("cache").delete(e.key);
         tx.onsuccess = () => res();

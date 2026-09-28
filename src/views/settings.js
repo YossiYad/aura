@@ -533,8 +533,8 @@
         ? "Queued downloads wait instead of using mobile data"
         : "This browser does not report the connection type, so downloads cannot wait for Wi-Fi here", !!s.wifiOnlyDownloads) +
       settingsLink("set-stats", "Listening stats", "See your most-played songs, artists and time", "playback") +
-      choiceRow("Song cache limit", "When the limit is reached, the least recently played cached songs go first",
-        segControl("set-cache-seg", [[200, "200 MB"], [400, "400 MB"], [800, "800 MB"], [0, "Unlimited"]], isNaN(cacheLimit) ? 400 : cacheLimit)) +
+      choiceRow("Song cache limit", "When the limit is reached, the least recently played cached songs go first. Songs not played for 30 days are removed",
+        segControl("set-cache-seg", [[200, "200 MB"], [400, "400 MB"], [800, "800 MB"]], [200, 400, 800].includes(cacheLimit) ? cacheLimit : 400)) +
       settingsLink("set-clearcache", "Clear song cache", "Remove downloaded audio without touching your library", "storage") +
       settingsLink("set-clearsearches", "Clear search history", "Remove your recent searches from this device", "blocked") +
       settingsLink("set-clearhistory", "Clear listening history", "Reset recents, stats and listening-based recommendations", "blocked"));
