@@ -76,7 +76,7 @@
   });
 
   // The same number as CACHE in sw.js; a test holds the two together.
-  const APP_VERSION = "v227";
+  const APP_VERSION = "v228";
   const view = /** @type {PaintedElement} */ (document.getElementById("view"));
   const sheetEl = document.getElementById("sheet");
   const scrimEl = document.getElementById("scrim");
