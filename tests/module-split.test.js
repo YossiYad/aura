@@ -9,7 +9,7 @@ const { moduleFiles } = require('./source');
 // ReferenceError on the one screen that needs it. This finds every bare call of a name
 // that another file of the module declares at its top level and this file does not.
 
-const SPLIT = ['views', 'player', 'api', 'main', 'store', 'sync', 'voice'];
+const SPLIT = ['views', 'player', 'api', 'main', 'store', 'sync', 'voice', 'ai', 'shared-queue'];
 const read = file => fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
 
 function topLevelNames(source) {

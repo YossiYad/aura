@@ -470,7 +470,7 @@ type AuraNamespace = Record<string, any>;
 declare var Aura: {
   views?: AuraNamespace, player?: AuraNamespace, api?: AuraNamespace,
   main?: AuraNamespace, store?: AuraNamespace, orbs?: AuraNamespace,
-  sync?: AuraNamespace, voice?: AuraNamespace
+  sync?: AuraNamespace, voice?: AuraNamespace, ai?: AuraNamespace, sharedQueue?: AuraNamespace
 };
 
 // Third-party SDKs loaded at runtime, with no type packages installed.

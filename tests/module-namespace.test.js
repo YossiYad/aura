@@ -10,7 +10,7 @@ const path = require('node:path');
 // have one file's getter silently replace the other's. Both are caught here, before a
 // browser ever meets them.
 
-const SPLIT = ['views', 'player', 'api', 'main', 'store', 'orbs', 'sync', 'voice'];
+const SPLIT = ['views', 'player', 'api', 'main', 'store', 'orbs', 'sync', 'voice', 'ai', 'shared-queue'];
 
 function publishedBy(file) {
   const source = fs.readFileSync(path.join(__dirname, '..', file), 'utf8');
