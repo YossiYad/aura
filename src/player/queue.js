@@ -3,85 +3,25 @@
   // Published on V for the other files of this module; see src/player.js.
   Object.defineProperties(V, {
     addToQueue: { get: () => addToQueue },
-    buildShuffleOrder: { get: () => buildShuffleOrder },
+    cacheAhead: { get: () => cacheAhead },
     clearUpcoming: { get: () => clearUpcoming },
-    countListen: { get: () => countListen },
     dismiss: { get: () => dismiss },
     firstPlayableIndex: { get: () => firstPlayableIndex },
     jumpTo: { get: () => jumpTo },
-    listenClock: { get: () => listenClock, set: value => { listenClock = value; } },
     moveAt: { get: () => moveAt },
-    nearEnd: { get: () => nearEnd },
-    noteListening: { get: () => noteListening },
     persist: { get: () => persist },
-    pickNextIndex: { get: () => pickNextIndex },
     playNext: { get: () => playNext },
     playQueue: { get: () => playQueue },
     prefetchNext: { get: () => prefetchNext },
     removeAt: { get: () => removeAt },
-    replaceCurrent: { get: () => replaceCurrent },
-    replayCurrent: { get: () => replayCurrent },
-    resetListenTracking: { get: () => resetListenTracking },
-    shuffleOrder: { get: () => shuffleOrder, set: value => { shuffleOrder = value; } },
-    swapQueueEntry: { get: () => swapQueueEntry },
-    syncShuffleOrder: { get: () => syncShuffleOrder }
+    replaceCurrent: { get: () => replaceCurrent }
   });
-
-  // A track that was started is not a track that was heard. Counting the start put every
-  // accidental tap, every skipped-through track and every failed one into "Jump back in"
-  // and into the play counts that pick the recommendations. Require a third of the
-  // track in actual playback, even for long songs and when playback reaches the end.
-  let listenedSeconds = 0;
-  let listenClock = 0;
-  let listenCounted = false;
-  let listenTrackId = null;
-
-  function listenTarget(track) {
-    const dur = V.getTime().dur || Number(track && track.duration);
-    return Number.isFinite(dur) && dur > 0 ? dur / 3 : Infinity;
-  }
-
-  function resetListenTracking(track) {
-    listenedSeconds = 0;
-    listenClock = V.getTime().cur || 0;
-    listenCounted = false;
-    listenTrackId = (track && track.id) || null;
-  }
-
-  function countListen(reason) {
-    const track = V.current();
-    if (listenCounted || !track || track.id !== listenTrackId) return;
-    if (listenedSeconds < listenTarget(track)) return;
-    listenCounted = true;
-    V.log("listen", track.id + " counted as played (" + reason + ")");
-    Store.pushRecent(track, V.isSpokenWord(track) ? "podcast" : "music");
-    if (reason === "listened through") cacheAhead();
-  }
-
-  function noteListening() {
-    const track = V.current();
-    if (!track || track.id !== listenTrackId) return;
-    const now = V.getTime().cur || 0;
-    const step = now - listenClock;
-    listenClock = now;
-    // Only forward movement at playing speed counts; a seek is not listening.
-    if (!V.loadingInProgress && !(V.backend === "audio" && V.audio.seeking) &&
-        (!V.isPaused() || (V.backend === "audio" && V.audio.ended)) && step > 0 && step < 5) listenedSeconds += step;
-    if (!listenCounted && listenedSeconds >= listenTarget(track)) countListen("listened through");
-  }
-
-  // How close to the end the next track has to be before it is worth holding ready.
-  function nearEnd() {
-    const t = V.getTime();
-    if (!t.dur) return false;
-    return t.dur - t.cur <= Math.max(V.crossfadeSecs() + 6, 12);
-  }
 
   // Prepare only the next track as soon as playback starts. The standby element
   // buffers its stream without saving a download or waiting until the current song ends.
   function prefetchNext() {
     if (!V.wantsPlayback || V.repeat === "one") return;
-    const ni = pickNextIndex();
+    const ni = V.pickNextIndex();
     if (!V.shareSession && V.repeat === "off" && V.radioUpcoming().length <= V.RADIO_LOW) {
       V.extendRadio();
     }
@@ -96,7 +36,7 @@
     const cur = V.current();
     if (cur) V.autoCache(cur.id);
     if (V.repeat === "one") return;
-    const ni = pickNextIndex();
+    const ni = V.pickNextIndex();
     if (ni === -1 || ni === V.pos || !V.queue[ni]) return;
     V.prepNextSource(ni);
   }
@@ -104,9 +44,9 @@
   function persist() {
     V.queue.forEach(V.rememberRadioTrack);
     if (V.shuffle) {
-      if (!shuffleOrder.length) buildShuffleOrder(); else syncShuffleOrder();
+      if (!V.shuffleOrder.length) V.buildShuffleOrder(); else V.syncShuffleOrder();
     }
-    const saved = { extra: V.queue, pos: V.pos, shuffle: V.shuffle, repeat: V.repeat, shuffleOrder };
+    const saved = { extra: V.queue, pos: V.pos, shuffle: V.shuffle, repeat: V.repeat, shuffleOrder: V.shuffleOrder };
     if (V.shareSession) Store.sharedQueuePlayback({ id: V.shareSession, ...saved });
     else Store.saveQueue(saved);
     V.emit({ type: "queue" });
@@ -154,7 +94,7 @@
       V.queue = [];
       V.pos = -1;
       V.history = [];
-      shuffleOrder = [];
+      V.shuffleOrder = [];
       V.failedQueueIds.clear();
       V.swappedFor.clear();
       persist();
@@ -169,7 +109,7 @@
     V.queue = tracks.slice();
     V.pos = at;
     V.history = [];
-    shuffleOrder = [];
+    V.shuffleOrder = [];
     V.failedQueueIds.clear();
     V.swappedFor.clear();
     persist();
@@ -224,9 +164,9 @@
     V.history = V.history.map(i => i > V.pos ? i + 1 : i);
     V.queue.splice(V.pos + 1, 0, track);
     if (V.shuffle) {
-      if (!shuffleOrder.length) buildShuffleOrder(); else syncShuffleOrder();
-      shuffleOrder = shuffleOrder.filter(id => id !== track.id);
-      shuffleOrder.splice(shuffleOrder.indexOf(V.current().id) + 1, 0, track.id);
+      if (!V.shuffleOrder.length) V.buildShuffleOrder(); else V.syncShuffleOrder();
+      V.shuffleOrder = V.shuffleOrder.filter(id => id !== track.id);
+      V.shuffleOrder.splice(V.shuffleOrder.indexOf(V.current().id) + 1, 0, track.id);
     }
     persist();
     prefetchNext();
@@ -310,9 +250,9 @@
       V.commitPendingPreparedStart("queue change");
       if (V.queue[from].id === V.current().id || V.queue[to].id === V.current().id) return;
       V.discardPrep();
-      const start = shuffleOrder.indexOf(V.queue[from].id);
-      const end = shuffleOrder.indexOf(V.queue[to].id);
-      shuffleOrder.splice(end, 0, shuffleOrder.splice(start, 1)[0]);
+      const start = V.shuffleOrder.indexOf(V.queue[from].id);
+      const end = V.shuffleOrder.indexOf(V.queue[to].id);
+      V.shuffleOrder.splice(end, 0, V.shuffleOrder.splice(start, 1)[0]);
       persist();
       prefetchNext();
       return;
@@ -341,8 +281,8 @@
     const previous = V.queue;
     const track = V.current();
     if (V.shuffle) {
-      if (!shuffleOrder.length) buildShuffleOrder(); else syncShuffleOrder();
-      const retained = new Set(shuffleOrder.slice(0, shuffleOrder.indexOf(track.id) + 1));
+      if (!V.shuffleOrder.length) V.buildShuffleOrder(); else V.syncShuffleOrder();
+      const retained = new Set(V.shuffleOrder.slice(0, V.shuffleOrder.indexOf(track.id) + 1));
       V.queue = V.queue.filter(t => retained.has(t.id));
     } else V.queue = V.queue.slice(0, V.pos + 1);
     V.history = V.history.map(i => V.queue.indexOf(previous[i])).filter(i => i >= 0);
@@ -362,7 +302,7 @@
     if (V.pos < 0 || V.pos >= V.queue.length) return playQueue([track], 0);
     V.discardPrep();
     V.failedQueueIds.delete(track.id);
-    swapQueueEntry(V.pos, track);
+    V.swapQueueEntry(V.pos, track);
     persist();
     V.loadAndPlay(track);
   }
@@ -382,107 +322,4 @@
     return true;
   }
 
-  // Shuffle used to draw a fresh random index on every advance, so some tracks came round
-  // twice while others never played at all, and turning it off restored nothing. The order
-  // is drawn once and then followed like any other running order: one pass, every track.
-  let shuffleOrder = [];
-
-  function shuffleArtistKey(id) {
-    const t = V.queue.find(x => x.id === id);
-    return t ? (t.artistId || String(t.artist || "").trim().toLowerCase()) : "";
-  }
-
-  // A plain shuffle happily draws the same artist twice in a row. Walk the drawn order and,
-  // wherever that happens, swap in the nearest later track by someone else - leaving it be
-  // only when every track left shares that same artist, since there is nothing to swap for.
-  function declumpByArtist(ids) {
-    for (let i = 1; i < ids.length; i++) {
-      const prevKey = shuffleArtistKey(ids[i - 1]);
-      if (!prevKey || shuffleArtistKey(ids[i]) !== prevKey) continue;
-      let j = -1;
-      for (let k = i + 1; k < ids.length; k++) {
-        if (shuffleArtistKey(ids[k]) !== prevKey) { j = k; break; }
-      }
-      if (j === -1) continue;
-      const swap = ids[i]; ids[i] = ids[j]; ids[j] = swap;
-    }
-    return ids;
-  }
-
-  function buildShuffleOrder() {
-    const curId = V.current() ? V.current().id : null;
-    const rest = V.queue.map(t => t.id).filter(id => id !== curId);
-    for (let i = rest.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const swap = rest[i]; rest[i] = rest[j]; rest[j] = swap;
-    }
-    shuffleOrder = declumpByArtist((curId ? [curId] : []).concat(rest));
-  }
-
-  // Absorbs what the radio appended and what was removed, without redrawing the order.
-  function syncShuffleOrder() {
-    const live = new Set(V.queue.map(t => t.id));
-    shuffleOrder = shuffleOrder.filter(id => live.has(id));
-    for (const t of V.queue) if (shuffleOrder.indexOf(t.id) === -1) shuffleOrder.push(t.id);
-  }
-
-  // A different upload of the same song takes over the queue slot and, with it, the slot
-  // in the drawn shuffle order. Leaving the order to resync would drop the old id and
-  // append the new one, moving the playing track to the end of the pass so that every
-  // track still waiting was skipped.
-  function swapQueueEntry(i, track) {
-    const old = V.queue[i];
-    V.queue[i] = track;
-    if (!old || old.id === track.id) return;
-    const at = shuffleOrder.indexOf(old.id);
-    if (at === -1) return;
-    if (shuffleOrder.indexOf(track.id) === -1) shuffleOrder[at] = track.id;
-    else shuffleOrder.splice(at, 1);
-  }
-
-  function playableIndexOf(id, usable) {
-    for (let i = 0; i < V.queue.length; i++) {
-      if (V.queue[i].id === id && i !== V.pos && !V.failedQueueIds.has(V.queue[i].id) && !Store.isBlocked(V.queue[i]) &&
-          (!usable || usable(V.queue[i]))) return i;
-    }
-    return -1;
-  }
-
-  // usable narrows the choice further - to the songs saved on the device, with no signal.
-  function pickNextIndex(usable) {
-    if (V.shuffle && V.queue.length > 1) {
-      if (!shuffleOrder.length) buildShuffleOrder(); else syncShuffleOrder();
-      const curId = V.current() ? V.current().id : null;
-      const at = curId ? shuffleOrder.indexOf(curId) : -1;
-      for (let step = at + 1; step < shuffleOrder.length; step++) {
-        const idx = playableIndexOf(shuffleOrder[step], usable);
-        if (idx !== -1) return idx;
-      }
-      if (V.repeat === "all") {
-        for (let step = 0; step <= at && step < shuffleOrder.length; step++) {
-          const idx = playableIndexOf(shuffleOrder[step], usable);
-          if (idx !== -1) return idx;
-        }
-      }
-      return -1;
-    }
-    const ok = track => !V.failedQueueIds.has(track.id) && !Store.isBlocked(track) && (!usable || usable(track));
-    for (let i = V.pos + 1; i < V.queue.length; i++) {
-      if (ok(V.queue[i])) return i;
-    }
-    if (V.repeat === "all") {
-      for (let i = 0; i <= V.pos; i++) {
-        if (ok(V.queue[i])) return i;
-      }
-    }
-    return -1;
-  }
-
-  function replayCurrent() {
-    V.playbackGeneration++;
-    V.handledEndGeneration = -1;
-    V.seekTo(0);
-    resetListenTracking(V.current());
-    V.resumePlay();
-  }
 })();
