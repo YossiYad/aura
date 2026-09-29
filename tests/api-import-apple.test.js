@@ -33,7 +33,8 @@ function createApi(reply) {
 }
 
 // The link the share sheet hands over for a playlist someone made themselves: a Hebrew
-// name, percent-encoded, and the language pinned on the end.
+// name, percent-encoded, and the language pinned on the end. The language is what makes
+// Apple name the artists in Hebrew, which is how the uploads name them too.
 const USER_LINK = "https://music.apple.com/il/playlist/%D7%A9%D7%99%D7%A8%D7%99%D7%9D/pl.u-NpXmzl7ClpYRoG?l=iw";
 const USER_PAGE = "https://music.apple.com/il/playlist/%D7%A9%D7%99%D7%A8%D7%99%D7%9D/pl.u-NpXmzl7ClpYRoG";
 
@@ -58,11 +59,11 @@ const USER_MARKDOWN = "Title: ‎שירים by אסנת ידגר - Apple Music\n
   "## שירים\n\nאסנת ידגר\n\nUpdated Today\n\n" +
   "![Image 1](https://music.apple.com/assets/artwork/1x1.gif)\n\n3:49\n\n".repeat(30);
 
-test("a playlist someone made themselves is read from the page data, with the language stripped from the link", async () => {
+test("a playlist someone made themselves is read from the page data, in the language the link names", async () => {
   const page = applePage("שירים", [["את מי עכשיו את מחבקת?", "Michael Levi"], ["אחי", "Moshiko Mor & Lior Narkis"], ["אחי", "Moshiko Mor & Lior Narkis"]]);
-  const { Api, calls } = createApi(url => url === USER_PAGE ? page : null);
+  const { Api, calls } = createApi(url => url === USER_PAGE + "?l=he" ? page : null);
   const out = await Api.importPlaylist(USER_LINK);
-  assert.equal(calls.find(u => /music\.apple\.com/.test(u)), USER_PAGE, "the page is asked for without the language, and the encoded name is left alone");
+  assert.equal(calls.find(u => /music\.apple\.com/.test(u)), USER_PAGE + "?l=he", "the page is asked for in the link's language, with Apple's old code translated, and the encoded name is left alone");
   assert.equal(out.name, "שירים");
   assert.deepEqual(plain(out.tracks), [
     { title: "את מי עכשיו את מחבקת?", artist: "Michael Levi" },
@@ -87,4 +88,13 @@ test("a page whose data carries no songs falls back to reading the page as text"
 test("a text-only read of a home-made playlist still names the failure, not a wrong list", async () => {
   const { Api } = createApi(url => /r\.jina\.ai/.test(url) ? USER_MARKDOWN : null);
   await assert.rejects(Api.importPlaylist(USER_LINK), /Apple Music playlist/);
+});
+
+test("a link without a language is read as it is, and a text-only fallback keeps the same language", async () => {
+  const { Api, calls } = createApi(url => /r\.jina\.ai/.test(url) ? USER_MARKDOWN : null);
+  await assert.rejects(Api.importPlaylist("https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb"), /Apple Music playlist/);
+  assert.equal(calls.find(u => /music\.apple\.com/.test(u)), "https://music.apple.com/us/playlist/todays-hits/pl.f4d106fed2bd41149aaacabb233eb5eb");
+  const { Api: Api2, calls: calls2 } = createApi(url => /r\.jina\.ai/.test(url) ? USER_MARKDOWN : null);
+  await assert.rejects(Api2.importPlaylist(USER_LINK), /Apple Music playlist/);
+  assert(calls2.some(u => u === "https://r.jina.ai/" + USER_PAGE + "?l=he"), "the text reader is asked for the same page, language included");
 });

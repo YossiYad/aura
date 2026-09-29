@@ -167,8 +167,14 @@
       }
     }
     if (/music\.apple\.com\/.+\/playlist\//.test(u)) {
-      // The share sheet appends the language (?l=iw); the page is the same without it.
-      const page = u.split("?")[0];
+      // The share sheet appends the language the phone runs in (?l=iw). It is kept, because
+      // it decides what the artists are called: the Israeli storefront names them in English
+      // ("Omer Adam") unless asked in Hebrew, and the uploads the matcher looks for are
+      // Hebrew, so a Hebrew playlist read in English lost a third of its songs to the
+      // artist check. Apple answers ?l=iw with a redirect to ?l=he, which the relay does
+      // not follow, so the old code is translated here.
+      const lang = (/[?&]l=([a-z-]+)/i.exec(u) || [])[1];
+      const page = u.split("?")[0] + (lang ? "?l=" + (lang.toLowerCase() === "iw" ? "he" : lang.toLowerCase()) : "");
       try {
         const html = await V.fetchViaProxies(page, "serialized-server-data");
         return parseAppleServerData(html);
