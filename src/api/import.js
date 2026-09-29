@@ -81,6 +81,42 @@
     return { name: name || "Apple Music import", tracks };
   }
 
+  // Apple serves a playlist page twice over: the rows a browser shows, and the JSON those
+  // rows are built from, kept in a script tag on the same page. A playlist someone made
+  // themselves renders with no song names at all - only artwork slots and durations - so
+  // reading the page as text found no songs and blamed privacy, and making the playlist
+  // public changed nothing. The JSON names every song and its artist for both kinds of
+  // playlist, so it is read first and the text of the page is the fallback.
+  function parseAppleServerData(html) {
+    const m = /<script type="application\/json" id="serialized-server-data">([\s\S]*?)<\/script>/.exec(html);
+    if (!m) throw new Error("Couldn't read the Apple Music playlist - is it public?");
+    const data = JSON.parse(m[1]);
+    const tracks = [];
+    const seen = new Set();
+    (function scan(n) {
+      if (!n || typeof n !== "object") return;
+      if (Array.isArray(n)) { n.forEach(scan); return; }
+      if (typeof n.title === "string" && typeof n.artistName === "string") {
+        const key = n.title + "|" + n.artistName;
+        if (!seen.has(key)) { seen.add(key); tracks.push({ title: n.title, artist: n.artistName }); }
+        return;
+      }
+      for (const k in n) if (n[k] && typeof n[k] === "object") scan(n[k]);
+    })(data);
+    if (!tracks.length) throw new Error("No tracks found - playlist may be private");
+    // The page's own header is the first item of the first section; the document title
+    // has the owner's name and "Apple Music" folded into it.
+    let name = null;
+    try { name = data.data[0].data.sections[0].items[0].title; } catch (e) {}
+    if (typeof name !== "string" || !name.trim()) {
+      const nameM = /<meta property="og:title" content="([^"]*)"/.exec(html);
+      name = nameM ? V.decodeHtml(nameM[1]).replace(/\s+on Apple Music\s*$/i, "") : "";
+    }
+    name = name.replace(/[\u200e\u200f]/g, "").trim();
+    V.log("import", "read the playlist from Apple's page data: " + tracks.length + " song(s)");
+    return { name: name || "Apple Music import", tracks };
+  }
+
   // The one source that needs no guessing. Spotify and Apple hand over a title and an
   // artist name and every song then has to be matched back to some upload, which is where
   // an import loses songs and picks up covers. A YouTube or YouTube Music list is already
@@ -131,10 +167,18 @@
       }
     }
     if (/music\.apple\.com\/.+\/playlist\//.test(u)) {
-      // One route only before this, so a bad moment at that one relay was the whole
-      // import failing.
-      const txt = await V.fetchViaProxies("https://r.jina.ai/" + u.split("?")[0], "music.apple.com");
-      return parseAppleMarkdown(txt);
+      // The share sheet appends the language (?l=iw); the page is the same without it.
+      const page = u.split("?")[0];
+      try {
+        const html = await V.fetchViaProxies(page, "serialized-server-data");
+        return parseAppleServerData(html);
+      } catch (e) {
+        // The page itself did not come through or carried no data, so read it as text
+        // the way this always did. One route only before this, so a bad moment at that
+        // one relay was the whole import failing.
+        const txt = await V.fetchViaProxies("https://r.jina.ai/" + page, "music.apple.com");
+        return parseAppleMarkdown(txt);
+      }
     }
     throw new Error("Paste a YouTube, YouTube Music, Spotify or Apple Music playlist link");
   }
