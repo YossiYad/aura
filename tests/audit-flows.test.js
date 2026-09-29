@@ -46,7 +46,7 @@ test('a spoken request has no dialog: it runs on the Ask screen, and driving mod
  assert.doesNotMatch(css,/voice-request|voice-open|voice-listen/);
  // The views module is split into files that reach each other through V (window.Aura.views).
  assert.match(views,/if \(mic\) mic\.onclick = \(\) => (?:V\.)?voiceStart\("ask"\);/);
- assert.match(views,/if \(mic\) mic\.onclick = \(\) => \{ Views\.showTab\("ai"\); voiceStart\("ask"\); \};/,'the search microphone goes to the Ask screen');
+ assert.match(views,/if \(mic\) mic\.onclick = \(\) => \{ Views\.showTab\("ai"\); (?:V\.)?voiceStart\("ask"\); \};/,'the search microphone goes to the Ask screen');
  assert.match(views,/if \((?:V\.)?voice && (?:V\.)?voice\.surface === "ask" && \((?:V\.)?currentTab !== "ai" \|\| (?:V\.)?subView\)\) (?:V\.)?voiceEnd\(\);/,'leaving the Ask screen ends its request');
  assert.match(main,/\$\("drive-voice"\)\.onclick = \(\) => Views\.startVoice\("drive"\);/);
  assert.match(main,/\$\("drive-voice-layer"\)\.onclick = \(\) => Views\.stopVoice\(\);/);
