@@ -12,68 +12,41 @@
   // Published on V for the other files of this module; see src/views.js.
   Object.defineProperties(V, {
     APP_VERSION: { get: () => APP_VERSION },
-    artHtml: { get: () => artHtml },
-    artistHtml: { get: () => artistHtml },
-    artSrc: { get: () => artSrc },
-    artWarmed: { get: () => artWarmed },
     askState: { get: () => askState },
-    backLayers: { get: () => backLayers },
-    closeModal: { get: () => closeModal },
-    closeSheet: { get: () => closeSheet },
     cssUrl: { get: () => cssUrl },
     currentTab: { get: () => currentTab, set: value => { currentTab = value; } },
-    dismissViaHistory: { get: () => dismissViaHistory },
     emptyState: { get: () => emptyState },
     esc: { get: () => esc },
     fmt: { get: () => fmt },
     fmtSubs: { get: () => fmtSubs },
     fmtViews: { get: () => fmtViews },
-    forceRefresh: { get: () => forceRefresh },
     gridCard: { get: () => gridCard },
     gridCardArt: { get: () => gridCardArt },
     homeFilter: { get: () => homeFilter },
     libraryFilter: { get: () => libraryFilter, set: value => { libraryFilter = value; } },
     libraryQuery: { get: () => libraryQuery, set: value => { libraryQuery = value; } },
     libraryTimer: { get: () => libraryTimer, set: value => { libraryTimer = value; } },
-    markLocalRows: { get: () => markLocalRows },
-    markNowPlaying: { get: () => markNowPlaying },
-    markStale: { get: () => markStale },
-    modalCleanup: { get: () => modalCleanup, set: value => { modalCleanup = value; } },
-    openModal: { get: () => openModal },
-    openSheet: { get: () => openSheet },
+    modalEl: { get: () => modalEl },
     paint: { get: () => paint },
-    PLAY_ICON: { get: () => PLAY_ICON },
     playlistPlaybackOptions: { get: () => playlistPlaybackOptions },
     playSelection: { get: () => playSelection },
-    shuffleSelection: { get: () => shuffleSelection },
-    popSubView: { get: () => popSubView },
-    promptModal: { get: () => promptModal },
-    pushSubView: { get: () => pushSubView },
     queueSelection: { get: () => queueSelection },
-    refreshIfStale: { get: () => refreshIfStale },
-    refreshing: { get: () => refreshing },
-    restoreViewScroll: { get: () => restoreViewScroll },
-    rowDlBtn: { get: () => rowDlBtn },
     scrimEl: { get: () => scrimEl },
     setViewMotion: { get: () => setViewMotion },
     sheetEl: { get: () => sheetEl },
-    spendEntry: { get: () => spendEntry },
-    spendSubViewEntries: { get: () => spendSubViewEntries },
+    shuffleSelection: { get: () => shuffleSelection },
     subView: { get: () => subView, set: value => { subView = value; } },
     subViewScrollStack: { get: () => subViewScrollStack, set: value => { subViewScrollStack = value; } },
     subViewStack: { get: () => subViewStack, set: value => { subViewStack = value; } },
     syncChrome: { get: () => syncChrome },
     syncPrivateButton: { get: () => syncPrivateButton },
-    ticket: { get: () => ticket },
     syncStatusPainter: { get: () => syncStatusPainter, set: value => { syncStatusPainter = value; } },
     syncStatusSubscribed: { get: () => syncStatusSubscribed, set: value => { syncStatusSubscribed = value; } },
     tabScroll: { get: () => tabScroll },
-    textZoom: { get: () => textZoom },
+    ticket: { get: () => ticket },
     toast: { get: () => toast },
     trackRow: { get: () => trackRow },
-    view: { get: () => view },
-    viewStale: { get: () => viewStale, set: value => { viewStale = value; } },
-    warmLocalArt: { get: () => warmLocalArt }
+    view: { get: () => view }
   });
 
   // The same number as CACHE in sw.js; a test holds the two together.
@@ -247,175 +220,6 @@
   }
   const HERO_SUBVIEW_KINDS = new Set(["album", "artist", "playlist", "downloaded", "liked", "likedPodcast", "shared", "ytArtist", "ytAlbum"]);
 
-  // On Android the Back button and the back gesture are how people leave a screen. With no
-  // history entries there was nothing to go back to, so Back left the app entirely and took
-  // the user's place in the app with it. Each screen and overlay adds an entry; Back closes
-  // the topmost one, and only leaves the app once there is nothing left open.
-  let historyDepth = 0;
-  let closingFromHistory = false;
-  // Entries spent deliberately by code rather than by a Back press. Each one owns a
-  // history.back() that is on its way; when its popstate lands there is nothing to close
-  // and the ledger must not move again - otherwise the count drifts and Back starts
-  // exiting the app while screens are still open.
-  let syntheticBacks = 0;
-
-  // An entry whose sheet was closed by a tap on the way to opening something else: the
-  // screen or dialog that follows takes it over rather than pushing another, and one
-  // that nothing claims is spent. Left behind, each was a Back press that did nothing.
-  let spareEntries = 0;
-  function handOverEntry() {
-    spareEntries++;
-    setTimeout(() => {
-      if (spareEntries <= 0) return;
-      spareEntries--;
-      spendEntry();
-    }, 0);
-  }
-
-  function pushHistory() {
-    if (spareEntries > 0) { spareEntries--; return; }
-    historyDepth++;
-    try { history.pushState({ aura: historyDepth }, ""); } catch (e) {}
-  }
-
-  // Consume one of our own entries now, because the thing it stood for was closed by a
-  // tap rather than by Back. A browser entry can only be removed by navigating over it,
-  // so this walks back across it; the matching popstate is recognised via syntheticBacks
-  // and does nothing. Without this, every tap-closed menu left its entry behind - and the
-  // piled-up orphans made Back press dead once and then leave the app outright.
-  function spendEntry() {
-    if (historyDepth <= 0 || closingFromHistory) return;
-    historyDepth--;
-    syntheticBacks++;
-    try { history.back(); } catch (e) { syntheticBacks--; historyDepth++; }
-  }
-
-  // Spend every entry a subview stack still holds. Used where the stack is cleared as a
-  // side effect of navigation that is not a Back press.
-  function spendSubViewEntries() {
-    const levels = (subView ? 1 : 0) + subViewStack.length;
-    for (let i = 0; i < levels; i++) spendEntry();
-  }
-
-  // For a control whose only job is to dismiss: go through history so the entry is spent
-  // rather than left behind for a later Back press to waste.
-  function dismissViaHistory(closeDirectly) {
-    if (historyDepth > 0 && !closingFromHistory) { history.back(); return; }
-    closeDirectly();
-  }
-
-  // Screens owned outside this file register themselves here, so Back closes them like
-  // any other layer. The full player sits above every screen but under sheets and modals.
-  const backLayers = [];
-
-  // One spare entry always sits under everything. Without it, the Back press on a bare
-  // screen navigates straight out of the document - the page is destroyed, and the audio
-  // element dies with it. With it, that press lands here and can be answered.
-  try {
-    history.pushState({ auraBase: true }, "");
-    if (window.Log) Log.add("nav", "base history entry pushed, history.length=" + history.length);
-  } catch (e) {
-    if (window.Log) Log.add("nav", "base history entry push threw: " + String((e && e.message) || e));
-  }
-
-  function closeTopBackLayer() {
-    for (let i = 0; i < backLayers.length; i++) {
-      const layer = backLayers[i];
-      try {
-        if (!layer.open()) continue;
-        layer.close();
-        // The layer held no entry of its own, so the one Back just spent belonged to
-        // whatever is still showing underneath. Put it back.
-        try { history.pushState({ auraBase: true }, ""); } catch (e) {}
-        if (window.Log) Log.add("nav", "back closed layer #" + i);
-        return true;
-      } catch (e) {}
-    }
-    return false;
-  }
-
-  // Playback is why a bare-screen Back must not simply leave: an exited app is a silent
-  // one, and the exit is usually a gesture gone further than intended. While music runs
-  // the press is caught and explained instead; pausing restores the old way out. Home is
-  // the way to listen in other apps - the OS keeps the sound going once it is in the
-  // background either way.
-  function holdExit() {
-    const hasPlayer = !!window.Player;
-    const track = hasPlayer && Player.current();
-    const paused = hasPlayer && track && Player.isPaused();
-    if (window.Log) Log.add("nav", "holdExit check: hasPlayer=" + hasPlayer + " track=" + !!track + " paused=" + paused);
-    if (!(hasPlayer && track && !paused)) return;
-    try { history.pushState({ auraBase: true }, ""); } catch (e) {
-      if (window.Log) Log.add("nav", "holdExit pushState threw: " + String((e && e.message) || e));
-    }
-    if (window.Log) Log.add("nav", "holdExit trapped the back press, music was playing");
-    // A toast alone is easy to miss with a thumb already moving for a second Back press -
-    // and a second press in quick succession isn't caught the same way the first one was.
-    // A pulse felt right away needs no reading and answers the one question that matters:
-    // did that Back press register at all.
-    if (navigator.vibrate) { try { navigator.vibrate(40); } catch (e) {} }
-    toast("Music keeps playing - use Home to listen in the background, or pause to exit");
-  }
-
-  window.addEventListener("popstate", () => {
-    closingFromHistory = true;
-    if (window.Log) {
-      Log.add("nav", "popstate: syntheticBacks=" + syntheticBacks + " historyDepth=" + historyDepth +
-        " modalHidden=" + modalEl.hidden + " sheetHidden=" + sheetEl.hidden + " subView=" + !!subView +
-        " layers=" + backLayers.length);
-    }
-    try {
-      if (syntheticBacks > 0) { syntheticBacks--; return; }
-      // Sheets and modals float above every registered layer, including the full
-      // player: dismissing one must spend its own entry, not close what shows beneath.
-      if (!modalEl.hidden || !sheetEl.hidden) {
-        if (historyDepth > 0) historyDepth--;
-        if (!modalEl.hidden) { closeModal(); scrimEl.hidden = true; }
-        else closeSheet();
-        return;
-      }
-      if (closeTopBackLayer()) return;
-      if (historyDepth > 0) historyDepth--;
-      if (subView) popSubView();
-      else holdExit();
-    } finally {
-      closingFromHistory = false;
-    }
-  });
-
-  function pushSubView(next) {
-    // The screen being covered keeps its own filter and sort, for the Back that
-    // restores it; the new screen starts clean.
-    if (subView) { subView.collectionQuery = V.collectionQuery; subView.collectionSort = V.collectionSort; }
-    V.collectionQuery = "";
-    V.collectionSort = "order";
-    subViewStack.push(subView);
-    subViewScrollStack.push(view.scrollTop);
-    subView = next;
-    pushHistory();
-    V.render(true);
-    restoreViewScroll(0);
-  }
-  function popSubView() {
-    const restoreScroll = subViewScrollStack.pop() || 0;
-    subView = subViewStack.pop() || null;
-    V.collectionQuery = (subView && subView.collectionQuery) || "";
-    V.collectionSort = (subView && subView.collectionSort) || "order";
-    V.render(true);
-    restoreViewScroll(restoreScroll);
-  }
-
-  // Setting this after a frame has already gone by paints the top of the new screen first
-  // and then jumps - visible every time you back out of an album. Place it now, before
-  // anything is painted, and keep the frame-later pass for lists that are still filling in.
-  function restoreViewScroll(y) {
-    view.scrollTop = y;
-    requestAnimationFrame(() => {
-      if (view.scrollTop !== y) view.scrollTop = y;
-      V.syncHeroStickyBar();
-    });
-  }
-
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   }
@@ -495,245 +299,12 @@
     setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 300); }, undo ? 6000 : 2600);
   }
 
-  function closeSheet() {
-    V.resetQueueSelection();
-    if (!sheetEl.hidden && !closingFromHistory && historyDepth > 0) handOverEntry();
-    sheetEl.hidden = true;
-    scrimEl.hidden = true;
-    sheetEl.innerHTML = "";
-    resetSheetDrag();
-    sheetEl.classList.remove("expanded");
-    if (window.SharedQueue) SharedQueue.refreshNotifications();
-  }
-  /**
-   * Opens the bottom sheet with the given content.
-   * @param {string} html Escaped already.
-   * @param {boolean} [keepQueueSelection]
-   */
-  function openSheet(html, keepQueueSelection = false) {
-    if (!keepQueueSelection) V.resetQueueSelection();
-    if (sheetEl.hidden) pushHistory();
-    resetSheetDrag();
-    sheetEl.classList.remove("expanded");
-    sheetEl.scrollTop = 0;
-    sheetEl.innerHTML = html;
-    sheetEl.hidden = false;
-    scrimEl.hidden = false;
-    if (window.SharedQueue) SharedQueue.refreshNotifications();
-  }
-
-  // The sheet already draws a grab handle, so it should behave like one: drag it down to
-  // dismiss, drag it up to take the whole screen. A drag only starts when the content is
-  // scrolled to the top, so scrolling a long sheet still scrolls it.
-  let sheetDragStartY = 0;
-  let sheetDragStartX = 0;
-  let sheetDragBaseY = 0;
-  let sheetDragBaseHeight = 0;
-  let sheetDragMaxHeight = 0;
-  let sheetDragAt = 0;
-  let sheetDragY = 0;
-  let sheetDragging = false;
-  let sheetDragEligible = false;
-  let sheetDragFrame = 0;
-  let sheetSuppressClickUntil = 0;
-  const sheetDragHandle = ".sheet-head, .sheet-title, [data-sheet-drag-handle]";
-
-  function paintSheetDrag() {
-    sheetDragFrame = 0;
-    // Reveal more of the menu while keeping its bottom anchored. Translating the
-    // entire sheet upward leaves a black gap below it and snaps back on release.
-    const growth = sheetDragY < 0 ? Math.min(-sheetDragY / 3, Math.max(0, sheetDragMaxHeight - sheetDragBaseHeight)) : 0;
-    sheetEl.style.maxHeight = (sheetDragBaseHeight + growth) + "px";
-    const offset = sheetDragBaseY + Math.max(0, sheetDragY);
-    sheetEl.style.transform = "translate3d(0," + offset + "px,0)";
-  }
-
-  function resetSheetDrag() {
-    if (sheetDragFrame) cancelAnimationFrame(sheetDragFrame);
-    sheetDragFrame = 0;
-    sheetDragEligible = false;
-    sheetDragging = false;
-    sheetDragY = 0;
-    sheetEl.classList.remove("dragging");
-    sheetEl.style.removeProperty("transform");
-    sheetEl.style.removeProperty("max-height");
-  }
-
-  sheetEl.addEventListener("touchstart", /** @param {TouchEvent & { target: HTMLElement }} e */ e => {
-    sheetDragEligible = false;
-    sheetSuppressClickUntil = 0;
-    if (e.touches.length !== 1) { resetSheetDrag(); return; }
-    if (sheetEl.hidden || sheetEl.scrollTop > 1 || e.target.closest("input, textarea, select")) return;
-    // Options scroll normally in both sizes. Only the grab area and header move the
-    // sheet, so looking through actions cannot repeatedly expand and collapse it.
-    if (e.target !== sheetEl && !e.target.closest(sheetDragHandle)) return;
-    sheetDragStartX = e.touches[0].clientX;
-    sheetDragStartY = e.touches[0].clientY;
-    sheetDragAt = performance.now();
-    sheetDragY = 0;
-    sheetDragEligible = true;
-    sheetDragging = false;
-  }, { passive: true });
-
-  sheetEl.addEventListener("touchmove", e => {
-    if (!sheetDragEligible) return;
-    // Once native scrolling owns a touch it cannot be reclaimed halfway through.
-    if (e.touches.length !== 1 || !e.cancelable) { resetSheetDrag(); return; }
-    const dy = e.touches[0].clientY - sheetDragStartY;
-    if (!sheetDragging) {
-      const dx = e.touches[0].clientX - sheetDragStartX;
-      if (Math.abs(dx) > 6 && Math.abs(dx) >= Math.abs(dy)) { sheetDragEligible = false; return; }
-      if (sheetEl.scrollTop > 1) { sheetDragEligible = false; return; }
-      if (Math.abs(dy) <= 6) return;
-      if (dy < 0 && sheetEl.classList.contains("expanded")) { sheetDragEligible = false; return; }
-      // Pick up the visible position even during entry or a previous snap. Otherwise
-      // the entry animation overrides our transform, making the handle feel stuck.
-      const box = sheetEl.getBoundingClientRect();
-      const parentBox = sheetEl.parentElement.getBoundingClientRect();
-      sheetDragBaseY = box.bottom - parentBox.bottom;
-      sheetDragBaseHeight = box.height;
-      sheetDragMaxHeight = parentBox.height - 10;
-      for (const animation of sheetEl.getAnimations()) {
-        if (/** @type {CSSAnimation} */ (animation).animationName === "sheet-in") animation.cancel();
-      }
-      sheetDragging = true;
-      sheetEl.classList.add("dragging");
-      sheetEl.style.maxHeight = box.height + "px";
-    }
-    sheetDragY = dy;
-    // Upward drag resists, because the only thing it can do is snap to full height.
-    if (!sheetDragFrame) {
-      sheetDragFrame = requestAnimationFrame(paintSheetDrag);
-    }
-    e.preventDefault();
-  }, { passive: false });
-
-  sheetEl.addEventListener("touchend", () => {
-    if (!sheetDragEligible) return;
-    const elapsed = Math.max(1, performance.now() - sheetDragAt);
-    const flick = Math.abs(sheetDragY) / elapsed > 0.6 && Math.abs(sheetDragY) > 40;
-    const dragged = sheetDragging;
-    const dy = sheetDragY;
-    if (dragged) {
-      sheetSuppressClickUntil = performance.now() + 400;
-      // Commit the final finger position before starting the snap, including when
-      // touchend arrives before the scheduled paint. Both transitions start here.
-      if (sheetDragFrame) cancelAnimationFrame(sheetDragFrame);
-      paintSheetDrag();
-      sheetEl.getBoundingClientRect();
-    }
-    resetSheetDrag();
-    if (!dragged) return;
-    if (dy > 0 && (flick || dy > 110)) {
-      if (sheetEl.classList.contains("expanded")) sheetEl.classList.remove("expanded");
-      else dismissViaHistory(closeSheet);
-    } else if (dy < 0 && (flick || dy < -60)) {
-      sheetEl.classList.add("expanded");
-    }
-  }, { passive: true });
-
-  sheetEl.addEventListener("touchcancel", resetSheetDrag, { passive: true });
-  sheetEl.addEventListener("contextmenu", /** @param {PointerEvent & { target: HTMLElement }} e */ e => {
-    if (!e.target.closest("input, textarea, select") && e.target.closest("img, " + sheetDragHandle)) e.preventDefault();
-  });
-  sheetEl.addEventListener("click", e => {
-    if (e.detail && performance.now() < sheetSuppressClickUntil) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-    }
-  }, true);
-  scrimEl.addEventListener("click", () => dismissViaHistory(() => { closeSheet(); closeModal(); }));
-  // Escape closes the dialog or sheet on top, the way Back and a tap outside do, so they can
-  // be left from a keyboard. A control that answers Escape itself (a rename, a drag) has
-  // already taken it.
-  document.addEventListener("keydown", e => {
-    if (e.key !== "Escape" || e.defaultPrevented || (modalEl.hidden && sheetEl.hidden)) return;
-    e.preventDefault();
-    dismissViaHistory(() => { closeSheet(); closeModal(); scrimEl.hidden = true; });
-  });
-
-  let modalCleanup = null;
-  function closeModal() {
-    if (modalCleanup) { const cleanup = modalCleanup; modalCleanup = null; cleanup(); }
-    modalEl.hidden = true; modalEl.innerHTML = "";
-  }
-  function openModal(html) {
-    if (modalCleanup) { const cleanup = modalCleanup; modalCleanup = null; cleanup(); }
-    if (modalEl.hidden) pushHistory();
-    modalEl.innerHTML = html;
-    modalEl.hidden = false;
-    scrimEl.hidden = false;
-  }
-
-  function promptModal(title, initial, onOk) {
-    openModal(
-      '<div class="modal"><h3>' + esc(title) + '</h3>' +
-      '<input type="text" id="modal-input" dir="auto" value="' + esc(initial || "") + '" />' +
-      '<div class="modal-actions"><button class="btn ghost" id="modal-cancel">Cancel</button>' +
-      '<button class="btn primary" id="modal-ok">Save</button></div></div>'
-    );
-    const input = /** @type {HTMLInputElement} */ (document.getElementById("modal-input"));
-    input.focus(); input.select();
-    // The modal stays visible until its history entry is spent, so a quick second Enter
-    // or Save would otherwise run onOk again and spend one entry too many.
-    let done = false;
-    const shut = () => {
-      if (done) return;
-      done = true;
-      dismissViaHistory(() => { closeModal(); scrimEl.hidden = true; });
-    };
-    document.getElementById("modal-cancel").onclick = shut;
-    const ok = () => {
-      const v = input.value.trim();
-      if (!v || done) return;
-      shut();
-      onOk(v);
-    };
-    document.getElementById("modal-ok").onclick = ok;
-    input.addEventListener("keydown", e => { if (e.key === "Enter") ok(); });
-  }
-
-  // The Text size setting scales the content of the view and of sheets with CSS zoom (see
-  // app.css). A finger moves in screen pixels and a transform inside that content is drawn
-  // in its own, larger ones, so a gesture divides what the finger travelled by this.
-  function textZoom() {
-    if (!document.documentElement.hasAttribute("data-text-size")) return 1;
-    return parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--text-zoom")) || 1;
-  }
-
-  const PLAY_ICON = '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="7,4 21,12 7,20"/></svg>';
-
-  const ROW_DL_ICONS =
-    '<svg class="i-dl" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
-    '<svg class="i-done" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
-    '<span class="ring"></span>';
-
-  function rowDlBtn(id) {
-    return '<button class="row-dl" data-dl="' + esc(id) + '" aria-label="Save offline">' + ROW_DL_ICONS + '</button>';
-  }
-
-  function markLocalRows() {
-    // The tick means downloaded, not "happens to be in the cache right now".
-    Player.downloadedIds().then(set => {
-      /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll(".row-dl[data-dl]")).forEach(b => {
-        const state = Player.downloadStatus ? Player.downloadStatus(b.dataset.dl) : null;
-        // A queued or failed download is worth seeing on the row it belongs to, rather than
-        // only in a toast that has already gone.
-        b.classList.toggle("busy", state === "pending" || state === "busy");
-        const nowDone = set.has(b.dataset.dl) || state === "done";
-        if (nowDone && !b.classList.contains("done")) b.classList.add("rn-pop");
-        b.classList.toggle("done", nowDone);
-        b.title = state === "failed" ? "Download failed - tap to try again" : "";
-      });
-    });
-  }
-
   Player.onChange(ev => {
     if (ev.type === "remote") V.syncRemoteMenu();
     if (ev.type === "queue" || ev.type === "track" || ev.type === "restored") V.refreshQueueSheet();
     if (ev.type !== "downloads") return;
-    markLocalRows();
-    warmLocalArt();
+    V.markLocalRows();
+    V.warmLocalArt();
     const dlHolder = document.getElementById("downloaded-library");
     if (dlHolder && dlHolder.isConnected) V.fillDownloadedLibrary();
     if (subView && subView.kind === "downloaded") V.fillHomeDownloaded();
@@ -755,63 +326,14 @@
     // a spinner with no request behind it and no button to start one.
     if (subView && subView.error) { subView.error = null; subView.loading = false; subView.fetched = false; }
     const field = document.activeElement;
-    if (document.hidden || (field && view.contains(field) && (field.matches("input, textarea") || /** @type {HTMLElement} */ (field).isContentEditable))) { markStale(); return; }
+    if (document.hidden || (field && view.contains(field) && (field.matches("input, textarea") || /** @type {HTMLElement} */ (field).isContentEditable))) { V.markStale(); return; }
     if (currentTab === "search" && !subView && V.discoverState.error && V.discoverState.q) V.doSearch(V.discoverState.q);
     else V.render();
   });
 
   Store.onChange(what => {
-    if (what === "recents" || what === "library" || what === "playlists" || what === "downloads") markStale();
+    if (what === "recents" || what === "library" || what === "playlists" || what === "downloads") V.markStale();
   });
-
-  // Pictures kept with the downloads, as object URLs, so every list that draws art can
-  // reach them without going near the network. Warmed once and kept - a cover is a few
-  // tens of kilobytes and the alternative is an empty square with no signal.
-  const localArt = new Map();
-  let artWarmed = false;
-
-  async function warmLocalArt() {
-    if (!Player.artIds) return;
-    const ids = await Player.artIds();
-    let added = 0;
-    for (const id of ids) {
-      if (localArt.has(id)) continue;
-      const blob = await Player.getArt(id);
-      // Every downloads event starts a pass, several a second while a download runs; a
-      // pass that got here first has made this one's URL already, and a second would
-      // hold its picture in memory with nothing left to release it.
-      if (!blob || localArt.has(id)) continue;
-      localArt.set(id, URL.createObjectURL(blob));
-      added++;
-    }
-    artWarmed = true;
-    // A repaint here replaced the screen under the reader (the filter box being typed
-    // in, an inline rename) every time a download finished; the next natural render
-    // picks the local artwork up.
-    if (added) markStale();
-    // The player bar draws the current song's cover and has no render of its own to wait for.
-    if (added && Player.current() && localArt.has(Player.current().id)) window.dispatchEvent(new Event("aura-local-art"));
-  }
-
-  /**
-   * @param {Track} track
-   * @returns {string} The saved cover when there is one, otherwise the remote one.
-   */
-  function artSrc(track) {
-    return localArt.get(track.id) || track.thumb || Api.thumbFor(track.id);
-  }
-
-  function artHtml(track, cls) {
-    const src = artSrc(track);
-    const active = Player.current() && Player.current().id === track.id;
-    return '<div class="art ' + (cls || "") + '"><img decoding="async" src="' + esc(src) + '" loading="lazy" alt="" />' +
-      '<div class="eq"' + (active ? "" : " hidden") + '><span></span><span></span><span></span><span></span></div></div>';
-  }
-
-  function artistHtml(track) {
-    if (!track.artistId) return esc(track.artist || "");
-    return '<button class="track-artist" dir="auto" data-trackartist="' + esc(track.artistId) + '" data-trackartistname="' + esc(track.artist || "") + '" data-trackartistthumb="' + esc(track.artistThumb || "") + '">' + esc(track.artist || "") + '</button>';
-  }
 
   // Assigning innerHTML throws away every node and every decoded image, so a repaint that
   // produces identical markup still costs a visible flash - the "refreshing a web page"
@@ -832,112 +354,11 @@
     const cur = Player.current();
     const active = cur && cur.id === track.id;
     return '<li class="song' + (active ? " active" : "") + '" data-id="' + esc(track.id) + '" data-ctx="' + esc(ctx || "") + '">' +
-      artHtml(track, "lg") +
+      V.artHtml(track, "lg") +
       '<div class="meta"><div class="song-title" dir="auto">' + esc(track.title) + '</div>' +
-      '<div class="song-sub" dir="auto">' + artistHtml(track) + (track.duration ? ' <span class="dot">·</span> ' + fmt(track.duration) : "") + '</div></div>' +
-      rowDlBtn(track.id) +
+      '<div class="song-sub" dir="auto">' + V.artistHtml(track) + (track.duration ? ' <span class="dot">·</span> ' + fmt(track.duration) : "") + '</div></div>' +
+      V.rowDlBtn(track.id) +
       '<button class="kebab" data-menu="' + esc(track.id) + '" aria-label="Actions"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></li>';
-  }
-
-  // Changing track used to rebuild the whole screen. Every image was thrown away and
-  // fetched again - the black flash - and the home page recomputed itself, so the rows
-  // silently became different songs while the listener was reading them. The only thing
-  // that actually changes on a track change is which row is the current one.
-  // Removing the repaint-on-every-track-change fixed the flashing, and took the live
-  // updates with it: a song finished, recents changed, and "Jump back in" never noticed.
-  // The data changing is the reason to repaint - but not underneath someone reading the
-  // screen. If the screen is covered, repaint now; if it is being looked at, wait until
-  // they come back to it.
-  let viewStale = false;
-
-  function screenCovered() {
-    if (document.hidden) return true;
-    const fp = document.getElementById("fullplayer");
-    if (fp && !fp.hidden) return true;
-    return !modalEl.hidden || !sheetEl.hidden;
-  }
-
-  // Everything the home page builds itself from, thrown away so the next render goes and
-  // asks again. Used by the pull gesture and by the network coming back.
-  let refreshing = false;
-
-  async function forceRefresh() {
-    if (refreshing) return;
-    refreshing = true;
-    try {
-      // With no signal there is nothing to ask again, and the saved rows are all Home has:
-      // a pull on a plane used to trade them for five rows of "Couldn't load".
-      if (navigator.onLine !== false) {
-        Object.keys(V.homeFeeds).forEach(key => delete V.homeFeeds[key]);
-        V.homeRecs.items = [];
-        try { localStorage.removeItem("aura.homeFeeds"); } catch (e) {}
-        try { localStorage.removeItem("aura.homeRecs"); } catch (e) {}
-      } else toast("You're offline - showing what's saved on this device");
-      V.homeDownloads.loaded = false;
-      view.__painted = null;
-      V.render();
-      // Long enough that the gesture reads as having done something, short enough that it
-      // is never in the way.
-      await new Promise(r => setTimeout(r, 450));
-    } finally {
-      refreshing = false;
-    }
-  }
-
-  function markStale() {
-    // Hidden is not covered: a repaint there, with the network work Home does, is spent
-    // on a screen nobody sees. It waits for the return, when refreshIfStale runs.
-    if (document.hidden) { viewStale = true; return; }
-    if (screenCovered()) {
-      // Bulk writes (an import, "add all" in a sheet) notify once or twice per track; the
-      // screen underneath is repainted once after the batch, not once per notice.
-      if (coveredRender) return;
-      coveredRender = setTimeout(() => {
-        coveredRender = 0;
-        if (document.hidden) { viewStale = true; return; }
-        V.render();
-      }, 0);
-      return;
-    }
-    viewStale = true;
-  }
-  let coveredRender = 0;
-
-  /** Renders the current screen when a change arrived while it was hidden. */
-  function refreshIfStale() {
-    if (!viewStale) return;
-    viewStale = false;
-    V.render();
-  }
-
-  /** Moves the playing marker to the current track without a full render. */
-  function markNowPlaying() {
-    const cur = Player.current();
-    const id = cur ? cur.id : null;
-    /** @type {NodeListOf<HTMLElement>} */ (view.querySelectorAll('.quick-tile[data-recent]')).forEach(el => {
-      const active = el.dataset.recent === id;
-      el.classList.toggle("active", active);
-      if (active) el.setAttribute("aria-current", "true");
-      else el.removeAttribute("aria-current");
-    });
-    /** @type {NodeListOf<HTMLElement>} */ (view.querySelectorAll(".song.active, .song-row.active, .dr.active")).forEach(el => {
-      if (el.dataset.id !== id) markRowPlaying(el, false);
-    });
-    if (!id) return;
-    /** @type {NodeListOf<HTMLElement>} */ (view.querySelectorAll('.song[data-id], .song-row[data-id], .dr[data-id]')).forEach(el => {
-      markRowPlaying(el, el.dataset.id === id);
-    });
-  }
-
-  // The pulsing bars are baked into the artwork markup at render time; a track change
-  // repaints nothing, so they have to move with the highlight or they stay on the song
-  // that was playing when the list was drawn.
-  function markRowPlaying(el, active) {
-    el.classList.toggle("active", active);
-    const eq = el.querySelector(".eq");
-    if (eq) eq.hidden = !active;
-    const fab = el.classList.contains("dr") && el.querySelector(".play-fab");
-    if (fab) fab.hidden = active;
   }
 
   function emptyState(title, sub, cta) {
