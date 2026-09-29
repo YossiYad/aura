@@ -8,6 +8,11 @@
     searchPlaylists: { get: () => searchPlaylists }
   });
 
+  // A server that answered, with nothing matching, is healthy: the race moves on to the
+  // next one, but a cooldown here would drop a working server from every search and
+  // playlist match for ten minutes over one obscure title.
+  function noResults() { return Object.assign(new Error("no results"), { empty: true }); }
+
   async function searchPipedOne(base, q) {
     try {
       let filter = "music_songs";
@@ -18,11 +23,11 @@
         data = await V.fetchJson(base + "/search?q=" + q + "&filter=" + filter);
         items = (data.items || []).filter(x => x.type === "stream").map(V.normPiped).filter(Boolean);
       }
-      if (!items.length) throw new Error("no results");
+      if (!items.length) throw noResults();
       V.markGood(base);
       return { items, source: base.replace(/^https?:\/\//, ""), kind: "piped", base, filter, nextpage: data.nextpage || null };
     } catch (e) {
-      V.markBad(base, "search");
+      if (!e.empty) V.markBad(base, "search");
       V.log("search", V.host(base) + " failed: " + String(e.message || e).slice(0, 120));
       throw e;
     }
@@ -32,11 +37,11 @@
     try {
       const data = await V.fetchJson(base + "/api/v1/search?q=" + q + "&type=video");
       const items = (data || []).map(x => V.normInvidious(x, base)).filter(Boolean);
-      if (!items.length) throw new Error("no results");
+      if (!items.length) throw noResults();
       V.markGood(base);
       return { items, source: base.replace(/^https?:\/\//, ""), kind: "invidious", base, page: 1, nextpage: "invidious-page-2" };
     } catch (e) {
-      V.markBad(base, "search");
+      if (!e.empty) V.markBad(base, "search");
       V.log("search", V.host(base) + " failed: " + String(e.message || e).slice(0, 120));
       throw e;
     }

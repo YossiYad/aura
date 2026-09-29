@@ -11,10 +11,12 @@
   const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
   const $ = id => document.getElementById(id);
   function serial(run) { const work = tail.catch(() => {}).then(run); tail = work; return work; }
+  // Older WebKit has no AbortSignal.timeout; the request then runs without a limit.
+  function timeLimit(ms) { try { return AbortSignal.timeout(ms); } catch { return undefined; } }
   async function request(path = '', method = 'GET', body) {
     const response = await fetch('/api/queue/' + path, { method, cache: 'no-store', redirect: 'error',
       headers: { 'X-Queue-Device': device, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-      body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(15000) });
+      body: body === undefined ? undefined : JSON.stringify(body), signal: timeLimit(15000) });
     let result;
     try { result = await response.json(); } catch { throw Error(tr('AuraShare אינו זמין בשרת כרגע.')); }
     if (!response.ok) throw Object.assign(Error(tr(result.error) || tr('לא ניתן לעדכן את התור כרגע.')), { status: response.status });

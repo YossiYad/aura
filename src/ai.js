@@ -270,10 +270,19 @@
 
   function extractError(e, timedOut, seconds) {
     const detail = String((e && (e.name + ": " + e.message)) || e).slice(0, 120);
+    if (e && e.notJson) return e;
     if (timedOut) {
       return Object.assign(new Error("Didn't respond within " + seconds + "s - likely blocked or unreachable on this network, not an app problem"), { network: true });
     }
     return Object.assign(new Error("Couldn't reach it (" + detail + ") - check your connection"), { detail, network: true });
+  }
+
+  // A 200 whose body does not parse (a proxy or captive portal injecting a page, an empty
+  // answer) is the provider's answer, not a connectivity problem: reported as such, so the
+  // key test does not blame the network for it.
+  async function readJson(res, label) {
+    try { return await res.json(); }
+    catch (e) { throw Object.assign(new Error(label + " answered with something that was not JSON"), { notJson: true }); }
   }
 
   // One call against one Gemini key. Server-side 5xx answers are usually momentary
@@ -323,7 +332,7 @@
         log("ai", "gemini " + candidates[0] + " unavailable (HTTP " + res.status + "), trying " + candidates[i]);
         res = await sendWithRetry(candidates[i], i === candidates.length - 1);
       }
-      if (res.ok) data = await res.json();
+      if (res.ok) data = await readJson(res, "Gemini");
     } catch (e) {
       log("ai", "gemini fetch failed (" + String((e && e.name) || e) + ")");
       throw extractError(e, timedOut, 55);
@@ -376,7 +385,7 @@
         await new Promise(resolve => setTimeout(resolve, 1500));
         res = await send();
       }
-      if (res.ok) data = await res.json();
+      if (res.ok) data = await readJson(res, "Groq");
     } catch (e) {
       log("ai", "groq fetch failed (" + String((e && e.name) || e) + ")");
       throw extractError(e, timedOut, 55);
@@ -498,7 +507,7 @@
               headers: { "Authorization": "Bearer " + key }, signal: ctl.signal
             });
         if (!res.ok) break;
-        data = await res.json();
+        data = await readJson(res, PROVIDERS[provider].label);
         if (provider === "gemini") models.push(...(data.models || []));
         pageToken = provider === "gemini" ? data.nextPageToken : "";
       } while (pageToken);
@@ -507,11 +516,14 @@
     } finally {
       clearTimeout(timer);
     }
-    if (res.status === 400 || res.status === 401 || res.status === 403) {
-      throw Object.assign(new Error("the provider rejected this key (HTTP " + res.status + ")"), { keyBad: true });
+    // A failing later page leaves the models already listed; only an empty list is a verdict.
+    if (!res.ok && !models.length) {
+      if (res.status === 400 || res.status === 401 || res.status === 403) {
+        throw Object.assign(new Error("the provider rejected this key (HTTP " + res.status + ")"), { keyBad: true });
+      }
+      if (res.status === 429) throw new Error("this key is out of free quota for now (HTTP 429)");
+      throw new Error("the model list came back HTTP " + res.status);
     }
-    if (res.status === 429) throw new Error("this key is out of free quota for now (HTTP 429)");
-    if (!res.ok) throw new Error("the model list came back HTTP " + res.status);
     // Gemini names a model "models/gemini-2.5-flash" and lists what it can be asked to do;
     // a model that exists but does not do generateContent answers 404 just like a missing
     // one, so it is filtered out here rather than passing as available.
@@ -826,7 +838,7 @@
       res = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
         method: "POST", headers: { "Authorization": "Bearer " + key }, body: form, signal: ctl.signal
       });
-      if (res.ok) data = await res.json();
+      if (res.ok) data = await readJson(res, "Groq");
     } catch (e) {
       throw extractError(e, timedOut, TRANSCRIBE_MS / 1000);
     } finally {
@@ -857,7 +869,7 @@
           { inlineData: { mimeType: (blob.type || "audio/mp4").split(";")[0], data: audio } }
         ] }] })
       });
-      if (res.ok) data = await res.json();
+      if (res.ok) data = await readJson(res, "Gemini");
     } catch (e) {
       throw extractError(e, timedOut, TRANSCRIBE_MS / 1000);
     } finally {

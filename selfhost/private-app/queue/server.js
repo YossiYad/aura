@@ -45,12 +45,16 @@ function createQueueService(options = {}) {
   }
   async function readBody(req) {
     if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) fail(415, 'JSON required');
-    let length = 0; const chunks = [];
+    let length = 0, over = false; const chunks = [];
+    // Throwing out of the loop destroys the request and its socket before the 413 can be
+    // written; the rest is read and dropped instead, and answered after.
     for await (const chunk of req) {
+      if (over) continue;
       length += chunk.length;
-      if (length > 8192) fail(413, 'Request too large');
+      if (length > 8192) { over = true; chunks.length = 0; continue; }
       chunks.push(chunk);
     }
+    if (over) fail(413, 'Request too large');
     try { const value = JSON.parse(Buffer.concat(chunks));
       if (!value || Array.isArray(value) || typeof value !== 'object') fail(400, 'Invalid request');
       return value;

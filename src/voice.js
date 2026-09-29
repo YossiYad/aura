@@ -357,7 +357,7 @@
         // An unchanged final hypothesis is not more speech. Keep its original
         // silence deadline even if the browser repeats it before disconnecting.
         if (text() !== before) clearSilence();
-        options.ontext(text(), final);
+        if (options.ontext) options.ontext(text(), final);
         waitForSilence();
       };
       run.onerror = event => {

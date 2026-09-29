@@ -480,27 +480,47 @@
     // recovered copy's place in the slot instead, to be restored or discarded in turn.
     const before = readState();
     const own = before.dirty && !bareStore(Store.exportData().data) ? Store.exportData() : null;
+    // A device with nothing of its own to keep has no business replacing a server copy it
+    // has never seen: those are another device's changes, and the slot the recovered copy
+    // leaves would be emptied, so they would exist nowhere. A pull first puts it in step.
+    if (!own && (remote.stamp || 0) !== (before.stamp || 0)) {
+      throw new Error("The server copy changed since this device last synced; sync first, then restore the copy");
+    }
     importing = true;
     try { Store.importData(body.data, { preserveDownloads: true }); } finally { importing = false; }
     const revision = ++changeRevision;
     writeState(Object.assign(readState(), { stamp: remote.stamp || 0, dirty: true }));
-    const saved = await fetch(ENDPOINT, {
-      method: "PUT", headers: { "Content-Type": "application/json", "If-Match": String(remote.stamp || 0) },
-      body: JSON.stringify(Store.exportData()), cache: "no-store"
-    });
-    if (!saved.ok) throw new Error("Recovered locally; server save failed. The other-device copy was kept.");
-    const out = await saved.json();
-    writeState(Object.assign(readState(), { stamp: out.stamp, dirty: revision !== changeRevision, at: Date.now() }));
-    if (own) {
-      const kept = await fetch(CONFLICT, { method: "PUT", cache: "no-store",
-        headers: { "Content-Type": "application/json", "If-Match": String(body.stamp || 0) }, body: JSON.stringify(own) });
-      if (!kept.ok) throw new Error("Recovered and saved; this device's earlier changes could not be kept on the server");
-      conflictOnServer = true;
-      if (window.Views && Views.toast) Views.toast("Restored the other device's copy - this device's earlier changes are kept under Settings");
-    } else {
-      const removed = await fetch(CONFLICT, { method: "DELETE", headers: { "If-Match": String(body.stamp || 0) } });
-      if (!removed.ok) throw new Error("Recovered and saved; a newer other-device copy was kept");
-      conflictOnServer = false;
+    try {
+      const saved = await fetch(ENDPOINT, {
+        method: "PUT", headers: { "Content-Type": "application/json", "If-Match": String(remote.stamp || 0) },
+        body: JSON.stringify(Store.exportData()), cache: "no-store"
+      });
+      if (!saved.ok) throw new Error("Recovered locally; server save failed. The other-device copy was kept.");
+      const out = await saved.json();
+      writeState(Object.assign(readState(), { stamp: out.stamp, dirty: revision !== changeRevision, at: Date.now() }));
+      if (own) {
+        const kept = await fetch(CONFLICT, { method: "PUT", cache: "no-store",
+          headers: { "Content-Type": "application/json", "If-Match": String(body.stamp || 0) }, body: JSON.stringify(own) });
+        if (!kept.ok) throw new Error("Recovered and saved; this device's earlier changes could not be kept on the server");
+        conflictOnServer = true;
+        if (window.Views && Views.toast) Views.toast("Restored the other device's copy - this device's earlier changes are kept under Settings");
+      } else {
+        const removed = await fetch(CONFLICT, { method: "DELETE", headers: { "If-Match": String(body.stamp || 0) } });
+        if (!removed.ok) throw new Error("Recovered and saved; a newer other-device copy was kept");
+        conflictOnServer = false;
+      }
+    } catch (e) {
+      // Until this device's own changes are in the slot they exist only here: a failure
+      // on the way puts them back in place of the recovered copy, which the server still
+      // keeps, instead of leaving them nowhere behind a message that says otherwise.
+      if (own && revision === changeRevision) {
+        importing = true;
+        try { Store.importData(own, { preserveDownloads: true }); } finally { importing = false; }
+        writeState(Object.assign(readState(), { stamp: before.stamp || 0, dirty: true }));
+        if (window.Views) Views.render();
+        throw new Error("Couldn't restore the copy; this device's changes were kept (" + String((e && e.message) || e) + ")");
+      }
+      throw e;
     }
     notifyListeners();
     if (revision !== changeRevision) schedulePush(PUSH_DEBOUNCE_MS);

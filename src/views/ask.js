@@ -143,13 +143,15 @@
   }
 
   function renderAsk() {
-    V.paint(V.view, '<div class="ask-page">' + askHtml() + '</div>');
+    // Identical markup leaves the nodes, and their listeners, in place: wiring again
+    // would stack another keydown and input handler on the same textarea each time.
+    if (!V.paint(V.view, '<div class="ask-page">' + askHtml() + '</div>')) return;
     wireAsk();
   }
 
   function paintAsk() {
     const holder = document.querySelector(".ask-page");
-    if (holder) V.paint(holder, askHtml());
+    if (holder && !V.paint(holder, askHtml())) return;
     wireAsk();
   }
 

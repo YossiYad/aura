@@ -17,6 +17,7 @@
   let yt = null;
   let ytReady = false;
   let ytTimer = null;
+  let ytBootTimer = null;
   let ytWaiters = [];
 
   function ensureYT() {
@@ -84,15 +85,18 @@
           }
         });
       };
+      // Bounds every boot, including one against an already loaded API whose player
+      // never reports ready; without it that caller's load would hang.
+      clearTimeout(ytBootTimer);
+      ytBootTimer = setTimeout(() => {
+        if (!ytReady && ytWaiters.length) { ytWaiters.forEach(w => w.rej(new Error("YT api timeout"))); ytWaiters = []; }
+      }, 12000);
       if (window.YT && window.YT.Player) return boot();
       window.onYouTubeIframeAPIReady = boot;
       const s = document.createElement("script");
       s.src = "https://www.youtube.com/iframe_api";
       s.onerror = () => { ytWaiters.forEach(w => w.rej(new Error("YT api load failed"))); ytWaiters = []; };
       document.head.appendChild(s);
-      setTimeout(() => {
-        if (!ytReady && ytWaiters.length) { ytWaiters.forEach(w => w.rej(new Error("YT api timeout"))); ytWaiters = []; }
-      }, 12000);
     });
   }
 

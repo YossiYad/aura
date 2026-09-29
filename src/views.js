@@ -76,7 +76,7 @@
   });
 
   // The same number as CACHE in sw.js; a test holds the two together.
-  const APP_VERSION = "v228";
+  const APP_VERSION = "v229";
   const view = /** @type {PaintedElement} */ (document.getElementById("view"));
   const sheetEl = document.getElementById("sheet");
   const scrimEl = document.getElementById("scrim");
@@ -734,7 +734,7 @@
     // a spinner with no request behind it and no button to start one.
     if (subView && subView.error) { subView.error = null; subView.loading = false; subView.fetched = false; }
     const field = document.activeElement;
-    if (document.hidden || (field && view.contains(field) && field.matches("input, textarea"))) { markStale(); return; }
+    if (document.hidden || (field && view.contains(field) && (field.matches("input, textarea") || /** @type {HTMLElement} */ (field).isContentEditable))) { markStale(); return; }
     if (currentTab === "search" && !subView && V.discoverState.error && V.discoverState.q) V.doSearch(V.discoverState.q);
     else V.render();
   });
@@ -867,9 +867,20 @@
     // Hidden is not covered: a repaint there, with the network work Home does, is spent
     // on a screen nobody sees. It waits for the return, when refreshIfStale runs.
     if (document.hidden) { viewStale = true; return; }
-    if (screenCovered()) { V.render(); return; }
+    if (screenCovered()) {
+      // Bulk writes (an import, "add all" in a sheet) notify once or twice per track; the
+      // screen underneath is repainted once after the batch, not once per notice.
+      if (coveredRender) return;
+      coveredRender = setTimeout(() => {
+        coveredRender = 0;
+        if (document.hidden) { viewStale = true; return; }
+        V.render();
+      }, 0);
+      return;
+    }
     viewStale = true;
   }
+  let coveredRender = 0;
 
   /** Renders the current screen when a change arrived while it was hidden. */
   function refreshIfStale() {

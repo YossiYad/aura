@@ -35,6 +35,9 @@
       const token = V.loadingToken;
       const saved = await V.localIds().catch(() => new Set());
       if (token !== V.loadingToken) return;
+      // A queue edit during the read does not bump the token; re-pick from what is there now.
+      ni = V.pickNextIndex();
+      if (ni === -1) return;
       const local = saved.has(V.queue[ni].id) ? ni : V.pickNextIndex(t => saved.has(t.id));
       if (local !== -1) ni = local;
     }

@@ -170,12 +170,16 @@ window.SongProgress = (function () {
         commit(at(event));
       });
       // A touch the system took back (a notification, a palm) is not a decision to seek.
-      root.addEventListener("pointercancel", () => {
+      // The same when capture goes without an up at all - the player closed under the
+      // finger - or the timeline stays frozen at the scrub until the next touch.
+      const abandon = () => {
         if (!scrubbing) return;
         release();
         paint(value);
         if (opts.onPreview) opts.onPreview(null);
-      });
+      };
+      root.addEventListener("pointercancel", abandon);
+      root.addEventListener("lostpointercapture", abandon);
       root.addEventListener("keydown", event => {
         // Shift with an arrow is next and previous, everywhere in the app.
         if (event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return;

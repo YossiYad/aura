@@ -142,7 +142,7 @@
  * @property {number} pos Index of the current track.
  * @property {boolean} shuffle
  * @property {RepeatMode} repeat
- * @property {number[]} shuffleOrder
+ * @property {string[]} shuffleOrder Track ids.
  */
 
 /**
@@ -318,7 +318,9 @@
   let privateSession = load("aura.privateSession", false) === true;
   if (privateSession && !resumedAppSession) {
     privateSession = false;
-    save("aura.privateSession", false);
+    // Outside any transaction; a refused write here would abort the module before it
+    // has listeners, and no screen could be told anything.
+    try { save("aura.privateSession", false); } catch (e) {}
   }
 
   const listeners = [];

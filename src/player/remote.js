@@ -345,6 +345,9 @@
       return;
     }
     V.cancelCrossfade();
+    // A handoff already running on the active element is the current song; discarding
+    // it uncommitted would strip that element and leave the queue on the finished one.
+    V.commitPendingPreparedStart("remote picker");
     V.discardPrep();
     try {
       if (typeof V.audio.webkitShowPlaybackTargetPicker === "function") V.audio.webkitShowPlaybackTargetPicker();

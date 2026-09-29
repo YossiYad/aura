@@ -240,9 +240,11 @@
           return c;
         })
         .catch(error => {
-          // A missing file, or a static host answering with its fallback page, is a host
-          // with no config: keep that answer. Anything else may be the network, so ask again.
-          if (error.status !== 404 && !(error instanceof SyntaxError)) siteConfigPromise = null;
+          // A missing file (404, or 403 from a bucket-style host), or a static host answering
+          // with its fallback page, is a host with no config: keep that answer. Anything else
+          // may be the network, so ask again.
+          const status = Number(error && error.status) || 0;
+          if (!(status >= 400 && status < 500) && !(error instanceof SyntaxError)) siteConfigPromise = null;
           return {};
         });
     }

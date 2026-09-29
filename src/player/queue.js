@@ -216,6 +216,9 @@
     if (V.current().id === track.id) return false;
     V.cancelCrossfade();
     V.commitPendingPreparedStart("queue change");
+    // The commit may have moved the queue onto this very track; dropFromQueue keeps the
+    // current entry, so inserting now would queue it twice in a row.
+    if (V.current().id === track.id) return false;
     V.discardPrep();
     dropFromQueue(track.id);
     V.history = V.history.map(i => i > V.pos ? i + 1 : i);
@@ -242,6 +245,7 @@
       if (existing !== -1 && !V.queue[existing].auraShareAuto) return false;
       V.cancelCrossfade();
       V.commitPendingPreparedStart("queue change");
+      if (V.current() && V.current().id === track.id && !V.shareExhausted) return false;
       V.discardPrep();
       // A pending end-of-queue lookup was hunting for something to play, and this
       // contribution is that something. A late recommendation must not pile on after it.

@@ -263,10 +263,16 @@
   // Runs at startup, and again whenever the switch or the keys change. Silent when there
   // is nothing to do, which is almost always: it sends only when the server holds no key
   // of this listener's yet, or when the keys on this device have changed since last time.
-  let serverMixSyncing = false;
-  async function syncServerMixKey(known) {
-    if (serverMixSyncing) return null;
-    serverMixSyncing = true;
+  /** @type {Promise<any>} The last sync queued; the next one runs after it. */
+  let serverMixSyncing = Promise.resolve(null);
+  function syncServerMixKey(known) {
+    // The switch flipped while the page-load sync is still out runs after it, reading
+    // the switch as it is then; a null here read as "no server", hiding the row behind a
+    // false error although the setting had been saved.
+    serverMixSyncing = serverMixSyncing.then(() => syncServerMixKeyNow(known));
+    return serverMixSyncing;
+  }
+  async function syncServerMixKeyNow(known) {
     try {
       const info = known || await V.serverMixState();
       if (!info) return null;
@@ -292,8 +298,6 @@
     } catch (e) {
       if (window.Log) Log.add("ai", "server mix key handoff failed: " + String((e && e.message) || e).slice(0, 60));
       return null;
-    } finally {
-      serverMixSyncing = false;
     }
   }
 

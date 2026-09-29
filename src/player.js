@@ -12,6 +12,7 @@
  * @property {string} [message] Text to show, on "remote-error".
  * @property {number} [rate] The new speed, on "rate".
  * @property {any} [error] What went wrong, on "error".
+ * @property {boolean} [willSkip] On "error" and "fallback-skip": whether the player moves on by itself.
  */
 
 /**

@@ -1,4 +1,4 @@
-const CACHE = "aura-v228";
+const CACHE = "aura-v229";
 const SHELL = [
   "./",
   "./index.html",
@@ -183,7 +183,12 @@ function syncShell() {
     if (changed) for (const f of fresh) await cache.put(f.entry, f.res);
     if (revision) await cache.put(REVISION, new Response(revision));
     return changed;
-  })().finally(() => { clearTimeout(timer); shellSync = null; });
+  })().catch(error => {
+    // One file refused is the whole read refused: the other fetches still in flight would
+    // otherwise run on unbounded, alongside the retry that follows a minute later.
+    ctl.abort();
+    throw error;
+  }).finally(() => { clearTimeout(timer); shellSync = null; });
   return shellSync;
 }
 

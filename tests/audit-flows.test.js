@@ -262,7 +262,7 @@ test('an AI request in progress cannot be submitted again',async()=>{
  const c=functions('src/views.js',['runAsk'],{askState:{status:'loading'}});await c.runAsk('Second request',false);
 });
 test('a keyless device does not revoke the account key',async()=>{
- let deletes=0;const c=functions('src/views.js',['syncServerMixKey'],{serverMixSyncing:false,serverMixWanted:()=>true,Ai:{hasAnyKey:()=>false},serverMixForgetKey:async()=>deletes++,window:{}});
+ let deletes=0;const c=functions('src/views.js',['syncServerMixKey','syncServerMixKeyNow'],{serverMixSyncing:Promise.resolve(null),serverMixWanted:()=>true,Ai:{hasAnyKey:()=>false},serverMixForgetKey:async()=>deletes++,window:{}});
  await c.syncServerMixKey({ownKey:true});assert.equal(deletes,0);
 });
 test('push registration errors preserve an existing local subscription',async()=>{
@@ -271,7 +271,7 @@ test('push registration errors preserve an existing local subscription',async()=
  await assert.rejects(c.enable(),/register notifications/);assert.equal(removed,0);
 });
 test('a Groq response body remains inside the request deadline',async()=>{
- let timer,cleared=false,signal;const c=functions('src/ai.js',['callGroq'],{AbortController,setTimeout:fn=>{timer=fn;return 1;},clearTimeout:()=>cleared=true,log(){},extractError:()=>new Error('timed out'),
+ let timer,cleared=false,signal;const c=functions('src/ai.js',['callGroq','readJson'],{AbortController,setTimeout:fn=>{timer=fn;return 1;},clearTimeout:()=>cleared=true,log(){},extractError:()=>new Error('timed out'),
  fetch:async(url,opts)=>{signal=opts.signal;return {ok:true,status:200,json:()=>new Promise((resolve,reject)=>signal.addEventListener('abort',()=>reject(new Error('aborted'))))};}});
  const request=c.callGroq('dummy','dummy','dummy');for(let i=0;i<20;i++)await Promise.resolve();assert.equal(cleared,false);timer();await assert.rejects(request,/timed out/);assert.equal(cleared,true);
 });
@@ -469,4 +469,35 @@ test('automatic backup setup waits for its transaction and reports a late abort'
  tx.error = Error('storage aborted'); tx.onabort();
  await rejected;
  assert.equal(closed, 1);
+});
+// A server that answered with nothing matching is healthy. Cooling it down dropped a
+// working server from every search and playlist match for ten minutes over one title.
+test('an empty search answer does not put the server on cooldown',async()=>{
+ let bad=0;const stubs={normInvidious:x=>x,normPiped:x=>x,markBad:()=>bad++,markGood(){},log(){},host:b=>b};
+ const empty=functions('src/api.js',['searchInvidiousOne','searchPipedOne','noResults'],{...stubs,fetchJson:async()=>[]});
+ await assert.rejects(empty.searchInvidiousOne('https://a','q'),/no results/);
+ await assert.rejects(empty.searchPipedOne('https://a','q'),/no results/);
+ assert.equal(bad,0);
+ const down=functions('src/api.js',['searchInvidiousOne','noResults'],{...stubs,fetchJson:async()=>{throw Error('HTTP 502');}});
+ await assert.rejects(down.searchInvidiousOne('https://a','q'),/502/);assert.equal(bad,1);
+});
+test('a 200 whose body is not JSON is the provider\'s fault, not the network\'s',async()=>{
+ const c=functions('src/ai.js',['callGroq','readJson','extractError'],{AbortController,setTimeout:()=>1,clearTimeout(){},log(){},
+  fetch:async()=>({ok:true,status:200,json:async()=>{throw new SyntaxError('Unexpected token <');}})});
+ await assert.rejects(c.callGroq('k','m','p'),e=>e.notJson===true&&!e.network&&/not JSON/.test(e.message));
+});
+// A sheet open over the library while an import adds two hundred songs notified twice per
+// song, and each notice repainted the whole tab underneath it at once.
+test('renders under an open sheet coalesce into one',async()=>{
+ let renders=0;const timers=[];
+ const c=functions('src/views.js',['markStale'],{document:{hidden:false},screenCovered:()=>true,viewStale:false,coveredRender:0,render:()=>renders++,setTimeout:fn=>{timers.push(fn);return 1;}});
+ for(let i=0;i<50;i++)c.markStale();
+ assert.equal(renders,0);assert.equal(timers.length,1);timers[0]();assert.equal(renders,1);
+ c.markStale();assert.equal(timers.length,2,'a notice after the repaint queues another');
+});
+test('the Ask page is not wired again when its markup is unchanged',async()=>{
+ let wired=0,wrote=false;
+ const c=functions('src/views.js',['renderAsk','paintAsk'],{view:{},paint:()=>wrote,askHtml:()=>'',wireAsk:()=>wired++,document:{querySelector:()=>({})}});
+ c.renderAsk();c.paintAsk();assert.equal(wired,0);
+ wrote=true;c.renderAsk();c.paintAsk();assert.equal(wired,2);
 });

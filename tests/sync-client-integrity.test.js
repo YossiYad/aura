@@ -281,3 +281,32 @@ test('a conflict copy stays replaceable when adopting after it fails',async()=>{
  assert.equal(copies.length,2);assert.equal(copies[1].headers['If-Match'],'100');
  assert(c.Store.findTrack('other-device'));assert.equal(c.state().dirty,false);
 });
+// The recovered copy went in over this device's unsynced changes before the server had
+// them, so a save that failed on the way left those changes nowhere.
+test('a failed recovery puts this device\'s unsynced changes back',async()=>{
+ const requests=[];let main={stamp:20,data:backup('from-third')},conflict={stamp:300,data:backup('from-other')};
+ const c=client(async(url,opts={})=>{requests.push({url,...opts});const isC=url.endsWith('/conflict'),m=opts.method||'GET';
+  if(m==='PUT')return isC?response({stamp:500}):{ok:false,status:500,json:async()=>({})};
+  if(m==='DELETE'){conflict=null;return response({ok:true});}
+  return response(isC?conflict:{stamp:main.stamp,data:main.data,hasConflict:true});});
+ await flushMicrotasks(40);
+ c.Store.addTrack({id:'only-here'});await c.Sync.pushNow();await flushMicrotasks(40);
+ await assert.rejects(c.Sync.recoverConflict(),/changes were kept/);
+ assert(c.Store.findTrack('only-here'),'the unsynced change is back in the library');
+ assert(!c.Store.findTrack('from-other'));assert.equal(c.state().dirty,true);
+ assert(conflict,'the recovered copy still waits on the server');
+ assert(!requests.some(r=>r.method==='PUT'&&r.url.endsWith('/conflict')),'nothing was filed over the recovered copy');
+});
+// A clean device that restores over a server copy it never saw replaces another device's
+// changes and then empties the slot, so those changes would exist nowhere.
+test('a clean device refuses to restore over a server copy it has not seen',async()=>{
+ const requests=[];let main={stamp:10,data:backup('initial')};
+ const c=client(async(url,opts={})=>{requests.push({url,...opts});
+  return response(url.endsWith('/conflict')?{stamp:300,data:backup('from-other')}:{...main,hasConflict:true});});
+ await flushMicrotasks(40);
+ // Another device pushed after this one last synced.
+ main={stamp:30,data:backup('newer')};
+ await assert.rejects(c.Sync.recoverConflict(),/sync first/);
+ assert(c.Store.findTrack('initial'));assert(!c.Store.findTrack('from-other'));assert.equal(c.state().stamp,10);
+ assert(!requests.some(r=>r.method==='PUT'||r.method==='DELETE'));
+});

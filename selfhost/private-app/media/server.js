@@ -88,10 +88,15 @@ function createMediaService({ origin, key, upstream = 'http://invidious:3000', n
     if (++rate.count > 240) return send(res, 429, { error: 'Too many tickets' });
     try {
       let body = '';
+      let over = false;
+      // Leaving the loop early destroys the request and its socket before the 413 can be
+      // written; the rest is read and dropped instead, and answered after.
       for await (const chunk of req) {
+        if (over) continue;
         body += chunk;
-        if (Buffer.byteLength(body) > 8192) return send(res, 413, { error: 'Request too large' });
+        if (Buffer.byteLength(body) > 8192) { over = true; body = ''; }
       }
+      if (over) return send(res, 413, { error: 'Request too large' });
       const source = sourceUrl(JSON.parse(body).url);
       let expiresAt = now() + TTL;
       if (source.searchParams.has('expire')) {

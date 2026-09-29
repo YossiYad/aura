@@ -348,11 +348,14 @@
   // heading edits in place instead: it keeps its own styling, so nothing moves, and Enter
   // or tapping away saves while Escape puts the old name back.
   let renamingPl = null;
+  let renamingEl = null;
 
   function beginTitleRename(el, pid) {
     const p = Store.getPlaylist(pid);
-    if (!p || renamingPl) return;
+    // A repaint can take the heading being edited away without a blur; that edit is over.
+    if (!p || (renamingPl && renamingEl && renamingEl.isConnected)) return;
     renamingPl = pid;
+    renamingEl = el;
     const before = p.name;
     try { el.contentEditable = "plain-text-only"; } catch (e) {}
     if (!el.isContentEditable) el.contentEditable = "true";
@@ -369,6 +372,7 @@
       if (closed) return;
       closed = true;
       renamingPl = null;
+      renamingEl = null;
       const typed = String(el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80);
       el.contentEditable = "false";
       el.removeEventListener("keydown", onKey);

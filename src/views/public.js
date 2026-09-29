@@ -34,12 +34,14 @@
       const track = Player.current();
       if (!track) return;
       document.getElementById("fullplayer").hidden = true;
-      V.currentTab = "search";
-      /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll("#tabs .bn-tab")).forEach(b => b.classList.toggle("active", b.dataset.tab === "search"));
+      // The artist page stacks on the screen it was opened from, on that tab, so Back
+      // returns there; only the search fallback moves to the Search tab.
       if (track.artistId) V.pushSubView({ kind: "ytArtist", id: track.artistId, name: track.artist || "Unknown", thumb: track.artistThumb || track.thumb || "" });
       else {
         // A screen left open would be drawn again over the results it was left for.
         V.spendSubViewEntries();
+        V.currentTab = "search";
+        /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll("#tabs .bn-tab")).forEach(b => b.classList.toggle("active", b.dataset.tab === "search"));
         V.subView = null;
         V.subViewStack = [];
         V.subViewScrollStack = [];
@@ -51,8 +53,6 @@
       if (!id) return;
       const f = Store.getFollow(id) || { id, name: "Artist", thumb: "" };
       document.getElementById("fullplayer").hidden = true;
-      V.currentTab = "search";
-      /** @type {NodeListOf<HTMLElement>} */ (document.querySelectorAll("#tabs .bn-tab")).forEach(b => b.classList.toggle("active", b.dataset.tab === "search"));
       V.pushSubView({ kind: "ytArtist", id: f.id, name: f.name, thumb: f.thumb });
     },
     // Where a manifest shortcut lands - the menu behind a long press on the home screen

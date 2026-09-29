@@ -474,3 +474,23 @@ test('a prepared song already buffered whole keeps its expired link', async () =
   assert.deepEqual(asked, ['one', 'two']);
   h.window.Player.dismiss();
 });
+
+// "Play next" on the song a pending handoff was already moving to checked the current
+// song before the handoff was committed, then inserted the song after itself.
+test('play next on the song a pending transition moves to does not queue it twice', async () => {
+  const h = setup();
+  h.internals.keepPreparedSource({ ni: 1, id: 'two', src: 'https://test/two' });
+  let release;
+  h.audio.play = () => new Promise(resolve => { release = resolve; });
+  h.audio.ended = true;
+  h.audio.dispatch('ended');
+  await flushMicrotasks(40);
+  assert.equal(h.window.Player.current().id, 'one');
+  assert.equal(h.window.Player.playNext({ id: 'two', title: 'Two' }), false);
+  assert.deepEqual(Array.from(h.window.Player.queue(), t => t.id), ['one', 'two']);
+  assert.equal(h.window.Player.current().id, 'two');
+  h.audio.ended = false;
+  release();
+  await flushMicrotasks(40);
+  h.window.Player.dismiss();
+});
