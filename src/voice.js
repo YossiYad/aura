@@ -910,20 +910,24 @@
       utterance.voice = voice;
       utterance.lang = voice.lang;
       let finished = false;
+      let started = false;
       function done(ok) {
         if (finished) return;
         finished = true;
         clearTimeout(timer);
-        utterance.onend = utterance.onerror = null;
+        utterance.onstart = utterance.onend = utterance.onerror = null;
         pendingReply = null;
         if (!ok) synth.cancel();
-        lastSpokeAt = Date.now();
+        // Only speech that played leaves audio behind for the next request to wait on; a
+        // reply cancelled before it began used to earn the same idle.
+        if (ok || started) lastSpokeAt = Date.now();
         log("spoken reply " + (ok ? "ended" : "cancelled or failed"));
         resolve(ok);
       }
       // A missing OS speech callback must never prevent the song starting.
       const timer = setTimeout(() => done(false), 8000);
       pendingReply = () => done(false);
+      utterance.onstart = () => { started = true; };
       utterance.onend = () => done(true);
       utterance.onerror = () => done(false);
       try { log("spoken reply started"); synth.speak(utterance); } catch (e) { done(false); }

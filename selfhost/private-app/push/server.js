@@ -83,6 +83,17 @@ function readBody(req, limit) {
   });
 }
 
+const MAX_SUBS = 20;
+// Every notification is a POST to the endpoint that was registered. Only an https
+// address is one a browser hands out, so nothing else is worth sending to from here.
+function pushEndpoint(value) {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !!url.hostname && !/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[|0\.)/.test(url.hostname);
+  } catch (e) { return false; }
+}
+
 function getSubs(key) { return readJson(subsFile(key), []); }
 function saveSubs(key, list) { writeJson(subsFile(key), list); }
 
@@ -116,8 +127,12 @@ const server = http.createServer((req, res) => {
       let sub;
       try { sub = JSON.parse(raw.toString("utf8")); } catch (e) { send(res, 400, { error: "bad json" }); return; }
       if (!sub || !sub.endpoint || !sub.keys) { send(res, 400, { error: "not a push subscription" }); return; }
+      if (!pushEndpoint(sub.endpoint)) { send(res, 400, { error: "not a push service endpoint" }); return; }
       const subs = getSubs(key).filter(s => s.endpoint !== sub.endpoint);
       subs.push({ endpoint: sub.endpoint, keys: sub.keys, addedAt: Date.now() });
+      // A listener has a handful of devices, not hundreds: the oldest registrations go
+      // first, so a page that keeps re-subscribing cannot grow the list without bound.
+      while (subs.length > MAX_SUBS) subs.shift();
       saveSubs(key, subs);
       send(res, 200, { ok: true, count: subs.length });
     }).catch(e => send(res, e && e.code === 413 ? 413 : 400, { error: e.message || "bad request" }));

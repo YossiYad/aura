@@ -5,7 +5,6 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 # auto-deploy.sh re-runs this from cron with none of the variables the first run was
 # given. What that run wrote to .env is the default here; a variable set now still wins.
 saved() { if [ -f "$SCRIPT_DIR/.env" ]; then sed -n "s/^$1=//p" "$SCRIPT_DIR/.env" | tail -n 1; fi; }
-APP_PORT="${APP_PORT:-$(saved APP_PORT)}"; APP_PORT="${APP_PORT:-8080}"
 OAUTH_PORT="${OAUTH_PORT:-$(saved OAUTH_PORT)}"; OAUTH_PORT="${OAUTH_PORT:-4180}"
 INVIDIOUS_NETWORK="${INVIDIOUS_NETWORK:-$(saved INVIDIOUS_NETWORK)}"; INVIDIOUS_NETWORK="${INVIDIOUS_NETWORK:-invidious_default}"
 REPO_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
@@ -81,7 +80,6 @@ echo "Wrote $REPO_DIR/config.json (git-ignored, stays on this machine)"
 # .env is git-ignored, like everything else here that describes this particular machine.
 cat > "$SCRIPT_DIR/.env" <<EOF
 PUBLIC_HOST=$PUBLIC_HOST
-APP_PORT=$APP_PORT
 OAUTH_PORT=$OAUTH_PORT
 INVIDIOUS_NETWORK=$INVIDIOUS_NETWORK
 EOF
@@ -94,6 +92,6 @@ echo "  $PUBLIC_HOST {"
 echo "      reverse_proxy 127.0.0.1:$OAUTH_PORT"
 echo "  }"
 echo "Use the block above with Caddy, or an equivalent configuration with your HTTPS proxy."
-echo "Proxy to oauth2-proxy (port $OAUTH_PORT), not directly to nginx (port $APP_PORT)."
+echo "Proxy to oauth2-proxy (port $OAUTH_PORT). nginx is not published on the host."
 echo "Once HTTPS is configured, open https://$PUBLIC_HOST and sign in."
 echo "Google OAuth redirect URI: https://$PUBLIC_HOST/oauth2/callback"

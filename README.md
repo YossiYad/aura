@@ -318,7 +318,7 @@ Caddy obtains and renews the HTTPS certificate when the domain and ports are rea
 See [Caddy's reverse proxy guide](https://caddyserver.com/docs/quick-starts/reverse-proxy).
 With another proxy, forward to `http://127.0.0.1:4180`, preserve the original `Host`, and
 set `X-Forwarded-Proto: https`. If you changed `OAUTH_PORT`, use that port instead.
-Always forward through oauth2-proxy, never directly to the internal app port `8080`.
+Always forward through oauth2-proxy. The app's own nginx is not published on the host.
 
 Open `https://music.example.com`, sign in with an allowed account, test a song and
 install the PWA from your browser. Listeners only need a browser, with no VPN app.

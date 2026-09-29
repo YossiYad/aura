@@ -183,7 +183,7 @@ test('Gemini transcribes the recording itself when Groq cannot', async () => {
   assert.match(calls[1].url, /generativelanguage\.googleapis\.com\/v1beta\/models\/.+:generateContent\?key=gemini-key$/);
   assert.equal(calls[1].options.headers['Content-Type'], 'text/plain', 'no CORS preflight, as with every Gemini call');
   const audio = JSON.parse(calls[1].options.body).contents[0].parts[1].inlineData;
-  assert.equal(audio.mimeType, 'audio/mp4');
+  assert.equal(audio.mimeType, 'audio/m4a', 'the name Gemini lists for the mp4 container');
   assert.equal(audio.data, Buffer.from([1, 2, 3, 250]).toString('base64'));
 });
 

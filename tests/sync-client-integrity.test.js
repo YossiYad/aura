@@ -310,3 +310,21 @@ test('a clean device refuses to restore over a server copy it has not seen',asyn
  assert(c.Store.findTrack('initial'));assert(!c.Store.findTrack('from-other'));assert.equal(c.state().stamp,10);
  assert(!requests.some(r=>r.method==='PUT'||r.method==='DELETE'));
 });
+// The keepalive copy was recognised by comparing the server data with the local data, so
+// any local write before the next pull (a queue position, a resume point) made the device
+// file its own newer data as a conflict and adopt its own older copy.
+test('a keepalive upload followed by a local edit is still this device\'s own copy',async()=>{
+ const requests=[];let remote=null;
+ const c=client(async(url,opts={})=>{requests.push({url,...opts});if(opts.method==='PUT')return response({stamp:31});return response(remote||{stamp:10,data:backup('initial')});});
+ await flushMicrotasks(40);c.Store.addTrack({id:'mine'});
+ c.window.dispatch('pagehide');
+ const sent=requests.find(x=>x.method==='PUT');assert(sent&&sent.keepalive,'the way out uploads');
+ remote={stamp:30,data:JSON.parse(sent.body)};
+ c.Store.addTrack({id:'later'});
+ c.time.value+=61000;c.window.dispatch('online');await flushMicrotasks(40);
+ assert(!requests.some(x=>x.url.endsWith('/conflict')&&x.method==='PUT'),'its own copy needs no conflict copy');
+ assert(c.Store.findTrack('later'),'the later edit is kept');assert.equal(c.state().stamp,30);assert.equal(c.state().dirty,true);
+ c.runTimers();await flushMicrotasks(40);
+ assert(requests.some(x=>x.method==='PUT'&&x.headers['If-Match']==='30'),'the later edit is pushed on top of it');
+ assert.equal(c.state().dirty,false);assert.equal(c.reloads(),0);
+});

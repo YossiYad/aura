@@ -19,7 +19,7 @@ function fixture(t) {
   // Any attempt to use the old network provider must fail the test.
   fs.writeFileSync(path.join(bin, 'tailscale'), '#!/bin/sh\nexit 99\n', { mode: 0o755 });
   const env = { ...process.env, PATH: bin + path.delimiter + process.env.PATH,
-    PUBLIC_HOST: '', APP_PORT: '', OAUTH_PORT: '', INVIDIOUS_NETWORK: '',
+    PUBLIC_HOST: '', OAUTH_PORT: '', INVIDIOUS_NETWORK: '',
     SETUP_CALL_LOG: path.join(root, 'docker-calls') };
   return { root, dir, run: values => spawnSync('sh', [path.join(dir, 'setup.sh')],
     { env: { ...env, ...values }, encoding: 'utf8' }) };

@@ -41,7 +41,7 @@ sudo systemctl reload caddy
 ```
 
 The proxy must send requests to `127.0.0.1:4180` (or your `OAUTH_PORT`), which enforces
-Google sign-in. Never proxy directly to nginx on `APP_PORT`. An alternative proxy must
+Google sign-in. nginx itself is not published on the host. An alternative proxy must
 preserve the original Host and set `X-Forwarded-Proto: https`.
 
 Open your HTTPS address in a browser and sign in. Add it to your phone's home screen
@@ -218,7 +218,6 @@ adds one more small Node container, capped at 96 MB, and `aura-mix` another, cap
 | Variable | Default | Meaning |
 |---|---|---|
 | `PUBLIC_HOST` | *(required on first run)* | Public domain without scheme, port or path; saved for updates |
-| `APP_PORT` | `8080` | Loopback port nginx listens on before oauth2-proxy |
 | `OAUTH_PORT` | `4180` | Loopback port oauth2-proxy listens on before the HTTPS reverse proxy |
 | `INVIDIOUS_NETWORK` | `invidious_default` | Docker network the Invidious container is on |
 

@@ -104,3 +104,18 @@ for (const service of ['push', 'mix']) test(service + ' server answers an oversi
   assert.equal(small.status, 200);
  } finally { server.closeAllConnections(); server.close(); }
 });
+
+// A subscription endpoint is where every notification is POSTed. Anything but a public
+// https address was accepted, so the server could be pointed at an internal host.
+test('the push server registers only https endpoints on public hosts', () => {
+ const fs = require('node:fs');
+ const source = fs.readFileSync(require.resolve('../selfhost/private-app/push/server.js'), 'utf8');
+ const start = source.indexOf('function pushEndpoint(');
+ const pushEndpoint = vm.runInNewContext('(' + source.slice(start, source.indexOf('\n}\n', start) + 2) + ')', { URL });
+ assert.equal(pushEndpoint('https://fcm.googleapis.com/fcm/send/abc'), true);
+ assert.equal(pushEndpoint('https://web.push.apple.com/QAbc'), true);
+ for (const bad of ['http://fcm.googleapis.com/x', 'https://localhost/x', 'https://127.0.0.1:8088/api/sync/', 'https://192.168.1.4/x',
+  'https://172.20.0.3/x', 'https://[::1]/x', 'ftp://push.test/x', 'not a url', 42, 'https://' + 'a'.repeat(2100)]) {
+  assert.equal(pushEndpoint(bad), false, String(bad).slice(0, 40));
+ }
+});

@@ -808,6 +808,14 @@
   // fallback. Groq goes first even when both are allowed: Gemini's route hangs on some
   // networks (docs/ai-providers.md), and a spoken request cannot wait out that timeout.
   const TRANSCRIBE_MS = 20000;
+  // Gemini's inline audio list names audio/m4a and audio/wav; iOS MediaRecorder reports
+  // its recording as audio/mp4, which is the same container under the name it does not list.
+  function geminiAudioMime(type) {
+    const mime = String(type || "audio/mp4").split(";")[0].trim().toLowerCase();
+    if (mime === "audio/mp4" || mime === "audio/x-m4a") return "audio/m4a";
+    if (mime === "audio/x-wav") return "audio/wav";
+    return mime;
+  }
   function audioFilename(type) {
     const sub = String(type || "").split(";")[0].split("/")[1] || "";
     if (/mp4|m4a|aac/.test(sub)) return "request.m4a";
@@ -866,7 +874,7 @@
         body: JSON.stringify({ contents: [{ parts: [
           { text: "Transcribe this spoken request word for word" + (lang === "he" ? ", in Hebrew" : "") +
             ". Reply with only the words that were said, nothing else, and with nothing at all if no words were said." },
-          { inlineData: { mimeType: (blob.type || "audio/mp4").split(";")[0], data: audio } }
+          { inlineData: { mimeType: geminiAudioMime(blob.type), data: audio } }
         ] }] })
       });
       if (res.ok) data = await readJson(res, "Gemini");

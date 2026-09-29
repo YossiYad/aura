@@ -501,3 +501,8 @@ test('the Ask page is not wired again when its markup is unchanged',async()=>{
  c.renderAsk();c.paintAsk();assert.equal(wired,0);
  wrote=true;c.renderAsk();c.paintAsk();assert.equal(wired,2);
 });
+test('a Gemini transcription names the recording under a type Gemini lists',()=>{
+ const c=functions('src/ai.js',['geminiAudioMime'],{});
+ assert.equal(c.geminiAudioMime('audio/mp4;codecs=mp4a.40.2'),'audio/m4a');assert.equal(c.geminiAudioMime(''),'audio/m4a');
+ assert.equal(c.geminiAudioMime('audio/webm;codecs=opus'),'audio/webm');assert.equal(c.geminiAudioMime('audio/x-wav'),'audio/wav');
+});

@@ -162,6 +162,32 @@
     catch (e) { return false; }
   }
 
+  // FNV-1a over the text: enough to tell the copy this device sent from any other.
+  /**
+   * @param {string} text
+   * @returns {string}
+   */
+  function textHash(text) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+    return h.toString(16);
+  }
+
+  // The keepalive upload is remembered by a hash of what went out. Comparing the server
+  // copy with the local data instead broke as soon as anything local moved on before the
+  // next pull - the queue position, a resume point, the server that answered last - and the
+  // device then filed its own newer data as a conflict and adopted its own older copy.
+  /**
+   * @param {{ data?: Object }} remote
+   * @param {{ sentHash?: string }} state
+   * @returns {boolean} True when the server copy is the one this device last sent out.
+   */
+  function sentByThisDevice(remote, state) {
+    if (!state.sentHash) return false;
+    try { return textHash(JSON.stringify(remote && remote.data)) === state.sentHash; }
+    catch (e) { return false; }
+  }
+
   // A device with nothing in it has nothing worth a conflict copy: a fresh install
   // whose first instance lookup marked it dirty used to upload an empty library over
   // another device's waiting changes.
@@ -179,15 +205,18 @@
     // Nothing here worth a conflict copy, but the server's library still has to come in:
     // taking its stamp without its data let the next edit upload the empty library over it.
     const bare = state.dirty && bareStore(Store.exportData().data);
-    if (state.dirty && !bare && sameAsLocal(body.data)) {
+    if (state.dirty && !bare && (sameAsLocal(body.data) || sentByThisDevice(body.data, state))) {
+      // Edits since that upload are still this device's to push, on top of its own copy.
+      const stillDirty = !sameAsLocal(body.data);
       writeState({
         stamp: body.stamp || 0,
         at: Date.now(),
         email: body.email || state.email || "",
         size: body.size || 0,
-        dirty: false
+        dirty: stillDirty
       });
       notifyListeners();
+      if (stillDirty) schedulePush(PUSH_DEBOUNCE_MS);
       return;
     }
     let announce = false;
@@ -553,8 +582,10 @@
     window.addEventListener("pagehide", () => {
       if (!available || syncTasks || pushing || !readState().dirty) return;
       try {
-        const body = JSON.stringify(Store.exportData());
+        const sent = Store.exportData();
+        const body = JSON.stringify(sent);
         if (new TextEncoder().encode(body).byteLength > KEEPALIVE_LIMIT) return;
+        writeState(Object.assign(readState(), { sentHash: textHash(JSON.stringify(sent.data)) }));
         fetch(ENDPOINT, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "If-Match": String(readState().stamp || 0) },
