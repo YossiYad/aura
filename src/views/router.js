@@ -67,8 +67,11 @@
       // deleted by a sync pull. Leave it the way a Back press would, restoring the screen
       // beneath with its own chrome and spending the entry this screen pushed, rather
       // than painting the tab under the hero chrome with a dead Back press left behind.
-      V.spendEntry();
+      // Uncovered by a Back press, the entry is spent a task later, once that press
+      // has been accounted for; spent in the same turn it was skipped, and the next
+      // Back press did nothing.
       V.popSubView();
+      setTimeout(V.spendEntry, 0);
       return;
     }
     if (V.currentTab === "home") V.renderHome();

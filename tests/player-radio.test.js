@@ -348,3 +348,30 @@ test('podcast continuation excludes music and different shows on the same publis
   await flushMicrotasks(100);
   assert.deepEqual(Array.from(h.window.Player.queue(), t => t.id), ['seed', 'next']);
 });
+
+// An extension with no seed at all finished before its promise was assigned, and the
+// cleanup inside it compared the wrong value: every later extension then got that
+// settled promise back and the queue was never topped up again.
+test('a radio extension that found no seed does not pin every later one', async () => {
+  const h = setup([song('seed')]);
+  let searches = 0;
+  let items = [];
+  h.Api.search = async () => { searches++; return { items }; };
+  h.play();
+  // The extension that playback itself starts finds nothing and settles first.
+  await flushMicrotasks(50);
+  h.runImmediateTimers();
+  await flushMicrotasks(50);
+  searches = 0;
+  items = songs('found', 5);
+  h.Store.isBlocked = t => !!t && t.id === 'seed';
+  const top = h.Store.topListeningTracks;
+  h.Store.topListeningTracks = () => [];
+  assert.equal(await h.window.__playerInternals.extendRadio(), false);
+  h.Store.topListeningTracks = top;
+  assert.equal(searches, 0, 'a blocked current song is no seed');
+  h.Store.isBlocked = () => false;
+  await h.window.__playerInternals.extendRadio();
+  await flushMicrotasks(50);
+  assert(searches > 0, 'the next extension runs instead of returning the settled one');
+});

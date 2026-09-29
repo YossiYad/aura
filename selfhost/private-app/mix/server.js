@@ -28,6 +28,7 @@ const MIX_SONGS = Math.min(40, positiveInt(process.env.MIX_SONGS, 15, 5));
 // A rebuild asked for by hand costs an AI call and a few dozen searches, so it is not
 // something to hand out on every page load.
 const REBUILD_COOLDOWN_MS = 10 * 60 * 1000;
+const rebuildAt = new Map();
 const MIX_DIR = path.join(DATA_DIR, "mix");
 
 function envList(name) {
@@ -121,13 +122,18 @@ function providersFor(key) {
   const own = readOwnKeys(key);
   if (!own) return { providers: SHARED_PROVIDERS, mine: false };
   const wanted = own.mode === "both" ? ["gemini", "groq"] : [own.mode];
-  const providers = wanted.map(name => ({
+  const all = ["gemini", "groq"].map(name => ({
     name,
     keys: name === "gemini" ? own.gemini : own.groq,
     model: (name === "gemini" ? own.geminiModel : own.groqModel) || DEFAULT_MODEL[name],
     fallbackModel: FALLBACK_MODEL[name]
   })).filter(p => p.keys.length);
-  return providers.length ? { providers, mine: true } : { providers: SHARED_PROVIDERS, mine: false };
+  const providers = all.filter(p => wanted.indexOf(p.name) !== -1);
+  // A mode naming a provider this listener holds no key for used to fall through to the
+  // shared key while Settings kept saying "your key builds your mix". Their own keys do.
+  if (providers.length) return { providers, mine: true };
+  if (all.length) return { providers: all, mine: true };
+  return { providers: SHARED_PROVIDERS, mine: false };
 }
 
 function readJson(file, fallback) {
@@ -476,6 +482,10 @@ async function callGroq(key, model, prompt) {
 
 function hasSharedKey() { return SHARED_PROVIDERS.some(p => p.keys.length); }
 function canBuildFor(key) { return providersFor(key).providers.some(p => p.keys.length); }
+function wantsHomeMix(key) {
+  const account = readAccount(key);
+  return !!(account && account.settings && account.settings.aiHomeSection === true);
+}
 
 // Every live key across both providers, Gemini first, so a request falls through to Groq
 // only once every Gemini key has actually failed.
@@ -487,11 +497,14 @@ async function askForSongs(prompt, providers) {
         const text = provider.name === "gemini"
           ? await callGemini(key, provider, prompt)
           : await callGroq(key, provider.model, prompt);
-        return JSON.parse(text);
+        const parsed = JSON.parse(text);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("the reply was not a song list");
+        return parsed;
       } catch (e) {
         lastErr = e;
         if (e && e.keyBad) failedAt.set(provider.name + "|" + key, Date.now());
-        console.log(provider.name + " key ..." + key.slice(-4) + " failed: " + String((e && e.message) || e).slice(0, 80));
+        console.log(provider.name + " key " + (provider.keys.indexOf(key) + 1) + " of " + provider.keys.length +
+          " failed: " + String((e && e.message) || e).slice(0, 80));
       }
     }
   }
@@ -533,9 +546,11 @@ async function buildMixOnce(key) {
     "the same artist too often. " + JSON_SHAPE;
 
   const parsed = await askForSongs(instruction, providers);
+  // Bounded: a model that answers with two hundred songs is two hundred searches.
   const suggestions = (Array.isArray(parsed.tracks) ? parsed.tracks : [])
     .map(t => ({ title: String((t && t.title) || "").trim(), artist: String((t && t.artist) || "").trim() }))
-    .filter(t => t.title);
+    .filter(t => t.title)
+    .slice(0, MIX_SONGS * 2);
   if (!suggestions.length) throw new Error("no songs came back");
 
   const queue = suggestions.map((item, index) => ({ item, index }));
@@ -552,7 +567,10 @@ async function buildMixOnce(key) {
     }
   }));
 
-  const found = matches.filter(Boolean);
+  // Two suggestions that resolve to the same upload ("Song" and "Song (Official Video)")
+  // are one song on Home, not two identical cards.
+  const seen = new Set();
+  const found = matches.filter(t => t && !seen.has(t.id) && seen.add(t.id));
   if (!found.length) throw new Error("nothing matched");
   const known = knownArtists(account);
   const inWorld = found.filter(t => t.artist && known.has(foldText(t.artist)));
@@ -581,7 +599,7 @@ async function buildMixOnce(key) {
 let running = false;
 
 async function runAll(reason) {
-  if (running) return;
+  if (running) { console.log("run skipped (" + reason + "): a run is still in progress"); return; }
   running = true;
   try { await runAccounts(reason); }
   finally { running = false; }
@@ -591,7 +609,10 @@ async function runAccounts(reason) {
   const started = Date.now();
   // Someone who has not handed a key over, on a server with no shared one either, is not
   // a failure to report every night - there is simply nothing to build for them.
-  const accounts = listAccounts().filter(canBuildFor);
+  // Someone who keeps the Home row off never asks for the mix, so a build for them is an
+  // AI call and a dozen searches a night spent on their own quota for nothing. The switch
+  // travels in the synced settings; the button in Settings and the app's own row do not.
+  const accounts = listAccounts().filter(key => canBuildFor(key) && wantsHomeMix(key));
   let ok = 0;
   let failed = 0;
   console.log("nightly mix run started (" + reason + ") for " + accounts.length + " account(s) with a key");
@@ -621,9 +642,12 @@ function lastSlot(now) {
 // Rescheduled one slot at a time rather than set as a 24-hour interval, so a daylight
 // saving change moves the run with the clock instead of leaving it an hour adrift, and a
 // container that was down at 4am catches up on the next start instead of skipping a day.
-function scheduleNext() {
+function scheduleNext(armed) {
   const now = Date.now();
-  const slot = new Date(lastSlot(now));
+  // Measured from the slot just run when there was one: a timer that fired a moment
+  // early, with a run that finished before the wall clock reached the slot, otherwise
+  // read that slot as still ahead and ran it a second time a minute later.
+  const slot = new Date(lastSlot(Math.max(now, (armed || 0) + 1)));
   slot.setDate(slot.getDate() + 1);
   slot.setHours(MIX_HOUR, 0, 0, 0);
   const next = slot.getTime();
@@ -631,7 +655,7 @@ function scheduleNext() {
   setTimeout(() => {
     runAll("scheduled hour")
       .catch(e => console.log("run failed: " + e.message))
-      .finally(scheduleNext);
+      .finally(() => scheduleNext(next));
   }, wait);
   console.log("next run at " + new Date(next).toString());
 }
@@ -732,7 +756,12 @@ const server = http.createServer((req, res) => {
       });
       console.log("stored an AI key for " + key);
       send(res, 200, Object.assign({ ok: true }, statusOf()));
-    }).catch(e => send(res, e && e.code === 413 ? 413 : 400, { error: e.message || "bad request" }));
+    }).catch(e => {
+      // A disk that refused the write is this server's problem, and its path is not the
+      // listener's business.
+      if (e && e.code === 413) send(res, 413, { error: e.message });
+      else { console.log("storing a key failed: " + String((e && e.message) || e).slice(0, 100)); send(res, 500, { error: "Couldn't store the key" }); }
+    });
     return;
   }
 
@@ -749,10 +778,14 @@ const server = http.createServer((req, res) => {
   if (route === "/rebuild" && req.method === "POST") {
     if (!canBuildFor(key)) { send(res, 503, { error: "no AI key for this account on the server" }); return; }
     const existing = readMix(key);
-    if (existing && Date.now() - Number(existing.at || 0) < REBUILD_COOLDOWN_MS) {
-      send(res, 429, { error: "just built - try again in a few minutes", at: existing.at });
+    // Counted from the last attempt as well as the last mix: with no mix yet (or the mix
+    // just deleted with the key) every failing rebuild was another AI call.
+    const last = Math.max(rebuildAt.get(key) || 0, existing ? Number(existing.at || 0) : 0);
+    if (Date.now() - last < REBUILD_COOLDOWN_MS) {
+      send(res, 429, { error: "just built - try again in a few minutes", at: last });
       return;
     }
+    rebuildAt.set(key, Date.now());
     buildMix(key).then(
       mix => send(res, 200, { available: true, at: mix.at, sig: mix.sig, name: mix.name, tracks: mix.tracks }),
       e => send(res, 500, { error: String((e && e.message) || e).slice(0, 120) })

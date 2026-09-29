@@ -494,3 +494,28 @@ test('play next on the song a pending transition moves to does not queue it twic
   await flushMicrotasks(40);
   h.window.Player.dismiss();
 });
+
+// The ended element reads as paused while the standby's handoff is still starting, so
+// Play pressed then restarted the finished song from the top under the next one and
+// left the handoff uncommitted with both elements sounding.
+test('play pressed during a standby handoff joins it instead of replaying the ended song', async () => {
+  const h = setup();
+  h.document.hidden = false;
+  h.document.visibilityState = 'visible';
+  h.internals.keepPreparedSource({ ni: 1, id: 'two', src: 'https://test/two' });
+  let release;
+  h.standby.play = () => new Promise(resolve => { release = resolve; });
+  h.audio.ended = true;
+  h.audio.dispatch('ended');
+  await flushMicrotasks(40);
+  assert.equal(h.standby.playCalls, 0, 'the fake play is held');
+  assert.equal(h.window.Player.current().id, 'one');
+  const replays = h.audio.playCalls;
+  h.window.Player.toggle();
+  await flushMicrotasks(40);
+  assert.equal(h.window.Player.current().id, 'two', 'the handoff is committed');
+  assert.equal(h.audio.playCalls, replays, 'the ended element is not replayed');
+  release();
+  await flushMicrotasks(40);
+  h.window.Player.dismiss();
+});

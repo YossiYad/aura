@@ -323,6 +323,9 @@
       added++;
     }
     if (added) { saveDownloadQueue(); V.emit({ type: "downloads" }); runDownloads(); }
+    // A list picked up from the last session whose every entry had in fact finished
+    // was otherwise kept and picked up again on every launch.
+    else if (!downloadQueue.length && !inFlight) saveDownloadQueue();
     return added;
   }
 

@@ -209,6 +209,9 @@
     V.audio.pause();
     V.audio.removeAttribute("src");
     try { V.audio.load(); } catch (e) {}
+    // The materialized copy of a saved song has nothing left to feed; every later resume
+    // goes through loadAndPlay, which reads it from storage again.
+    if (V.blobUrl) { URL.revokeObjectURL(V.blobUrl); V.blobUrl = null; }
     V.wantsPlayback = intended;
     V.platformPaused = heldPlatformPause;
     V.audioSessionInterrupted = heldInterruption;

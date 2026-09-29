@@ -439,6 +439,14 @@
       if (!live()) return;
       const queued = (next || append) && !!Player.current();
       let added = 0;
+      let sharedAlready = false;
+      // playQueue answers false for blocked tracks, and in an AuraShare session also for
+      // ones already in it. The second is a request that was met, not a song that
+      // cannot play; spoken as a failure it sent the listener looking for another match.
+      const mustBeShared = list => {
+        if (Player.shareSession && Player.shareSession() && list.some(track => !Store.isBlocked(track))) return true;
+        throw new Error(tr("לא ניתן לנגן את השירים האלה."));
+      };
       if (next) {
         const tracks = result.tracks.filter(track => !Store.isBlocked(track));
         if (!tracks.length) throw new Error(tr("לא ניתן להוסיף את השיר הזה לתור."));
@@ -448,21 +456,21 @@
         // behind it out of order. A shared queue files each contribution after the
         // earlier ones, so there the list goes in first-first.
         if (!queued) {
-          if (!Player.playQueue(tracks, 0)) throw new Error(tr("לא ניתן לנגן את השירים האלה."));
+          if (!Player.playQueue(tracks, 0)) sharedAlready = mustBeShared(tracks);
         } else if (Player.shareSession && Player.shareSession()) tracks.forEach(track => Player.playNext(track));
         else tracks.slice().reverse().forEach(track => Player.playNext(track));
       } else if (append) {
         const tracks = result.tracks.filter(track => !Store.isBlocked(track));
         if (!tracks.length) throw new Error(tr("לא ניתן להוסיף את השירים האלה לתור."));
         for (const track of tracks) { if (Player.addToQueue(track)) added++; }
-      } else if (!Player.playQueue(result.tracks, 0)) throw new Error(tr("לא ניתן לנגן את השירים האלה."));
+      } else if (!Player.playQueue(result.tracks, 0)) sharedAlready = mustBeShared(result.tracks);
       // A request that only queued something hands the paused song back. One that
       // started new music must not: the song it paused is no longer the point.
       if (!queued) me.pausedTrack = null;
       setAskText("", false);
       voiceEnd();
       V.toast((queued ? next ? tr("השיר הבא בתור: ") : added ? tr("נוסף לסוף התור: ") : tr("כבר נמצא בתור: ")
-        : tr("הבקשה נשלחה לנגן: ")) + result.label);
+        : sharedAlready ? tr("כבר נמצא ב-AuraShare: ") : tr("הבקשה נשלחה לנגן: ")) + result.label);
     } catch (e) {
       if (!live()) return;
       voiceLog("request not played, its note is shown and the microphone is ready again");

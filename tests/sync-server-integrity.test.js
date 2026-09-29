@@ -105,3 +105,8 @@ test('a failed personal save reports failure and preserves the previous revision
  assert.equal(saved.stamp, first.stamp);
  assert.equal(saved.data.data.library[0].id, 'main');
 });
+test('a quoted If-Match, as an ETag would be sent, matches the stamp',async()=>{
+ const req=server();const first=await req('PUT','/api/sync/',backup('a'),{'if-match':'0'});
+ assert.equal((await req('PUT','/api/sync/',backup('b'),{'if-match':'"'+first.stamp+'"'})).code,200);
+ assert.equal((await req('GET','/api/sync/')).data.data.library[0].id,'b');
+});

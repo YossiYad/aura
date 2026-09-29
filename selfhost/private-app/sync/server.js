@@ -45,6 +45,19 @@ async function withLock(key, fn) {
   try { return await run; } finally { if (locks.get(key) === run) locks.delete(key); }
 }
 
+// A slot holding a file that does not parse is not a copy to offer: the GET for it
+// answers 404, and a Settings row offering to restore it failed every time.
+function conflictWaiting(file) {
+  const record = readRecord(file);
+  return !!(record && typeof record === "object" && record.data);
+}
+
+// An If-Match header as the client sends it, or quoted the way an ETag would be.
+function ifMatch(req) {
+  const raw = req.headers["if-match"];
+  return raw == null ? null : String(raw).replace(/^\s*"(.*)"\s*$/, "$1");
+}
+
 function readRecord(file) {
   try { return JSON.parse(fs.readFileSync(file, "utf8")); }
   catch (e) { return null; }
@@ -328,7 +341,7 @@ const server = http.createServer((req, res) => {
       if (wantConflict) {
         finish(404, {});
       } else {
-        finish(200, { stamp: 0, savedAt: "", email, size: 0, hasConflict: fs.existsSync(cFile), data: null });
+        finish(200, { stamp: 0, savedAt: "", email, size: 0, hasConflict: conflictWaiting(cFile), data: null });
       }
       return;
     }
@@ -337,7 +350,7 @@ const server = http.createServer((req, res) => {
       savedAt: record.savedAt || "",
       email,
       size: payloadSize(record),
-      hasConflict: fs.existsSync(cFile),
+      hasConflict: conflictWaiting(cFile),
       data: record.data
     });
     return;
@@ -364,17 +377,17 @@ const server = http.createServer((req, res) => {
         const current = readRecord(target);
         const stamp = (current && current.stamp) || 0;
         if (!wantConflict) {
-          const expected = req.headers["if-match"];
+          const expected = ifMatch(req);
           if (expected == null) return finish(428, { error: "Refresh the app to sync safely" });
           if (expected !== String(stamp)) {
             return finish(409, { error: "Server copy changed", stamp, email,
-              data: current ? current.data : null, hasConflict: fs.existsSync(cFile) });
+              data: current ? current.data : null, hasConflict: conflictWaiting(cFile) });
           }
         } else if (current && current.data) {
           // One slot. A second device's copy must not overwrite the first device's
           // changes, which have nowhere else to live until they are restored or
           // discarded; that device keeps its own changes locally until then.
-          const expected = req.headers["if-match"];
+          const expected = ifMatch(req);
           if (expected == null || expected !== String(stamp)) {
             return finish(409, { error: "Another device's copy is already waiting", stamp, email, hasConflict: true });
           }
@@ -390,7 +403,7 @@ const server = http.createServer((req, res) => {
   if (req.method === "DELETE") {
     withLock(aFile, () => {
       const current = readRecord(target);
-      const expected = req.headers["if-match"];
+      const expected = ifMatch(req);
       if (expected != null && expected !== String((current && current.stamp) || 0)) {
         return finish(409, { error: "Copy changed; it was kept" });
       }

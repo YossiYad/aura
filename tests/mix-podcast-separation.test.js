@@ -66,3 +66,21 @@ test('a mix whose key was withdrawn while it was being built is not kept', async
   fs.rmSync(data, { recursive: true, force: true });
   fs.rmSync(sync, { recursive: true, force: true });
 });
+
+test('a listener whose mode names a provider they hold no key for still builds with their own keys', () => {
+  const m = mix();
+  m.readOwnKeys = () => ({ gemini: [], groq: ['groq-key'], mode: 'gemini', geminiModel: '', groqModel: '' });
+  const chosen = m.providersFor('listener');
+  assert.equal(chosen.mine, true);
+  assert.deepEqual(Array.from(chosen.providers, p => p.name), ['groq']);
+  m.readOwnKeys = () => ({ gemini: ['g'], groq: ['q'], mode: 'groq', geminiModel: '', groqModel: '' });
+  assert.deepEqual(Array.from(m.providersFor('listener').providers, p => p.name), ['groq']);
+});
+
+test('the nightly run builds only for listeners who show the Home row', () => {
+  const m = mix();
+  m.readAccount = key => key === 'on' ? { settings: { aiHomeSection: true } } : key === 'off' ? { settings: {} } : null;
+  assert.equal(m.wantsHomeMix('on'), true);
+  assert.equal(m.wantsHomeMix('off'), false);
+  assert.equal(m.wantsHomeMix('missing'), false);
+});

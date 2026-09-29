@@ -208,7 +208,7 @@
       const t = V.trackById(rid);
       if (!t) return;
       if (Store.isBlocked(t)) { V.toast(V.BLOCKED_MSG, "err"); return; }
-      Player.playQueue([t], 0);
+      V.playSelection([t], 0);
       return;
     }
 

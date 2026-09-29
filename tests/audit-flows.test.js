@@ -343,10 +343,11 @@ test('nginx serves every file the shell, the phone page, the TV page and the man
  const shell=Array.from(read('sw.js').match(/const SHELL = \[([\s\S]*?)\];/)[1].matchAll(/"([^"]+)"/g),m=>new URL(m[1],'https://app.test/').pathname);
  const manifest=JSON.parse(read('manifest.json'));
  const icons=manifest.icons.concat(...(manifest.shortcuts||[]).map(s=>s.icons||[])).map(icon=>new URL(icon.src,'https://app.test/manifest.json').pathname);
- const wanted=new Set([...shell,...local('index.html',read('index.html')),...local('tv/index.html',read('tv/index.html')),...icons]);
- assert(wanted.has('/src/progress.js')&&wanted.has('/src/progress.css')&&wanted.has('/tv/receiver.js')&&wanted.has('/icons/shortcut-ai.png'),'the pages were not read');
+ const wanted=new Set([...shell,...local('index.html',read('index.html')),...local('tv/index.html',read('tv/index.html')),...local('guest/index.html',read('guest/index.html')),'/guest/',...icons]);
+ assert(wanted.has('/src/progress.js')&&wanted.has('/src/progress.css')&&wanted.has('/tv/receiver.js')&&wanted.has('/guest/app.js')&&wanted.has('/icons/shortcut-ai.png'),'the pages were not read');
  for(const path of wanted){
   if(path==='/')assert.match(source,/location = \/ \{\n\s*try_files \/index\.html =404;/,'the root document');
+  else if(path==='/guest/')assert.match(source,/location = \/guest\/ \{\n\s*try_files \/guest\/index\.html =404;/,'the guest document');
   else assert.equal(allowed(path),true,path+' is loaded by the app but missing from the nginx allowlist');
  }
 });

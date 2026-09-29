@@ -170,6 +170,14 @@
     // A position held for an interruption's recovery belongs to that interruption.
     V.interruptionCheckpoint = null;
     V.routeReattached = false;
+    // A handoff already running on the standby element is the next song starting. The
+    // ended element reads as paused meanwhile, so Play pressed here must join that
+    // handoff, not restart the finished song under it with both elements sounding.
+    if (V.preparedStart && V.preparedStart.el !== V.audio && V.commitPendingPreparedStart("listener play")) {
+      V.wantsPlayback = true;
+      V.updatePlaybackState();
+      return;
+    }
     if (V.backend === "audio" && (V.audio.ended || V.handledEndGeneration === V.playbackGeneration)) {
       // An end-of-queue lookup still pending would cut this replay off when it lands,
       // and a shared queue's next contribution would too if the queue still read as

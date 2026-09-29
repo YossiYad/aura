@@ -6,7 +6,7 @@ const playerSource = readModule("player");
 // The functions some tests drive directly, handed out on window.__playerInternals.
 const playerSourceWithInternals = readModuleExposing("player", ["prefetchNext", "next", "keepPreparedSource",
   "playPreparedInstantly", "playViaAudio", "playViaYt", "stopAudio", "scheduleSourceRetry", "resetListenTracking",
-  "countListen", "isSpokenWord"], "__playerInternals");
+  "countListen", "isSpokenWord", "extendRadio"], "__playerInternals");
 
 class FakeEventTarget {
   constructor() {

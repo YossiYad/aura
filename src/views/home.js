@@ -201,7 +201,9 @@
       }
     });
     await Promise.all(workers);
-    const found = matches.filter(Boolean);
+    // Two suggestions that resolve to the same upload are one card, not two alike.
+    const seen = new Set();
+    const found = matches.filter(t => t && !seen.has(t.id) && seen.add(t.id));
     if (!found.length) throw new Error("no matches");
     const anchor = await V.getTasteAnchor();
     const inWorld = anchor ? found.filter(t => V.inTasteWorld(anchor, t)) : found;
@@ -519,7 +521,12 @@
   function fillHomeFeeds() {
     if (V.currentTab !== "home" || V.subView) return;
     const holder = document.getElementById("home-feeds");
-    if (holder) V.paint(holder, homeFeedsHtml());
+    if (!holder) return;
+    // The key moved while rows were loading (a scrobble reordered the top artists) and
+    // nothing holds rows for the new one: painting now would be skeletons that no load
+    // fills. Start that load instead; it reads the day's cache first, so it usually paints.
+    if (!homeFeeds[homeFeedKey()]) { buildHomeFeeds(); return; }
+    V.paint(holder, homeFeedsHtml());
   }
 
   // A show row holds one show. Searching a show's name puts its own channel at the top of

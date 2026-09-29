@@ -34,6 +34,7 @@
     "השיר הבא בתור:": "Next in queue:",
     "נוסף לסוף התור:": "Added to the end of the queue:",
     "כבר נמצא בתור:": "Already in the queue:",
+    "כבר נמצא ב-AuraShare:": "Already in AuraShare:",
     "הבקשה נשלחה לנגן:": "Sent to the player:",
     "בקשה קולית": "Voice request",
     "AuraShare · QR להזמנה": "AuraShare · Invite with QR",

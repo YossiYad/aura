@@ -489,8 +489,16 @@
     preparedStart = attempt;
     const valid = () => preparedStart === attempt && generation === V.playbackGeneration &&
       startPos === V.pos && V.wantsPlayback;
+    // An attempt invalidated without being cancelled (a generation bump, a Cast pause)
+    // used to stay in preparedStart for good, holding the ended handler, the stall
+    // check and the position writes until a pause or a new selection. Let it go.
+    const abandon = () => {
+      if (preparedStart !== attempt) return;
+      if (onActive) { preparedStart = null; clearTimeout(attempt.timer); }
+      else cancelPreparedStart();
+    };
     const failed = e => {
-      if (!valid()) return;
+      if (!valid()) { abandon(); return; }
       if (onActive && V.platformBlocksAutoPlay() && commitInterruptedPreparedStart("audio interruption")) return;
       preparedStart = null;
       clearTimeout(attempt.timer);
@@ -520,7 +528,7 @@
     };
     attempt.failed = failed;
     const started = () => {
-      if (!valid()) return;
+      if (!valid()) { abandon(); return; }
       if (V.platformBlocksAutoPlay()) return;
       if (target.paused) { failed(new Error("audio remained paused")); return; }
       preparedStart = null;

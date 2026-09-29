@@ -152,121 +152,122 @@
     const generation = radioGeneration;
     let request;
     request = (async () => {
-      try {
-        const valid = () => generation === radioGeneration && (V.shareSession || Store.settings().autoplay);
-        const remaining = () => Math.max(0, ahead - radioUpcoming().length);
-        const songsOnly = Store.settings().musicOnly !== false;
-        const spoken = V.isSpokenWord(cur);
-        const liked = V.shareSession ? [] : Store.likedTracks();
-        // With no signal only what is on the device can play. The tail used to fill with
-        // liked songs that were not, and playback stopped at the first of them with saved
-        // music further down. Nothing is asked of the network either: it cannot answer.
-        const saved = navigator.onLine === false ? await V.localIds().catch(() => new Set()) : null;
+      const valid = () => generation === radioGeneration && (V.shareSession || Store.settings().autoplay);
+      const remaining = () => Math.max(0, ahead - radioUpcoming().length);
+      const songsOnly = Store.settings().musicOnly !== false;
+      const spoken = V.isSpokenWord(cur);
+      const liked = V.shareSession ? [] : Store.likedTracks();
+      // With no signal only what is on the device can play. The tail used to fill with
+      // liked songs that were not, and playback stopped at the first of them with saved
+      // music further down. Nothing is asked of the network either: it cannot answer.
+      const saved = navigator.onLine === false ? await V.localIds().catch(() => new Set()) : null;
+      if (!valid()) return false;
+      const familiar = (V.shareSession ? Array.from(sessionQueueTracks.values()).filter(t => !t.auraShareAuto) : liked.concat(Store.topListeningTracks(60), Store.library(), Store.recents(),
+        saved && Store.downloadedTracks ? Store.downloadedTracks() : []))
+        .filter(t => t && t.id && !Store.isBlocked(t) && !V.isSpokenWord(t));
+      const familiarIds = new Set(familiar.map(t => t.id));
+      const likedIds = new Set(liked.map(t => t.id));
+      const artistKey = radioArtistKey;
+      const artists = new Set(familiar.concat(cur).map(t => artistKey(t.artist)).filter(Boolean));
+      const artistIds = new Set(familiar.concat(cur).map(t => t.artistId).filter(Boolean));
+      const knownArtist = t => (t.artistId && artistIds.has(t.artistId)) || artists.has(artistKey(t.artist));
+      const inTaste = t => familiarIds.has(t.id) || knownArtist(t);
+      const sameShow = t => {
+        if (!V.isSpokenWord(t)) return false;
+        const show = t.podcast || (Store.matchingPodcastShow && (Store.matchingPodcastShow(t) || {}).name);
+        const currentShow = cur.podcast || (Store.matchingPodcastShow && (Store.matchingPodcastShow(cur) || {}).name);
+        if (currentShow) return !!show && radioArtistKey(show) === radioArtistKey(currentShow);
+        return (cur.artistId && t.artistId === cur.artistId) ||
+          (!!cur.artist && radioArtistKey(t.artist) === radioArtistKey(cur.artist));
+      };
+      // After an episode, more of that show - not a song, and not another show's episode.
+      // Episodes run far longer than the song cap, so that cap cannot apply here.
+      const ok = t => t && t.id && !radioSessionIds.has(t.id) && !radioSessionSongs.has(radioSongKey(t)) &&
+        !V.failedQueueIds.has(t.id) && !Store.isBlocked(t) && (!saved || saved.has(t.id)) && t.duration > 60 && (spoken
+        ? t.duration < 4 * 3600 && sameShow(t)
+        : !V.isSpokenWord(t) && t.duration < 900 && (!songsOnly || Api.looksLikeMusic(t)));
+      let added = 0;
+      // Related lists provide discovery, while the listener's music anchors most of
+      // the tail. With no profile yet, the selected song is the available signal.
+      let discoveries = radioUpcoming().filter(t => !inTaste(t)).length;
+      const discoveryLimit = familiar.length ? 3 : RADIO_AHEAD;
+      const score = t => likedIds.has(t.id) ? 3 : familiarIds.has(t.id) ? 2 : knownArtist(t) ? 1 : 0;
+      // Publish each usable batch immediately. Later lookups can fill the rest without
+      // holding the next song hostage to a slow provider. Recheck the live queue on every
+      // batch because the listener can add, clear or replace it while a request is pending.
+      const take = (list, related = false) => {
+        if (!valid()) return true;
+        const live = new Set(V.queue.map(t => t.id));
+        const adds = [];
+        const want = remaining();
+        if (!want) return true;
+        const ranked = (list || []).filter(Boolean).slice().sort((a, b) => score(b) - score(a));
+        const known = ranked.filter(t => inTaste(t));
+        const novel = ranked.filter(t => !inTaste(t));
+        const candidates = [];
+        while (known.length || novel.length) {
+          candidates.push(...known.splice(0, 3), ...novel.splice(0, 1));
+        }
+        for (const t of candidates) {
+          if (live.has(t.id)) continue;
+          if (!ok(t)) continue;
+          const discovery = !spoken && !inTaste(t);
+          if (discovery && (!related || discoveries >= discoveryLimit)) continue;
+          rememberRadioTrack(t);
+          adds.push(V.shareSession ? Object.assign({}, t, { auraShareAuto: true }) : t);
+          if (discovery) discoveries++;
+          if (adds.length >= want) break;
+        }
+        if (adds.length) {
+          V.queue = V.queue.concat(adds);
+          added += adds.length;
+          V.persist();
+          const ni = V.pickNextIndex();
+          if (ni !== -1 && ni !== V.pos) V.prepNextSource(ni);
+        }
+        return !remaining();
+      };
+      const seeds = saved ? [] : radioSeeds().filter(t => !Store.isBlocked(t) && (spoken ? sameShow(t) : !V.isSpokenWord(t)));
+      if (saved && !spoken) take(familiar);
+      for (const seed of seeds) {
         if (!valid()) return false;
-        const familiar = (V.shareSession ? Array.from(sessionQueueTracks.values()).filter(t => !t.auraShareAuto) : liked.concat(Store.topListeningTracks(60), Store.library(), Store.recents(),
-          saved && Store.downloadedTracks ? Store.downloadedTracks() : []))
-          .filter(t => t && t.id && !Store.isBlocked(t) && !V.isSpokenWord(t));
-        const familiarIds = new Set(familiar.map(t => t.id));
-        const likedIds = new Set(liked.map(t => t.id));
-        const artistKey = radioArtistKey;
-        const artists = new Set(familiar.concat(cur).map(t => artistKey(t.artist)).filter(Boolean));
-        const artistIds = new Set(familiar.concat(cur).map(t => t.artistId).filter(Boolean));
-        const knownArtist = t => (t.artistId && artistIds.has(t.artistId)) || artists.has(artistKey(t.artist));
-        const inTaste = t => familiarIds.has(t.id) || knownArtist(t);
-        const sameShow = t => {
-          if (!V.isSpokenWord(t)) return false;
-          const show = t.podcast || (Store.matchingPodcastShow && (Store.matchingPodcastShow(t) || {}).name);
-          const currentShow = cur.podcast || (Store.matchingPodcastShow && (Store.matchingPodcastShow(cur) || {}).name);
-          if (currentShow) return !!show && radioArtistKey(show) === radioArtistKey(currentShow);
-          return (cur.artistId && t.artistId === cur.artistId) ||
-            (!!cur.artist && radioArtistKey(t.artist) === radioArtistKey(cur.artist));
-        };
-        // After an episode, more of that show - not a song, and not another show's episode.
-        // Episodes run far longer than the song cap, so that cap cannot apply here.
-        const ok = t => t && t.id && !radioSessionIds.has(t.id) && !radioSessionSongs.has(radioSongKey(t)) &&
-          !V.failedQueueIds.has(t.id) && !Store.isBlocked(t) && (!saved || saved.has(t.id)) && t.duration > 60 && (spoken
-          ? t.duration < 4 * 3600 && sameShow(t)
-          : !V.isSpokenWord(t) && t.duration < 900 && (!songsOnly || Api.looksLikeMusic(t)));
-        let added = 0;
-        // Related lists provide discovery, while the listener's music anchors most of
-        // the tail. With no profile yet, the selected song is the available signal.
-        let discoveries = radioUpcoming().filter(t => !inTaste(t)).length;
-        const discoveryLimit = familiar.length ? 3 : RADIO_AHEAD;
-        const score = t => likedIds.has(t.id) ? 3 : familiarIds.has(t.id) ? 2 : knownArtist(t) ? 1 : 0;
-        // Publish each usable batch immediately. Later lookups can fill the rest without
-        // holding the next song hostage to a slow provider. Recheck the live queue on every
-        // batch because the listener can add, clear or replace it while a request is pending.
-        const take = (list, related = false) => {
-          if (!valid()) return true;
-          const live = new Set(V.queue.map(t => t.id));
-          const adds = [];
-          const want = remaining();
-          if (!want) return true;
-          const ranked = (list || []).filter(Boolean).slice().sort((a, b) => score(b) - score(a));
-          const known = ranked.filter(t => inTaste(t));
-          const novel = ranked.filter(t => !inTaste(t));
-          const candidates = [];
-          while (known.length || novel.length) {
-            candidates.push(...known.splice(0, 3), ...novel.splice(0, 1));
-          }
-          for (const t of candidates) {
-            if (live.has(t.id)) continue;
-            if (!ok(t)) continue;
-            const discovery = !spoken && !inTaste(t);
-            if (discovery && (!related || discoveries >= discoveryLimit)) continue;
-            rememberRadioTrack(t);
-            adds.push(V.shareSession ? Object.assign({}, t, { auraShareAuto: true }) : t);
-            if (discovery) discoveries++;
-            if (adds.length >= want) break;
-          }
-          if (adds.length) {
-            V.queue = V.queue.concat(adds);
-            added += adds.length;
-            V.persist();
-            const ni = V.pickNextIndex();
-            if (ni !== -1 && ni !== V.pos) V.prepNextSource(ni);
-          }
-          return !remaining();
-        };
-        const seeds = saved ? [] : radioSeeds().filter(t => !Store.isBlocked(t) && (spoken ? sameShow(t) : !V.isSpokenWord(t)));
-        if (saved && !spoken) take(familiar);
+        try {
+          const info = await Api.resolve(seed.id, V.streamOptions(seed.id));
+          if (take(info.related, true)) break;
+        } catch (e) {}
+        // Saved favorites and actual listening are stronger evidence than unrelated
+        // provider suggestions, and remain available when a related list is sparse.
+        if (!spoken && take(familiar)) break;
+      }
+      if (remaining()) {
+        const searched = new Set();
         for (const seed of seeds) {
           if (!valid()) return false;
+          const q = seed.artist || seed.title;
+          if (!q || searched.has(artistKey(q))) continue;
+          searched.add(artistKey(q));
           try {
-            const info = await Api.resolve(seed.id, V.streamOptions(seed.id));
-            if (take(info.related, true)) break;
+            const res = await Api.search(q);
+            // Search ranking alone is not evidence of the requested artist.
+            if (take((res.items || []).filter(t => t && (spoken || inTaste(t))))) break;
           } catch (e) {}
-          // Saved favorites and actual listening are stronger evidence than unrelated
-          // provider suggestions, and remain available when a related list is sparse.
-          if (!spoken && take(familiar)) break;
         }
-        if (remaining()) {
-          const searched = new Set();
-          for (const seed of seeds) {
-            if (!valid()) return false;
-            const q = seed.artist || seed.title;
-            if (!q || searched.has(artistKey(q))) continue;
-            searched.add(artistKey(q));
-            try {
-              const res = await Api.search(q);
-              // Search ranking alone is not evidence of the requested artist.
-              if (take((res.items || []).filter(t => t && (spoken || inTaste(t))))) break;
-            } catch (e) {}
-          }
-        }
-        if (!valid()) return false;
-        if (!added) {
-          V.log("radio", "nothing new to add from " + seeds.length + " seed(s)" +
-            (navigator.onLine === false ? " while offline" : ""));
-          return false;
-        }
-        V.log("radio", "queue extended with " + added + " tracks");
-        return true;
-      } finally {
-        if (radioPromise === request) radioPromise = null;
       }
+      if (!valid()) return false;
+      if (!added) {
+        V.log("radio", "nothing new to add from " + seeds.length + " seed(s)" +
+          (navigator.onLine === false ? " while offline" : ""));
+        return false;
+      }
+      V.log("radio", "queue extended with " + added + " tracks");
+      return true;
     })();
     radioPromise = request;
+    // Cleared once the promise settles, never inside the function: a request that found
+    // no seed finishes before it is even assigned, and a finally in there compared the
+    // wrong value and left its settled promise pinned for every later extension.
+    const clear = () => { if (radioPromise === request) radioPromise = null; };
+    request.then(clear, clear);
     return request;
   }
 
