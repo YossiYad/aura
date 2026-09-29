@@ -55,9 +55,12 @@ git-ignored `config.json`, using `config.example.json` as a starting point.
 - Keep a file under about 400 lines. Past that, move a coherent area (one screen, one
   concern) into its own file of the module, named `<area>-<part>.js` beside it
   (`src/views/settings-look.js` next to `src/views/settings.js`), listed in `index.html`
-  and `SHELL` right after the file it came from. `tests/module-split.test.js` fails on a
-  function called bare from a file that no longer holds it, and
-  `tests/module-namespace.test.js` on a `V.name` nobody publishes.
+  and `SHELL` right after the file it came from. `tests/tools/split-module.py` does the
+  move: given the origin and a JSON map of new file to the top-level names it takes, it
+  writes the files, rewrites the calls across the module as `V.name`, fills the publish
+  blocks and lists the files in `index.html` and `SHELL`; read its header for the spec
+  shape. `tests/module-split.test.js` fails on a function called bare from a file that no
+  longer holds it, and `tests/module-namespace.test.js` on a `V.name` nobody publishes.
 - Add regression coverage for behavior changes. Use invented fixtures and example
   addresses instead of personal data, credentials or copied lyrics.
 - Keep private configuration, cookies, logs and downloaded media out of commits.

@@ -517,3 +517,14 @@ test('a spoken request loses its courtesy words and a curly apostrophe, not the 
  assert.equal(c.clean('play Yellow thank you'),'play Yellow');assert.equal(c.clean('play Yellow, please'),'play Yellow');
  assert.equal(c.clean('ילדה של אבא תודה רבה'),'ילדה של אבא');assert.equal(c.clean("Taylor Swift’s new song"),"Taylor Swift's new song");
 });
+// A screen fill takes a ticket and asks it after every await: the answer to an earlier
+// question must not land on a later screen, nor an older fill over a newer one.
+test('a fill ticket goes stale when a newer fill of its scope begins or its screen is gone',()=>{
+ const sv={kind:'artist'};const c=functions('src/views.js',['ticket'],{tickets:new Map(),currentTab:'search',subView:sv});
+ const first=c.ticket('artist',{subView:sv});assert.equal(first(),true);
+ const second=c.ticket('artist',{subView:sv});assert.equal(first(),false,'a newer fill of the same scope');assert.equal(second(),true);
+ c.subView=null;assert.equal(second(),false,'the screen it was for is gone');
+ const tab=c.ticket('home-feeds',{tab:'home',subView:null});assert.equal(tab(),false,'not on that tab');
+ c.currentTab='home';assert.equal(tab(),true);
+ const free=c.ticket('search');c.currentTab='library';c.subView=sv;assert.equal(free(),true,'a ticket with no screen only minds its scope');
+});

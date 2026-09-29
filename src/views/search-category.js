@@ -82,15 +82,19 @@
       const plan = V.categoryPlan(sv.query);
       const keep = (plan && plan.keep) || (() => true);
       sv.sections = categorySpecs(sv).map(spec => ({ title: spec[0], query: spec[1], tracks: [], status: "loading" }));
+      // One ticket for the page: its rows load side by side and land on the same screen.
+      const still = V.ticket("category", { subView: sv });
       sv.sections.forEach(section => {
         categorySearch(section.query).then(result => {
+          if (!still()) return;
           const seen = new Set(sv.sections.flatMap(item => item.tracks).map(track => track.id));
           section.tracks = (result.items || []).filter(track => keep(track) && !seen.has(track.id) && seen.add(track.id) && !Store.isBlocked(track)).slice(0, 10);
           section.status = "ready";
-          if (V.subView === sv) V.render();
+          V.render();
         }).catch(() => {
+          if (!still()) return;
           section.status = "error";
-          if (V.subView === sv) V.render();
+          V.render();
         });
       });
     }

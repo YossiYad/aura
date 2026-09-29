@@ -25,17 +25,20 @@
     const record = sv.record || cached;
     if (!sv.loading && !sv.fetched) {
       sv.loading = true;
+      const still = V.ticket("shared", { subView: sv });
       Sync.sharedOpen(sv.id).then(fresh => {
+        if (!still()) return;
         sv.record = fresh;
         sv.loading = false;
         sv.fetched = true;
         sv.error = null;
-        if (V.subView === sv) V.render();
+        V.render();
       }).catch(err => {
+        if (!still()) return;
         sv.loading = false;
         sv.fetched = true;
         sv.error = String((err && err.message) || err);
-        if (V.subView === sv) V.render();
+        V.render();
       });
     }
     if (!record || !record.tracks) {

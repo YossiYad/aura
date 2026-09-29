@@ -24,18 +24,19 @@
   // YouTube publishes for every channel carries exact dates for the fifteen newest, which
   // is the stretch anyone browsing a show is looking at, so those dates are filled in from
   // it. Missing ones only: a date the channel already reported is the better one.
-  async function backfillDates(sv, data) {
+  async function backfillDates(data, still) {
     const videos = (data && data.videos) || [];
     if (!videos.slice(0, 15).some(track => !track.published)) return;
     try {
       const feed = await Api.channelFeed(data.id);
+      if (!still()) return;
       const dates = new Map(feed.map(track => [track.id, track.published]));
       let filled = 0;
       videos.forEach(track => {
         const at = dates.get(track.id);
         if (at && !track.published) { track.published = at; filled++; }
       });
-      if (filled && V.subView === sv) V.render();
+      if (filled) V.render();
     } catch (e) {}
   }
 
@@ -88,14 +89,16 @@
     if (!sv.data && !sv.loading && !sv.error) {
       sv.loading = true;
       sv.songSort = sv.songSort || "popular";
+      const still = V.ticket("artist", { subView: sv });
       Api.getArtist(sv.id, { name: sv.name, thumb: sv.thumb }).then(data => {
+        if (!still()) return;
         sv.data = data;
         sv.songs = Object.assign({ items: data.videos || [], nextpage: null }, data.songPage || {});
         sv.loading = false;
         // A musician's page is read by what is biggest, a show's by what is newest, so the
         // chip starts on whichever side this channel is - until the listener picks one.
         if (!sv.songSortChosen) sv.songSort = podcastChannel(data) ? "latest" : "popular";
-        backfillDates(sv, data);
+        backfillDates(data, still);
         // Opening the page is itself an acknowledgment: fold in whatever is newest and
         // clear the "new" dot, the same way reading a message clears its unread badge.
         // A page built from search results is not in upload order, so its first video
@@ -104,14 +107,15 @@
           if (!data.fromSearch) Store.refreshFollowLatest(data.id, data.videos[0].id);
           Store.markFollowSeen(data.id);
         }
-        if (V.subView === sv) V.render();
+        V.render();
       }).catch(() => {
+        if (!still()) return;
         // A dead end is the worst answer: the listener asked for an artist they have
         // heard, so at minimum show what is already known about them and let them search.
         sv.error = "Couldn't load this artist right now.";
         sv.loading = false;
         sv.fallbackName = sv.name || "";
-        if (V.subView === sv) V.render();
+        V.render();
       });
     }
     if (sv.loading || !sv.data) {
@@ -208,15 +212,20 @@
       sv.loadingMore = true;
       sv.moreError = false;
       V.render();
+      const still = V.ticket("artist-more", { subView: sv });
       try {
         const more = await Api.artistMore(sv.songs);
+        if (!still()) return;
         const have = new Set(sv.songs.items.map(t => t.id));
         sv.songs.items = sv.songs.items.concat(more.items.filter(t => !have.has(t.id) && have.add(t.id) && !Store.isBlocked(t)));
         sv.songs.nextpage = more.nextpage || null;
         sv.songs.page = more.page;
-      } catch (e) { sv.moreError = true; V.toast("Couldn't load more songs - tap Load more to retry", "err"); }
+      } catch (e) {
+        if (!still()) return;
+        sv.moreError = true; V.toast("Couldn't load more songs - tap Load more to retry", "err");
+      }
       sv.loadingMore = false;
-      if (V.subView === sv) V.render();
+      V.render();
     };
     sv.currentVideos = playAll;
   }
@@ -224,14 +233,17 @@
   function renderYtAlbum(sv) {
     if (!sv.tracks && !sv.loading && !sv.error) {
       sv.loading = true;
+      const still = V.ticket("album", { subView: sv });
       Api.getAlbumTracks(sv.id).then(tracks => {
+        if (!still()) return;
         sv.tracks = tracks.filter(t => !Store.isBlocked(t)).map(t => Object.assign({}, t, { album: sv.name, artist: t.artist || sv.artistName || "" }));
         sv.loading = false;
-        if (V.subView === sv) V.render();
+        V.render();
       }).catch(() => {
+        if (!still()) return;
         sv.error = "Couldn't load this album right now.";
         sv.loading = false;
-        if (V.subView === sv) V.render();
+        V.render();
       });
     }
     if (sv.loading || !sv.tracks) {
