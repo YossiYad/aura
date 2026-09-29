@@ -6,8 +6,9 @@
   // here without a model, the rest goes to Ai.interpretPlayback when online with a key, and
   // resolve() looks the result up and returns the tracks without touching playback.
   function clean(value) {
-    return String(value || "").trim().replace(/[.!?…]+$/g, "")
-      .replace(/(?:\s+|^)(?:בבקשה|תודה|please|thanks)$/i, "").trim();
+    const courtesy = /(?:\s+|^)(?:בבקשה|תודה(?:\s+רבה)?|please|thank\s+you|thanks)$/i;
+    return String(value || "").trim().replace(/\u2019/g, "'").replace(/[.!?…,;]+$/g, "")
+      .replace(courtesy, "").replace(/[.!?…,;]+$/g, "").trim();
   }
   /**
    * Splits where a request wants its music from what it asks for.
@@ -75,7 +76,7 @@
     // a real title - still falls through to the song parser rather than being read as newest.
     if ((m = /^(?:ה?שיר|ה?סינגל)?\s*(?:הכי\s+ה?חדשה?|ה?חדשה?(?:\s+ביותר)?|הכי\s+ה?אחרו(?:ן|נה)|ה?אחרו(?:ן|נה))\s+של\s+(.+)$/i.exec(q)) ||
         (m = /^the\s+(?:new|newest|latest|most\s+recent)\s+(?:song|single|track|release)\s+(?:by|from)\s+(.+)$/i.exec(q)) ||
-        (m = /^(.+?)'?s\s+(?:new|newest|latest|last|most\s+recent)\s+(?:song|single|track|release)$/i.exec(q)))
+        (m = /^(.+?)(?:'s|')?\s+(?:new|newest|latest|last|most\s+recent)\s+(?:song|single|track|release)$/i.exec(q)))
       return { kind: "latest", query: clean(m[1]), artist: "" };
     q = q.replace(/^(?:ה?שיר|(?:the )?song)\s+/i, "");
     // The last "by", not the first: titles carry one of their own ("Stand by Me", "ילדה של
@@ -390,7 +391,10 @@
       // A title that only contains the request may be another recording of it: a saved
       // "Song (Live)" is not what "play Song" asks for unless nothing else can be found.
       const plain = matches.filter(t => !otherVersion(t.title, intent.query));
-      const track = intent.artist && plain.length === 1 ? plain[0]
+      // Exact, as the comment above promises: "Hello, Goodbye" contains "Hello" and is not
+      // it. A request that names the version itself ("... live") may match a longer title.
+      const exact = t => V.fold(t.title) === V.fold(intent.query) || VERSION_WORDS.some(word => (" " + V.fold(intent.query) + " ").includes(" " + word + " "));
+      const track = intent.artist && plain.length === 1 && exact(plain[0]) ? plain[0]
         : await Api.matchTrack(intent.query, intent.artist, { original: true }) ||
           (intent.artist && matches.length === 1 ? matches[0] : null);
       tracks = track ? [track] : [];

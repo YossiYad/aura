@@ -71,7 +71,9 @@
    * @returns {string}
    */
   function artistKey(name) {
-    return String(name || "").trim().toLowerCase().replace(/\s*-\s*topic$/, "").replace(/vevo$/, "").trim();
+    // Both suffixes at once, so folding a folded name changes nothing: a key that kept
+    // moving could be matched but never lifted from the manager.
+    return String(name || "").trim().toLowerCase().replace(/(\s*-\s*topic|vevo)+$/, "").trim();
   }
 
   blocked = normalizeBlocked(blocked);

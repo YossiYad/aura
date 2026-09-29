@@ -78,7 +78,10 @@
     f.checkedAt = Date.now();
     if (!hadBaseline && f.lastSeenId == null) f.lastSeenId = latestId;
     V.save("aura.follows", V.follows);
-    V.notify("follows");
+    // A check that found nothing new moved only its own timestamp. Announced, that made
+    // sync upload the whole store every half hour and every other device adopt it and
+    // reload; the timestamp rides along with the next real change instead.
+    if (changed || !hadBaseline) V.notify("follows");
     return hadBaseline && changed;
   }
 

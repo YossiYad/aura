@@ -10,8 +10,13 @@
     scoreMatch: { get: () => scoreMatch }
   });
 
+  // Accents and Hebrew presentation forms are dropped the way foldText drops them: an
+  // AI or an import writes "Beyoncé" while the uploader wrote "Beyonce", and the two
+  // never matched. An apostrophe is removed rather than turned into a space, so "Don't"
+  // is one word on both sides.
   function normMatch(s) {
-    return String(s || "").toLowerCase().replace(/[\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7]/g, "")
+    return String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+      .replace(/[\u0591-\u05BD\u05BF\u05C1\u05C2\u05C4\u05C5\u05C7]/g, "").replace(/['\u2019\u05F3]/g, "")
       .replace(/[^\p{L}\p{N} ]+/gu, " ").replace(/\s+/g, " ").trim();
   }
 
@@ -83,7 +88,9 @@
   }
 
   function voiceMatchCandidates(items, title, artist) {
-    const asked = " " + normMatch(title) + " ";
+    // Title and performer both, as scoreMatch reads them: a performer called Live is not
+    // asking for a concert recording.
+    const asked = " " + normMatch(title + " " + artist) + " ";
     const versions = OTHER_VERSION;
     const contains = (text, word) => (" " + normMatch(text) + " ").includes(" " + word + " ");
     const hasCover = t => ["cover", "קאבר", "חידוש"].some(w => contains(t.title, w));

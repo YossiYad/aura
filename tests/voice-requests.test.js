@@ -1664,3 +1664,14 @@ test("an iPhone reply is skipped unless it is spoken inside a tap", async () => 
     assert.equal(speaks, spoken ? 1 : 0);
   }
 });
+
+// "X's new song" read the possessive with an optional apostrophe, so a lazy match bit the
+// final s off any name ending in one: the Beatles became the Beatle.
+test("a name ending in s keeps its s in a newest-song request", async () => {
+  const asked = [];
+  const { Voice } = harness({ Api: { matchTrack: async () => null, searchArtists: async query => { asked.push(query); return { items: [], base: null }; } } });
+  for (const request of ["play the Beatles new song", "play the Beatles' new song", "play Kiss latest single"]) {
+    await Voice.resolve(request).catch(() => {});
+  }
+  assert.deepEqual(asked.map(q => q.toLowerCase()), ["the beatles", "the beatles", "kiss"]);
+});

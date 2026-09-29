@@ -106,6 +106,8 @@
   // "hip hop essentials essentials" and "sleep music classics" answered with whatever
   // happened to contain those words. {year} becomes the current year when the plan is
   // read, so the "new" rows keep asking for new songs.
+  /** @typedef {[string, string, string, string, string[][], string?]} BrowseCard */
+  /** @type {BrowseCard[]} */
   const BROWSE = [
     ["Music", "new music", "#dc148c", "MUSIC", [
       ["Top hits right now", "top hits {year}"],
@@ -287,6 +289,7 @@
   // singer-songwriters the country grew up on - it answers with their songs. The rows are
   // then held to Hebrew: a track with no Hebrew in its title or its channel name is not
   // what either card promised.
+  /** @type {BrowseCard[]} */
   const FRESH = [
     ["Fresh Israeli pop", "new Israeli pop music", "#c54872", "IL POP", [
       ["Popular in Israel", "עומר אדם אודיה אושר כהן ששון איפרם שאולוב איתי לוי"],

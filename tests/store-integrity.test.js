@@ -150,3 +150,37 @@ test('the listening profile keeps its artists to the same bound as its tracks', 
   assert.equal(saved['Old artist 0'], undefined, 'the artist heard longest ago makes way');
   assert.ok(saved['Old artist 1999']);
 });
+
+// A follow check ran every half hour and announced itself even when nothing had moved,
+// which made sync upload the whole store and every other device adopt it and reload.
+test('a follow check that found nothing new does not announce a change', () => {
+  const { Store } = createStore();
+  Store.follow({ id: 'UC1', name: 'Someone', thumb: '' });
+  let notices = 0;
+  Store.onChange(what => { if (what === 'follows') notices++; });
+  assert.equal(Store.refreshFollowLatest('UC1', 'v1'), false);
+  assert.equal(notices, 1, 'the first look sets a baseline worth keeping');
+  assert.equal(Store.refreshFollowLatest('UC1', 'v1'), false);
+  assert.equal(notices, 1, 'nothing moved, nothing said');
+  assert.equal(Store.refreshFollowLatest('UC1', 'v2'), true);
+  assert.equal(notices, 2);
+});
+
+test('a listening profile imported with a non-numeric play count still counts plays', () => {
+  const { Store } = createStore();
+  const song = { id: 'v1', title: 'T', artist: 'A' };
+  Store.importData({ format: 'aura-backup', version: 1, data: { library: [song], playlists: [], liked: [], recents: [],
+    listeningProfile: { tracks: { v1: { plays: '3', track: song } }, artists: { A: { plays: '3' } } } } });
+  Store.pushRecent(song);
+  const profile = Store.exportData().data.listeningProfile;
+  assert.equal(profile.tracks.v1.plays, 4);
+  assert.equal(profile.artists.A.plays, 4);
+});
+
+test('an artist key folds to a fixed point, so a block can always be lifted', () => {
+  const { Store } = createStore();
+  Store.blockArtist('Someone - TopicVEVO');
+  assert.equal(Store.isBlocked({ id: 'x', artist: 'Someone' }), true);
+  Store.unblockArtist(Store.blockedList().artists[0]);
+  assert.equal(Store.isBlocked({ id: 'x', artist: 'Someone' }), false);
+});

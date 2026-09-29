@@ -12,6 +12,7 @@ function client(fetch, options = {}) {
   subscription = null;
   return true;
  } };
+ if (options.subscriptionKey) sub.options = { applicationServerKey: new Uint8Array(options.subscriptionKey).buffer };
  if (options.subscribed) subscription = sub;
  const navigator = { serviceWorker: { addEventListener() {}, ready: Promise.resolve({ pushManager: {
   getSubscription: async () => subscription,
@@ -118,4 +119,13 @@ test('the push server registers only https endpoints on public hosts', () => {
   'https://172.20.0.3/x', 'https://[::1]/x', 'ftp://push.test/x', 'not a url', 42, 'https://' + 'a'.repeat(2100)]) {
   assert.equal(pushEndpoint(bad), false, String(bad).slice(0, 40));
  }
+});
+
+// A subscription made against a server key since rotated is one the server cannot send
+// to; status read it as on, so nothing arrived and nothing asked to turn it on again.
+test('a subscription made against a rotated server key reads as not subscribed', async () => {
+ const c = client(async () => keyResponse(), { subscribed: true, subscriptionKey: [9, 9, 9] });
+ assert.equal((await c.Push.status()).subscribed, false);
+ const same = client(async () => keyResponse(), { subscribed: true, subscriptionKey: [1, 2, 3] });
+ assert.equal((await same.Push.status()).subscribed, true);
 });

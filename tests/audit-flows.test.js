@@ -507,3 +507,13 @@ test('a Gemini transcription names the recording under a type Gemini lists',()=>
  assert.equal(c.geminiAudioMime('audio/mp4;codecs=mp4a.40.2'),'audio/m4a');assert.equal(c.geminiAudioMime(''),'audio/m4a');
  assert.equal(c.geminiAudioMime('audio/webm;codecs=opus'),'audio/webm');assert.equal(c.geminiAudioMime('audio/x-wav'),'audio/wav');
 });
+test('matching folds accents, presentation forms and apostrophes the way the library index does',()=>{
+ const c=functions('src/api.js',['normMatch'],{});
+ assert.equal(c.normMatch('Beyoncé'),'beyonce');assert.equal(c.normMatch("Don't Stop Me Now"),'dont stop me now');
+ assert.equal(c.normMatch('שׁיר'),c.normMatch('שיר'));assert.equal(c.normMatch("Taylor Swift’s"),'taylor swifts');
+});
+test('a spoken request loses its courtesy words and a curly apostrophe, not the end of a name',()=>{
+ const c=functions('src/voice.js',['clean'],{});
+ assert.equal(c.clean('play Yellow thank you'),'play Yellow');assert.equal(c.clean('play Yellow, please'),'play Yellow');
+ assert.equal(c.clean('ילדה של אבא תודה רבה'),'ילדה של אבא');assert.equal(c.clean("Taylor Swift’s new song"),"Taylor Swift's new song");
+});

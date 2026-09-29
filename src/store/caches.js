@@ -115,7 +115,9 @@
    * @param {SkipSegment[]} list
    */
   function cacheSegments(id, list) {
-    if (!id) return;
+    // Kept in memory only during a private session: the entry records that this video
+    // was played, and when.
+    if (!id || V.privateOn()) return;
     delete segments[id];
     segments[id] = { list: list || [], at: Date.now() };
     const keys = Object.keys(segments);

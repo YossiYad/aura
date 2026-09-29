@@ -1,4 +1,4 @@
-const CACHE = "aura-v231";
+const CACHE = "aura-v232";
 const SHELL = [
   "./",
   "./index.html",
@@ -137,6 +137,9 @@ self.addEventListener("message", e => {
 // read the whole shell again and compare it with what is kept. Nothing is written unless
 // every file arrived, and then all of it is, so the installed shell still moves as one.
 let shellSync = null;
+// The write of a fresh shell, while it runs: a launch during it must wait rather than
+// read a document from one deploy with scripts from another.
+let shellWrite = null;
 
 // The shell is a hundred files, and reading them all on every return to the app is a
 // hundred requests through the login proxy while the app is being picked back up. A
@@ -170,7 +173,7 @@ function syncShell() {
     const cache = await caches.open(CACHE);
     const revision = await servedRevision(ctl.signal);
     const compared = revision && await cache.match(REVISION);
-    if (compared && await compared.text() === revision) return false;
+    if (compared && (await compared.text()).trim() === revision) return false;
     const fresh = await Promise.all(SHELL.map(async entry => {
       const res = await fetch(entry, { cache: "no-cache", signal: ctl.signal });
       // A lapsed login answers with its sign-in page, and that is not the app.
@@ -180,7 +183,25 @@ function syncShell() {
       return { entry, res, same };
     }));
     const changed = !fresh.every(f => f.same);
-    if (changed) for (const f of fresh) await cache.put(f.entry, f.res);
+    if (changed) {
+      // Scripts and styles first, the documents last: a write cut short leaves the old
+      // document with the old files it loads, never a new document over old scripts.
+      const documents = f => f.entry === "./" || f.entry === "./index.html";
+      const ordered = fresh.filter(f => !documents(f)).concat(fresh.filter(documents));
+      shellWrite = (async () => {
+        for (const f of ordered) await cache.put(f.entry, f.res);
+        // An entry the shell no longer lists (a file renamed or removed) would otherwise
+        // sit in this cache for as long as the cache name lasts.
+        const base = location.href || (location.origin + "/");
+        const listed = new Set(SHELL.map(entry => new URL(entry, base).href));
+        const kept = typeof cache.keys === "function" ? await cache.keys() : [];
+        for (const request of kept) {
+          const url = new URL(request.url);
+          if (isShellRequest(request, url) && !listed.has(url.origin + url.pathname)) await cache.delete(request);
+        }
+      })().finally(() => { shellWrite = null; });
+      await shellWrite;
+    }
     if (revision) await cache.put(REVISION, new Response(revision));
     return changed;
   })().catch(error => {
@@ -266,6 +287,7 @@ self.addEventListener("fetch", e => {
           // Offline refreshes can still open the installed app.
         } finally { clearTimeout(timer); }
       }
+      if (shellWrite) await shellWrite.catch(() => {});
       const cache = await caches.open(CACHE);
       const cached = await cache.match(e.request, { ignoreSearch: true }) ||
         (e.request.mode === "navigate" ? await cache.match("./index.html") : null);
@@ -335,7 +357,10 @@ self.addEventListener("notificationclick", e => {
   const artistId = e.notification.data && e.notification.data.artistId;
   e.waitUntil((async () => {
     const allClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    for (const c of allClients) {
+    // The phone app, not the TV or guest page that may be open beside it: only the app
+    // knows how to open an artist.
+    const app = c => !/\/(tv|guest)(\/|$)/.test(new URL(c.url).pathname);
+    for (const c of allClients.filter(app).concat(allClients.filter(c => !app(c)))) {
       if ("focus" in c) {
         if (artistId) c.postMessage({ type: "OPEN_ARTIST", artistId });
         return c.focus();

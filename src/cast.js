@@ -117,6 +117,11 @@
     media.addUpdateListener(update);
   }
 
+  // A Pause that arrives while a load is in flight. The element already reads as paused
+  // then, so pause() had nothing to send, and the item started playing on the TV after
+  // the listener had pressed Pause.
+  let pauseRequested = false;
+
   async function load(autoplay) {
     if (loading) return loading;
     if (!session || !source || !audio.mediaTrack) throw new Error("TV is not connected");
@@ -133,12 +138,18 @@
     observedId = audio.mediaTrack.id;
     const promise = loadChain.catch(() => {}).then(async () => {
       if (token !== revision || session !== targetSession) return;
+      request.autoplay = autoplay && !pauseRequested;
       await targetSession.loadMedia(request);
       if (token !== revision || session !== targetSession) return;
       loadedRevision = token;
       bindMedia();
       ready = 4;
       audio.volume = desiredVolume;
+      if (pauseRequested) {
+        pauseRequested = false;
+        paused = true;
+        if (media && (media.playerState === "PLAYING" || media.playerState === "BUFFERING")) await command("pause", null).catch(fail);
+      }
       fire("loadedmetadata");
       update(true);
     });
@@ -151,6 +162,7 @@
   Object.defineProperties(audio, {
     src: { get: () => source, set: value => {
       revision++; queueRevision++; loading = null; source = value; position = 0; paused = true; ended = false; ready = 0; audio.error = null;
+      pauseRequested = false;
       fire("loadstart");
     } },
     currentTime: { get: () => validMedia() && !loading && media.getEstimatedTime ? media.getEstimatedTime() : position,
@@ -178,6 +190,7 @@
   audio.removeAttribute = name => { if (name === "src") { audio.src = ""; stop(); } };
   audio.load = () => {};
   audio.play = async () => {
+    pauseRequested = false;
     // A load already in flight may be the paused one a connection starts with; handing
     // it back as the answer to Play would leave the TV paused until a second tap.
     if (loading) await loading;
@@ -190,6 +203,7 @@
     update(true);
   };
   audio.pause = () => {
+    if (loading) pauseRequested = true;
     if (paused) return;
     paused = true;
     if (validMedia()) command("pause", null).catch(fail);

@@ -18,7 +18,9 @@ LOCK="/tmp/aura-auto-deploy.lock"
 SETUP_PENDING="$SCRIPT_DIR/.setup-pending"
 
 exec 9>"$LOCK"
-flock -n 9 || exit 0
+# Said out loud: a setup.sh that hung under this lock (a registry pull that never ends)
+# otherwise froze every later poll with nothing in the log to show for it.
+flock -n 9 || { echo "$(date -Iseconds) another run still holds $LOCK, skipping this poll"; exit 0; }
 
 cd "$REPO_DIR"
 # A quiet credential failure here would freeze the deploy on an old commit
@@ -36,7 +38,7 @@ REMOTE=$(git rev-parse origin/main)
 run_setup() {
   echo "$(date -Iseconds) re-running setup.sh:"
   cat "$SETUP_PENDING" | sed 's/^/  /'
-  if sh "$SCRIPT_DIR/setup.sh"; then
+  if timeout 20m sh "$SCRIPT_DIR/setup.sh"; then
     rm -f "$SETUP_PENDING"
   else
     echo "$(date -Iseconds) setup.sh failed, see above; it will be retried on the next poll"
@@ -48,8 +50,18 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     selfhost/private-app/nginx.conf selfhost/private-app/setup.sh \
     selfhost/private-app/sync selfhost/private-app/push selfhost/private-app/mix selfhost/private-app/queue \
     selfhost/private-app/media)
+  # Recorded before the checkout moves: owed setup that was noted only after it was
+  # lost for good to a kill in between, since the next poll saw nothing to deploy.
+  if [ -n "$CHANGED" ]; then
+    { [ -f "$SETUP_PENDING" ] && cat "$SETUP_PENDING"; echo "$CHANGED"; } | sort -u > "$SETUP_PENDING.tmp"
+    mv "$SETUP_PENDING.tmp" "$SETUP_PENDING"
+  fi
   if git merge-base --is-ancestor "$LOCAL" "$REMOTE"; then
-    git merge --quiet --ff-only origin/main
+    git merge --quiet --ff-only origin/main || {
+      echo "$(date -Iseconds) fast-forward to origin/main refused; still serving $(git rev-parse --short HEAD)." \
+        "A tracked file was changed on this machine - see git status here."
+      exit 1
+    }
   else
     # main was rewritten upstream, so there is nothing to fast-forward to and --ff-only
     # would fail here every minute from now on, silently freezing the deploy on an old
@@ -60,11 +72,7 @@ if [ "$LOCAL" != "$REMOTE" ]; then
     git reset --hard --quiet origin/main
   fi
   echo "$(date -Iseconds) deployed $(git rev-parse --short HEAD)"
-  if [ -n "$CHANGED" ]; then
-    echo "$(date -Iseconds) deploy-relevant change, setup.sh is owed"
-    { [ -f "$SETUP_PENDING" ] && cat "$SETUP_PENDING"; echo "$CHANGED"; } | sort -u > "$SETUP_PENDING.tmp"
-    mv "$SETUP_PENDING.tmp" "$SETUP_PENDING"
-  fi
+  if [ -n "$CHANGED" ]; then echo "$(date -Iseconds) deploy-relevant change, setup.sh is owed"; fi
 fi
 # The commit being served, for the app's service worker: while it is the one its last
 # full comparison of the installed shell saw, this one small file tells it nothing has

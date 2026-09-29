@@ -97,7 +97,12 @@
     const backend = await checkBackend();
     const permission = Notification.permission;
     let subscribed = false;
-    if (backend && permission === "granted") subscribed = !!(await currentSubscription());
+    if (backend && permission === "granted") {
+      // A subscription made against a server key since rotated is one the server can no
+      // longer send to; shown as on, nothing arrived and nothing asked to turn it on again.
+      const sub = await currentSubscription();
+      subscribed = !!sub && sameServerKey(sub);
+    }
     return { supported: true, backendAvailable: backend, permission, subscribed };
   }
 

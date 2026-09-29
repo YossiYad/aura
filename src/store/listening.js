@@ -44,7 +44,7 @@
     V.recents = V.recents.slice(0, 50);
     const trackStat = V.listeningProfile.tracks[track.id] || { plays: 0 };
     V.listeningProfile.tracks[track.id] = Object.assign({}, trackStat, {
-      plays: trackStat.plays + 1,
+      plays: (Number(trackStat.plays) || 0) + 1,
       lastPlayed: now,
       track: {
         id: track.id,
@@ -69,7 +69,7 @@
     if (artist && classified === "music") {
       const artistStat = V.listeningProfile.artists[artist] || { plays: 0 };
       V.listeningProfile.artists[artist] = {
-        plays: artistStat.plays + 1,
+        plays: (Number(artistStat.plays) || 0) + 1,
         lastPlayed: now,
         thumb: track.artistThumb || track.thumb || artistStat.thumb || "",
         // Without this, a top artist was only ever a name, and a name is all a search can

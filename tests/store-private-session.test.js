@@ -140,3 +140,11 @@ test('a synced copy with the feature hidden does not end a private session runni
   Store.importData(remote, { preserveDownloads: true });
   assert.equal(Store.settings().privateSession, false);
 });
+
+test("a private session keeps no skip-segment record of what was played", () => {
+  const h = createStore();
+  const { Store } = h;
+  Store.setPrivateSession(true);
+  Store.cacheSegments("v1", [{ start: 1, end: 2, category: "sponsor" }]);
+  assert.equal(h.read("aura.segments"), null);
+});

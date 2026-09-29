@@ -166,6 +166,10 @@
     if (!upcoming.length || upcoming[0].id !== prep.id) return;
     const tail = upcoming.slice(1, 12);
     const valid = () => V.audio.isCast && xfadePrep === prep && !V.sleepAfterTrack;
+    // How far into the future each queued song starts: a link that expires before then
+    // (a cobalt tunnel lives about ninety seconds) would fail on the receiver with the
+    // phone locked. The queue stops there; the player resolves it afresh when reached.
+    let lead = ((upcoming[0] && upcoming[0].duration) || 180) * 1000;
     for (let offset = 0; offset < tail.length && valid(); offset += 3) {
       const results = await Promise.allSettled(tail.slice(offset, offset + 3).map(async track =>
         ({ track, info: await Api.resolve(track.id, V.streamOptions(track.id)) })));
@@ -173,6 +177,9 @@
       const entries = [];
       for (const result of results) {
         if (result.status !== "fulfilled") break;
+        const { track, info } = result.value;
+        if (info && info.expiresAt && info.expiresAt < Date.now() + lead + 60000) break;
+        lead += ((track && track.duration) || 180) * 1000;
         entries.push(result.value);
       }
       await CastPlayback.appendUpcoming(entries);

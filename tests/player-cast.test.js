@@ -243,3 +243,40 @@ test('repeat one on the TV reloads a finished song from the start instead of fin
   assert.equal(h.P.current().id, 'one');
   h.P.dismiss();
 });
+
+// The element reads as paused while a receiver load is in flight, so a Pause pressed then
+// had nothing to send, and the item started playing on the TV after the listener paused.
+test('a pause pressed while the receiver is still loading lands with the load', async () => {
+  const h = await setup();
+  const media = h.receiver.media();
+  media.playerState = 'IDLE'; media.idleReason = 'CANCELLED'; h.receiver.notify();
+  await flushMicrotasks(40);
+  const release = h.receiver.blockLoad();
+  h.P.toggle();
+  await flushMicrotasks(40);
+  assert.equal(h.receiver.loads.length, 2, 'Play on an idle receiver loads the song again');
+  h.P.pause();
+  await flushMicrotasks(40);
+  release();
+  await flushMicrotasks(80);
+  assert.equal(h.receiver.media().playerState, 'PAUSED', 'the TV does not play on after the pause');
+  assert.equal(h.P.isPaused(), true);
+  h.P.dismiss();
+});
+
+// A tail link that expires before its song is reached fails on the receiver with the
+// phone locked; the queue stops at it and the player resolves it afresh when it gets there.
+test('the receiver queue stops before a link that expires before its turn', async () => {
+  const receiver = castSdk();
+  const h = createHarness({ castSdk: receiver.sdk, exposeInternals: true,
+    tracks: ['one', 'two', 'three', 'four'].map(id => ({ id, title: 'Song ' + id, artist: 'A', duration: 180 })),
+    settings: { autoplay: false, crossfade: 4 } });
+  h.Api.resolve = async id => ({ url: 'https://test/' + id + '.m4a', mime: 'audio/mp4', expiresAt: id === 'three' ? Date.now() + 90000 : 0 });
+  h.Api.invalidate = () => {};
+  h.play();
+  await h.window.Player.requestRemotePlayback();
+  await h.window.Player.requestRemotePlayback();
+  await flushMicrotasks(80);
+  assert.deepEqual(receiver.media().items.map(item => item.media.metadata.title), ['Song one', 'Song two'], 'three starts six minutes out; its link dies in ninety seconds');
+  h.window.Player.dismiss();
+});

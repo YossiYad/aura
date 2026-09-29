@@ -81,7 +81,18 @@
         // A failed comparison is worth another go, in a minute rather than in five, but
         // not on every return to the app: on a bad connection each one is a full read.
         shellSyncedAt = data && !data.failed ? Date.now() : Date.now() - 4 * 60 * 1000;
-        if (data && data.changed && window.Log) Log.add("refresh", "installed app files brought up to date for the next launch");
+        if (data && data.changed) {
+          if (window.Log) Log.add("refresh", "installed app files brought up to date for the next launch");
+          // The files are in place for the next launch; the interface in use is not
+          // replaced under the listener, but they are told a restart brings the update.
+          pendingReload = true;
+          updateAnnounced = false;
+          reloadWhenQuiet();
+          if (!updateAnnounced && !reloading && window.Views) {
+            updateAnnounced = true;
+            Views.toast("App update ready - refresh from Settings when playback is idle");
+          }
+        }
       };
       const timer = setTimeout(() => finish(null), 30000);
       try {
