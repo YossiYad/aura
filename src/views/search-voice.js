@@ -237,6 +237,20 @@
     try {
       const result = await Voice.resolve(request, text => { if (live()) voiceSay(text); }, live);
       if (!live()) return;
+      if (result.action === "skip") {
+        if (!Player.current()) throw new Error(tr("אין שיר לדלג עליו."));
+        if (!Player.upcoming().length) throw new Error(tr("זה השיר האחרון בתור."));
+        voiceSay(tr("עובר לשיר הבא"));
+        await Voice.reply({ he: "עובר לשיר הבא", en: "Skipping to the next song" }, language);
+        if (!live()) return;
+        // The song the microphone paused is not coming back: the next one is the point.
+        me.pausedTrack = null;
+        Player.next();
+        setAskText("", false);
+        voiceEnd();
+        V.toast(tr("עובר לשיר הבא"));
+        return;
+      }
       voiceSay(tr("מצאתי: ") + result.label);
       const next = result.action === "next";
       const append = result.action === "append";

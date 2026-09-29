@@ -56,6 +56,7 @@
     function check() { if (!isActive()) throw new Error("cancelled"); }
     const original = String(request || "").trim();
     if (!original) throw new Error(tr("צריך לומר או לכתוב מה לנגן."));
+    if (V.skipRequest(original)) return { tracks: [], label: "", action: "skip" };
     const placement = V.playbackRequest(original);
     const raw = placement.action !== "play" ? placement.text : original;
     const hasAI = navigator.onLine !== false && window.Ai && Ai.hasAnyKey();

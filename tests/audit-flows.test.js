@@ -56,8 +56,8 @@ test('a spoken request has no dialog: it runs on the Ask screen, and driving mod
  assert.match(views,/toggleRow\("set-voice-reply", "Spoken replies"/);
 });
 test('typed words are an order to play only when they say so themselves',()=>{
- const c=functions('src/voice.js',['isCommand','playbackRequest','clean','requestStart'],{});
- for(const text of ['play Yellow by Coldplay','please play something calm','תשים לי ואיך בשמיים של אייל גולן','שים את הפלייליסט נסיעה','תנגן שירים של עידן רייכל','Yellow by Coldplay next','תוסיף את ואיך בשמיים לסוף התור','queue Bohemian Rhapsody'])assert.equal(c.isCommand(text),true,text);
+ const c=functions('src/voice.js',['isCommand','skipRequest','playbackRequest','clean','requestStart'],{});
+ for(const text of ['next','skip','השיר הבא','play Yellow by Coldplay','please play something calm','תשים לי ואיך בשמיים של אייל גולן','שים את הפלייליסט נסיעה','תנגן שירים של עידן רייכל','Yellow by Coldplay next','תוסיף את ואיך בשמיים לסוף התור','queue Bohemian Rhapsody'])assert.equal(c.isCommand(text),true,text);
  for(const text of ['Something calm for studying','2000s pop-rock for a road trip','playlist for a long drive','music from the 80s','songs by Coldplay and bands like them','משהו רגוע ללימודים','פלייליסט לריצה','Next to Me','playful indie'])assert.equal(c.isCommand(text),false,text);
 });
 test('one field serves both kinds of asking',()=>{
@@ -527,4 +527,16 @@ test('a fill ticket goes stale when a newer fill of its scope begins or its scre
  const tab=c.ticket('home-feeds',{tab:'home',subView:null});assert.equal(tab(),false,'not on that tab');
  c.currentTab='home';assert.equal(tab(),true);
  const free=c.ticket('search');c.currentTab='library';c.subView=sv;assert.equal(free(),true,'a ticket with no screen only minds its scope');
+});
+// With no key on the device and no mix on the server, the profile alone builds the row.
+test('the Home mix is built from the listening profile when there is no key',async()=>{
+ const searched=[];const heard=[{id:'h1',title:'Heard',artist:'Alpha'}];
+ const Store={topListeningArtists:()=>[{name:'Alpha'},{name:'Beta'},{name:'Gamma'}],topListeningTracks:()=>heard,isBlocked:()=>false};
+ const Api={search:async q=>{searched.push(q);const artist=q.split(' ')[0];return {items:['h1','a','b','c'].map((s,i)=>({id:s==='h1'?'h1':artist+s,title:artist+' song '+i,artist,duration:200}))};},looksLikeMusic:()=>true};
+ const c=functions('src/views.js',['profileMixTracks'],{Store,Api,window:{},PROFILE_MIX_SONGS:15,PROFILE_PER_ARTIST:2});
+ const picked=await c.profileMixTracks();
+ assert(searched.some(q=>q.startsWith('Alpha'))&&searched.some(q=>q.startsWith('Gamma')),'the top artists are searched');
+ assert(!picked.some(t=>t.id==='h1'),'a song already played is not suggested');
+ for(const artist of ['Alpha','Beta','Gamma'])assert(picked.filter(t=>t.artist===artist).length<=2,artist+' at most twice');
+ assert.deepEqual(Array.from(picked.slice(0,3),t=>t.artist),['Alpha','Beta','Gamma'],'dealt out in turn');
 });

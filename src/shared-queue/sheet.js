@@ -37,7 +37,7 @@
         tr('<label for="sq-hours">תוקף ההצטרפות</label><select id="sq-hours"><option value="1">שעה</option><option value="4">4 שעות</option><option value="8" selected>8 שעות</option><option value="24">24 שעות</option></select>') +
         tr('<label for="sq-permission">הרשאה מוצעת באישור אורח</label><select id="sq-permission">') + V.options('approval') + '</select>' +
         tr('<p class="sq-note">מאשרים כל אורח בנפרד עם הרשאה לבחירתכם. אין מגבלה אישית על מספר השירים. ') + (existingQueue
-          ? tr('בסיום השיתוף השירים שנוספו נשארים בתור והניגון ממשיך כרגיל.')
+          ? tr('בסיום AuraShare השירים שנוספו נשארים בתור והניגון ממשיך כרגיל.')
           : tr('כשהתור מתרוקן, Aura מוסיפה שיר מתאים אחד.')) + '</p>' +
         tr('<button type="submit" class="sq-primary">יצירת QR להזמנה</button></form>');
       V.$('sq-create').onsubmit = event => {
@@ -58,7 +58,7 @@
         tr('<section class="sq-section"><h3>הוספת שירים משלכם</h3><form id="sq-search" class="sq-form"><label for="sq-query">שם שיר או אמן</label><input id="sq-query" type="search" minlength="2" maxlength="160" required dir="auto"><button type="submit">חיפוש</button></form><div id="sq-results"></div></section>') +
         tr('<section class="sq-section"><h3 id="sq-people-title">משתתפים והרשאות</h3><label class="sq-person"><span>הרשאה מוצעת לאורחים חדשים</span><select id="sq-default">') + V.options(V.room.permission) + '</select></label><div id="sq-guests"></div></section>' +
         tr('<section class="sq-section"><h3 id="sq-count">הצעות לשירים</h3><div id="sq-requests"></div></section>') +
-        '<button type="button" id="sq-end" class="sq-danger">' + (V.room.mode === 'existing-queue' ? tr('סיום השיתוף וביטול ה־QR') : tr('סגירת התור וביטול ה־QR')) + '</button>';
+        '<button type="button" id="sq-end" class="sq-danger">' + (V.room.mode === 'existing-queue' ? tr('סיום AuraShare וביטול ה־QR') : tr('סגירת התור וביטול ה־QR')) + '</button>';
       /** @type {HTMLImageElement} */ (V.$('sq-qr')).src = '/api/queue/qr.svg?room=' + encodeURIComponent(V.room.id);
       V.$('sq-qr').onerror = () => V.error(tr('לא ניתן לטעון את ה־QR. לחצו על רענון כדי לנסות שוב.'));
       V.$('sq-copy').onclick = async () => {
@@ -125,11 +125,11 @@
     // music kept playing instead of showing an invitation that silently does otherwise.
     const mismatch = V.requestedMode === 'standalone' && V.room.mode === 'existing-queue';
     V.$('sq-mode-note').hidden = !mismatch;
-    V.$('sq-mode-note').textContent = mismatch ? tr('כבר פעילה הזמנה שמחוברת לתור הקיים, ולכן הניגון לא נעצר ולא נפתח תור חדש. כדי לפתוח AuraShare נפרד עם תור ריק, סיימו קודם את השיתוף הזה.') : '';
+    V.$('sq-mode-note').textContent = mismatch ? tr('כבר פעילה הזמנה שמחוברת לתור הקיים, ולכן הניגון לא נעצר ולא נפתח תור חדש. כדי לפתוח AuraShare נפרד עם תור ריק, סיימו קודם את ה-AuraShare הזה.') : '';
     V.$('sq-controller').textContent = V.room.isController
       ? (V.room.mode === 'existing-queue' ? tr('ההזמנה מחוברת לתור הקיים במכשיר הזה. הניגון והגדרות הנגן ממשיכים כרגיל. ') : tr('השירים יתווספו לתור במכשיר הזה. ')) + tr('השאירו את האפליקציה פתוחה כדי לקבל שירים חדשים.')
       : tr('הוספת השירים פעילה במכשיר אחר. אפשר להעביר לכאן את הניהול.') + (V.room.mode === 'existing-queue' ? tr(' ההוספות הבאות יצטרפו לתור המקומי במכשיר הזה.')
-        : tr(' ההעברה תשהה את הניגון האישי במכשיר הזה ותפתח כאן תור שיתוף ריק.'));
+        : tr(' ההעברה תשהה את הניגון האישי במכשיר הזה ותפתח כאן תור AuraShare ריק.'));
     V.$('sq-control').hidden = V.room.isController;
     renderPlayback();
     if (document.activeElement !== V.$('sq-default')) /** @type {HTMLSelectElement} */ (V.$('sq-default')).value = V.room.permission;

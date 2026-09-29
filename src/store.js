@@ -31,6 +31,7 @@
  * @property {number} [plays] Play count, on tracks from Store.topListeningTracks.
  * @property {number} [lastPlayed] Last play in ms, on tracks from Store.topListeningTracks.
  * @property {boolean} [auraShareAuto] A queue entry Aura added to fill an AuraShare session.
+ * @property {string} [auraShareBy] The guest who added it to an AuraShare session, by the name they joined with.
  */
 
 /**

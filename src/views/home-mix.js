@@ -142,7 +142,7 @@
       if (window.Log) Log.add("ai", "home section from the server's nightly mix (" + fromServer.tracks.length + " songs)");
       return fromServer.tracks;
     }
-    if (!aiHomeEnabled()) throw new Error("no AI key on this device and no mix on the server");
+    if (!aiHomeEnabled()) return profileMixTracks();
     try {
       return await fetchAiHomeTracks(history);
     } catch (e) {
@@ -150,8 +150,60 @@
         if (window.Log) Log.add("ai", "kept the server's older mix - building one here failed");
         return fromServer.tracks;
       }
-      throw e;
+      // A provider that is down or out of quota is not an empty row: the profile still
+      // says enough on its own.
+      if (window.Log) Log.add("ai", "building the mix with the model failed (" + String((e && e.message) || e).slice(0, 60) + "), built from the profile instead");
+      return profileMixTracks();
     }
+  }
+
+  // A mix with no model in the loop, the same one the self-hosted server builds when it
+  // holds no key: the artists this listener plays most, searched for the rest of their
+  // songs, and what the search engine files next to the songs they play. Nothing already
+  // in the profile, at most two songs per artist, the artists dealt out in turn.
+  const PROFILE_MIX_SONGS = 15;
+  const PROFILE_PER_ARTIST = 2;
+  async function profileMixTracks() {
+    const artists = Store.topListeningArtists(8).filter(a => a && a.name);
+    const played = Store.topListeningTracks(10, "all");
+    if (!artists.length && !played.length) throw new Error("nothing listened to yet");
+    const heard = new Set(Store.topListeningTracks(500, "all").map(t => t.id));
+    const queries = artists.slice(0, 6).map(a => a.name + " songs")
+      .concat(played.slice(0, 4).map(t => (t.artist ? t.artist + " " : "") + t.title));
+    const pools = new Array(queries.length);
+    const queue = queries.map((query, index) => ({ query, index }));
+    // Three at a time, as everywhere else that asks the search servers for a whole row.
+    await Promise.all(Array.from({ length: 3 }, async () => {
+      while (queue.length) {
+        const entry = queue.shift();
+        try {
+          const res = await Api.search(entry.query);
+          pools[entry.index] = (res.items || []).filter(t => t && t.id && !heard.has(t.id) && t.duration > 45 && t.duration < 900 &&
+            Api.looksLikeMusic(t) && !Store.isBlocked(t));
+        } catch (e) { pools[entry.index] = []; }
+      }
+    }));
+    const seen = new Set();
+    const perArtist = new Map();
+    const picked = [];
+    for (let round = 0; picked.length < PROFILE_MIX_SONGS; round++) {
+      let any = false;
+      for (const pool of pools) {
+        if (!pool || round >= pool.length) continue;
+        any = true;
+        const t = pool[round];
+        const artist = String(t.artist || "").trim().toLowerCase();
+        if (seen.has(t.id) || (perArtist.get(artist) || 0) >= PROFILE_PER_ARTIST) continue;
+        seen.add(t.id);
+        perArtist.set(artist, (perArtist.get(artist) || 0) + 1);
+        picked.push(t);
+        if (picked.length >= PROFILE_MIX_SONGS) break;
+      }
+      if (!any) break;
+    }
+    if (!picked.length) throw new Error("no matches");
+    if (window.Log) Log.add("ai", "home section built from the listening profile alone: " + picked.length + " songs");
+    return picked;
   }
 
   // One mix, start to finish: ask, resolve every suggestion to a real track, and keep the

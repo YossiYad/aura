@@ -28,7 +28,7 @@
  * @typedef {Object} ResolvedRequest
  * @property {Track[]} tracks
  * @property {string} label What to call the result on screen.
- * @property {"play" | "next" | "append"} action
+ * @property {"play" | "next" | "append" | "skip"} action Skip names no music: the queue moves on.
  */
 
 (function () {

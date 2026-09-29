@@ -99,7 +99,8 @@
           ? Player.queue().some(track => track.id === item.track.id)
           : (current && current.id === item.track.id && Player.playbackRequested()) ||
             Player.upcoming().some(track => track.id === item.track.id && !track.auraShareAuto);
-        if (!alreadyQueued && !Player.addToQueue(item.track)) {
+        // The name travels with the song, so the queue says who asked for it.
+        if (!alreadyQueued && !Player.addToQueue(Object.assign({}, item.track, { auraShareBy: item.name || '' }))) {
           // A paused current song is already attached and can be resumed with Play.
           if (!current || current.id !== item.track.id) { error(tr('לא ניתן להוסיף את ') + item.track.title + tr(' כרגע.')); continue; }
         }

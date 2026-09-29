@@ -6,6 +6,7 @@
     artistUploadLooksLikeMusic: { get: () => artistUploadLooksLikeMusic },
     basicIntent: { get: () => basicIntent },
     isCommand: { get: () => isCommand },
+    skipRequest: { get: () => skipRequest },
     musicIntent: { get: () => musicIntent },
     named: { get: () => named },
     otherVersion: { get: () => otherVersion },
@@ -56,7 +57,15 @@
    * @param {string} request Typed text.
    * @returns {boolean} True when the words ask for playback themselves, not describe a playlist.
    */
+  // "Next", "skip", "השיר הבא": the one request that names no music at all. Read before
+  // the parsers below, which would go looking for a song called "next song".
+  function skipRequest(request) {
+    const text = clean(V.requestStart(request))
+      .replace(/^(?:(?:היי|אורה|בבקשה|אפשר|אתה יכול|את יכולה|can you|could you|please)\s+)+/i, "");
+    return /^(?:(?:play|put on|go to|skip to|תשים|תשימי|שים|שימי|תפעיל|תפעילי|תנגן|תנגני|נגן|תעבור|תעברי|עבור|עברי)\s+(?:לי\s+)?(?:את\s+)?)?(?:(?:the\s+)?next(?:\s+(?:song|track|one))?|(?:ל?ה?שיר\s+)?הבא|skip(?:\s+(?:this|it|this\s+(?:song|track|one)|the\s+(?:song|track)))?|תדלג|תדלגי|דלג|דלגי)$/i.test(text);
+  }
   function isCommand(request) {
+    if (skipRequest(request)) return true;
     if (playbackRequest(request).action !== "play") return true;
     const text = clean(V.requestStart(request)).replace(/^(?:(?:היי|אורה|בבקשה|אפשר|אתה יכול|את יכולה|אני רוצה|בא לי|אני אשמח|can you|could you|i want to|please)\s+)+/i, "");
     return /^(?:שתשים|שתשימי|שתפעיל|שתפעילי|שתנגן|שתנגני|תשים|תשימי|שים|שימי|תפעיל|תפעילי|הפעל|תנגן|תנגני|נגן|תשמיע|תשמיעי|השמע|תוסיף|תוסיפי|הוסף|הוסיפי|play|put on|queue|enqueue)(?:\s|$)/i.test(text);

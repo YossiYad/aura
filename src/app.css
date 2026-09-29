@@ -2579,6 +2579,10 @@ html.ios-standalone .app:not(.category-mode):not(.hero-mode) > .topbar {
   line-height: 14px;
   color: var(--sc-light-grey);
 }
+/* The guest who added a song to an AuraShare session, beside its artist in the queue. */
+.queue-by {
+  color: var(--accent, #1ed760);
+}
 .song-sub .dot { color: var(--sc-light-grey); }
 .song-dur { font-size: 13px; color: var(--sc-light-grey); }
 .kebab, .row-dl { color: var(--sc-lighter-grey); }

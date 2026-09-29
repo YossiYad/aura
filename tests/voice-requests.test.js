@@ -140,9 +140,21 @@ test("AI correction of a song name preserves the next-song action", async () => 
   assert.equal(result.tracks[0].id, song.id);
 });
 
-test("a next-song request without a title asks for one", async () => {
+test("a next-song request without a title asks for one, and next alone moves the queue on", async () => {
   const { Voice } = harness({ Api: { matchTrack: assert.fail } });
-  await assert.rejects(Voice.resolve('play next'), /איזה שיר/);
+  await assert.rejects(Voice.resolve('תשים בתור הבא'), /איזה שיר/);
+  for (const request of ['play next', 'next', 'the next song', 'skip', 'skip this one', 'השיר הבא', 'הבא', 'תדלג', 'תעבור לשיר הבא', 'please skip']) {
+    assert.equal((await Voice.resolve(request)).action, 'skip', request);
+  }
+});
+
+// A title with "next" in it is a song, not a skip; a named next song is a placement.
+test("next inside a title or before a named song is not a skip", async () => {
+  const asked = [];
+  const { Voice } = harness({ Api: { matchTrack: async title => { asked.push(title); return { ...song, title }; } } });
+  assert.equal((await Voice.resolve('play Next to Me')).action, 'play');
+  assert.equal((await Voice.resolve('next song is Yellow')).action, 'next');
+  assert.deepEqual(asked, ['Next to Me', 'Yellow']);
 });
 
 test("queue-add requests select the end of the queue and keep song names clean", async () => {

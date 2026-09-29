@@ -10,7 +10,7 @@ function client(options = {}) {
   const timers = new Map(), recorded = options.recorded || new Set(), queued = [];
   let timer = 0, adds = 0, acknowledgments = 0, acknowledged = false, active = true, session = '';
   const room = { id: 'room', mode: options.mode, isController: options.controller !== false,
-    requests: [{ id: 'suggestion', status: 'approved', deliver: true, track: { id: 'song', title: 'Song' } }] };
+    requests: [{ id: 'suggestion', status: 'approved', deliver: true, name: 'Dana', track: { id: 'song', title: 'Song' } }] };
   if (options.noRequests) room.requests = [];
   const context = {
     window: {}, document: { hidden: false, getElementById: () => null, addEventListener() {} },
@@ -43,6 +43,7 @@ function client(options = {}) {
 test('lost delivery acknowledgment retries without re-adding a song, even if it left the local queue', async () => {
   const h = client({ failFirstAck: true }); await settle();
   assert.equal(h.adds, 1); assert.equal(h.acknowledgments, 1);
+  assert.equal(h.queued[0].auraShareBy, 'Dana', 'the queue says who asked for the song');
   h.queued.length = 0;
   await h.poll();
   assert.equal(h.adds, 1); assert.equal(h.acknowledgments, 2);

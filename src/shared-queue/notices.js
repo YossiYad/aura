@@ -39,7 +39,7 @@
 
   function observeActivity(previous) {
     if (!V.room) {
-      if (previous && window.Views) Views.toast(tr('השיתוף הסתיים או שפג תוקפו. ההזמנה אינה פעילה יותר.'));
+      if (previous && window.Views) Views.toast(tr('AuraShare הסתיים או שפג תוקפו. ההזמנה אינה פעילה יותר.'));
       return;
     }
     const sameRoom = previous && previous.id === V.room.id;
@@ -54,7 +54,7 @@
     if (previous.permission !== V.room.permission) addActivity(tr('ההרשאה המוצעת לאורחים חדשים עודכנה: ') + tr(V.labels[V.room.permission]));
     for (const guest of guests) {
       const old = oldGuests.get(guest.id);
-      if (!old) addActivity(guest.name + tr(' הצטרף/ה לשיתוף · ') + tr(V.labels[guest.permission]));
+      if (!old) addActivity(guest.name + tr(' הצטרף/ה ל-AuraShare · ') + tr(V.labels[guest.permission]));
       else {
         if (old.permission !== guest.permission) addActivity(tr('ההרשאה של ') + guest.name + tr(' עודכנה: ') + tr(V.labels[guest.permission]));
         if (old.online !== guest.online) addActivity(guest.name + (guest.online ? tr(' חזר/ה להיות פעיל/ה.') : tr(' אינו/ה פעיל/ה כרגע.')));
@@ -246,7 +246,7 @@
       '<p class="sq-note" dir="auto">' + V.esc(item.track.artist) + '</p>' + (!V.room.isController ? tr('<p class="sq-note">אישור שירים זמין במכשיר שמנהל את הניגון.</p>') : '') +
       buttons('song', item.id, !V.room.isController) })));
     cards.push(...activity.slice().reverse().map(item => ({ key: 'event:' + item.id, html: '<p dir="auto">' + V.esc(item.message) + '</p><button type="button" class="sq-notice-dismiss" data-notice-dismiss="' + item.id + tr('" aria-label="סגירת העדכון">×</button>') })));
-    if (!cards.length) cards.push({ key: 'empty', html: tr('<p class="sq-note">כאן יופיעו בקשות הצטרפות, בקשות לשירים ועדכונים מהשיתוף.</p>') });
+    if (!cards.length) cards.push({ key: 'empty', html: tr('<p class="sq-note">כאן יופיעו בקשות הצטרפות, בקשות לשירים ועדכונים מ-AuraShare.</p>') });
     const shown = noticesExpanded ? cards : cards.slice(0, 1);
     const list = V.$('sq-notices-list'), keys = new Set(shown.map(card => card.key));
     for (const child of Array.from(/** @type {HTMLCollectionOf<HTMLElement>} */ (list.children))) if (!keys.has(child.dataset.key)) child.remove();

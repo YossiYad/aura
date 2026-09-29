@@ -136,7 +136,7 @@
       V.sheetItem("newpl", "Playlist", V.IC.plus) +
       V.sheetItem("aiplaylist", "Playlist with AI", V.IC.sparkle) +
       (canShare ? V.sheetItem("newshared", "Shared playlist", V.IC.person) : "") +
-      ((window.SharedQueue && SharedQueue.available()) || canShare ? V.sheetItem("sharedqueue", "share", V.IC.person) : "") +
+      ((window.SharedQueue && SharedQueue.available()) || canShare ? V.sheetItem("sharedqueue", "AuraShare", V.IC.person) : "") +
       V.sheetItem("import", "Import a playlist", V.IC.dl)
     );
     V.sheetEl.onclick = e => {

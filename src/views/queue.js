@@ -99,7 +99,8 @@
       (!showHistory && window.SharedQueue && SharedQueue.available() ? '<button type="button" class="sheet-item" id="queue-shared">' + V.IC.person + tr('<span>AuraShare · QR להזמנה</span></button>') : '') +
       (showHistory ? historyHtml : (upcoming ? '<p class="queue-history-note">Drag the three lines to reorder. Swipe sideways to remove.</p>' : "") + '<ul class="song-list queue-list">' + queued.map(({ track: t, index: i }, order) =>
         '<li class="song' + (i === pos ? " active" : "") + '" data-qi="' + i + '">' + V.artHtml(t, "") +
-        '<div class="meta"><div class="song-title" dir="auto">' + V.esc(t.title) + '</div><div class="song-sub" dir="auto">' + V.esc(t.artist) + '</div></div>' +
+        '<div class="meta"><div class="song-title" dir="auto">' + V.esc(t.title) + '</div><div class="song-sub" dir="auto">' + V.esc(t.artist) +
+        (t.auraShareBy ? ' · <span class="queue-by">' + V.esc(t.auraShareBy) + '</span>' : '') + '</div></div>' +
         (order > 0 ? V.reorderHandle(t.title) : '<span class="song-dur">now</span>') + '</li>'
       ).join("") + '</ul>'), showHistory
     );
