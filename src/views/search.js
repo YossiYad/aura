@@ -542,7 +542,7 @@
     if (mic) mic.onclick = () => { Views.showTab("ai"); voiceStart("ask"); };
     document.getElementById("disc-clear").onclick = () => {
       cancelLiveSearch();
-      searchRequest++;
+      V.ticket("search");
       committedSearchQ = null;
       input.value = "";
       discoverState = emptyDiscoverState();
@@ -553,7 +553,8 @@
       cancelLiveSearch();
       const value = input.value.trim();
       if (value !== discoverState.q) {
-        searchRequest++;
+        // A new ticket for nobody: the search in flight finds its own stale.
+        V.ticket("search");
         if (discoverState.busy) discoverState = emptyDiscoverState();
       }
       if (!value && discoverState.q) discoverState = emptyDiscoverState();
@@ -570,7 +571,6 @@
     if (clearSearches) clearSearches.onclick = () => { Store.clearSearches(); refreshSearchView(); };
   }
 
-  let searchRequest = 0;
   function showSearchState(q) {
     const input = /** @type {HTMLInputElement} */ (document.getElementById("disc-input"));
     if (V.currentTab !== "search" || V.subView || !input) { V.render(); return; }
@@ -580,17 +580,19 @@
 
   async function doSearch(q) {
     if (!q) return;
-    const request = ++searchRequest;
+    // The results are kept for the Search tab whichever screen is up when they land, so
+    // the ticket is for the query alone: one typed over it is the one that counts.
+    const still = V.ticket("search");
     committedSearchQ = q;
     discoverState = { q, items: [], artists: [], source: "", busy: true, error: null, kind: null, nextpage: null };
     showSearchState(q);
     try {
       const res = await Api.search(q);
-      if (request !== searchRequest) return;
+      if (!still()) return;
       Store.pushSearch(q);
       discoverState = { q, items: res.items.filter(t => !Store.isBlocked(t)), artists: res.artists || [], source: res.source, busy: false, error: null, kind: res.kind, base: res.base, filter: res.filter, page: res.page, nextpage: res.nextpage || null };
     } catch (e) {
-      if (request !== searchRequest) return;
+      if (!still()) return;
       discoverState = { q, items: [], artists: [], source: "", busy: false, error: "Search failed - no server reachable right now. Check your connection and try again.", kind: null, nextpage: null };
     }
     if (V.currentTab === "search" && !V.subView) showSearchState(q);

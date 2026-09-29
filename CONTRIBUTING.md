@@ -43,6 +43,21 @@ git-ignored `config.json`, using `config.example.json` as a starting point.
   VS Code opens it read-only (`.vscode/settings.json`). Change the code of ours that wraps
   it instead, such as the `<thinking-orb>` element in `src/thinking-orbs/orbs.js` around
   `src/thinking-orbs/vendor/thinking-orbs.js`.
+- A screen fill that waits on the network takes a ticket before it starts and asks it
+  before it writes anything back: `const still = V.ticket("artist", { tab: "search",
+  subView: sv });` then `if (!still()) return;` after every `await`. The ticket goes stale
+  when a newer fill of the same scope begins or the screen it was taken for is gone, so an
+  answer to an earlier question never lands on a later screen. The player does the same
+  with `loadingToken`, `audioSessionGeneration` and `prepRevision`; a continuation on the
+  play path checks the one it started with after every `await`. State that several files
+  share lives in one of them and is read through `V`; a file never keeps its own copy of
+  another file's state across an `await`.
+- Keep a file under about 400 lines. Past that, move a coherent area (one screen, one
+  concern) into its own file of the module, named `<area>-<part>.js` beside it
+  (`src/views/settings-look.js` next to `src/views/settings.js`), listed in `index.html`
+  and `SHELL` right after the file it came from. `tests/module-split.test.js` fails on a
+  function called bare from a file that no longer holds it, and
+  `tests/module-namespace.test.js` on a `V.name` nobody publishes.
 - Add regression coverage for behavior changes. Use invented fixtures and example
   addresses instead of personal data, credentials or copied lyrics.
 - Keep private configuration, cookies, logs and downloaded media out of commits.

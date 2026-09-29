@@ -64,6 +64,7 @@
     subViewStack: { get: () => subViewStack, set: value => { subViewStack = value; } },
     syncChrome: { get: () => syncChrome },
     syncPrivateButton: { get: () => syncPrivateButton },
+    ticket: { get: () => ticket },
     syncStatusPainter: { get: () => syncStatusPainter, set: value => { syncStatusPainter = value; } },
     syncStatusSubscribed: { get: () => syncStatusSubscribed, set: value => { syncStatusSubscribed = value; } },
     tabScroll: { get: () => tabScroll },
@@ -97,6 +98,26 @@
   let askState = { prompt: "", asked: "", spoken: false, status: "idle", step: "", error: "", name: "", tracks: [], notFound: 0 };
   const tabScroll = { home: 0, search: 0, library: 0, ai: 0 };
   let viewEnterTimer = null;
+
+  // Every screen fill that waits on the network takes a ticket first and asks it before
+  // writing anything back. The ticket is good while no newer fill of the same scope has
+  // begun and, when the fill was for a screen, while that screen is still up. Without it
+  // the answer to an earlier question lands on a later screen: a search typed over, a
+  // playlist backed out of, a feed key that moved while its rows loaded.
+  const tickets = new Map();
+  /**
+   * @param {string} scope What is being filled: "search", "home-feeds", "artist".
+   * @param {{ tab?: string, subView?: Object | null }} [screen] The screen the fill is for:
+   *   its tab, and the subview it belongs to (null for the tab's own page).
+   * @returns {() => boolean} True while the answer still has a place to land.
+   */
+  function ticket(scope, screen) {
+    const serial = (tickets.get(scope) || 0) + 1;
+    tickets.set(scope, serial);
+    return () => tickets.get(scope) === serial &&
+      (!screen || ((screen.tab === undefined || currentTab === screen.tab) &&
+        (screen.subView === undefined || subView === screen.subView)));
+  }
 
   function playlistPlaybackOptions(ctx) {
     return /^(pl|shared):/.test(ctx || "") ? { shuffle: false } : undefined;
