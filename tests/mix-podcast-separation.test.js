@@ -84,3 +84,26 @@ test('the nightly run builds only for listeners who show the Home row', () => {
   assert.equal(m.wantsHomeMix('off'), false);
   assert.equal(m.wantsHomeMix('missing'), false);
 });
+
+// With no key at all the profile still says enough: the artists played most, searched for
+// their other songs. Nothing already in the profile, at most two per artist, dealt out.
+test('a mix is built from the listening profile alone when there is no key', async () => {
+  const m = mix();
+  const heard = (id, artist, plays) => ({ track: { id, title: 'Heard ' + id, artist, kind: 'music' }, plays, lastPlayed: 1 });
+  const account = { listeningProfile: { tracks: { h1: heard('h1', 'Alpha', 9), h2: heard('h2', 'Beta', 5), h3: heard('h3', 'Gamma', 2) }, artists: {} } };
+  const searched = [];
+  m.searchTracks = async query => {
+    searched.push(query);
+    const artist = query.split(' ')[0];
+    return ['h1', 'a', 'b', 'c'].map((suffix, i) => ({ id: suffix === 'h1' ? 'h1' : artist + suffix, title: artist + ' song ' + i, artist, duration: 200 }));
+  };
+  m.readAccount = () => account;
+  const picked = await m.profileSuggestions(account, m.blockedOf(account));
+  assert(searched.some(q => q.startsWith('Alpha')) && searched.some(q => q.startsWith('Beta')), 'the top artists are searched');
+  assert(!picked.some(t => t.id === 'h1'), 'a song already in the profile is not suggested again');
+  for (const artist of ['Alpha', 'Beta', 'Gamma']) assert(picked.filter(t => t.artist === artist).length <= 2, artist + ' at most twice');
+  assert.deepEqual(Array.from(picked.slice(0, 3), t => t.artist), ['Alpha', 'Beta', 'Gamma'], 'dealt out in turn');
+  assert.equal(m.canBuildFor('anyone'), true, 'a profile with music is enough to build for');
+  m.readAccount = () => null;
+  assert.equal(m.canBuildFor('nobody'), false);
+});

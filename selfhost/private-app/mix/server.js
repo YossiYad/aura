@@ -481,7 +481,11 @@ async function callGroq(key, model, prompt) {
 }
 
 function hasSharedKey() { return SHARED_PROVIDERS.some(p => p.keys.length); }
-function canBuildFor(key) { return providersFor(key).providers.some(p => p.keys.length); }
+// A key, or a profile with music in it: the profile alone builds a mix (see
+// profileSuggestions), a key only makes it wider.
+function canBuildFor(key) {
+  return providersFor(key).providers.some(p => p.keys.length) || topListeningTracks(readAccount(key), 1).length > 0;
+}
 function wantsHomeMix(key) {
   const account = readAccount(key);
   return !!(account && account.settings && account.settings.aiHomeSection === true);
@@ -523,15 +527,8 @@ function buildMix(key) {
   return request;
 }
 
-async function buildMixOnce(key) {
-  const account = readAccount(key);
-  if (!account) throw new Error("nothing synced for this account yet");
-  const history = historyContext(account);
-  if (!history) throw new Error("nothing listened to yet to build a taste profile from");
-  const { providers, mine } = providersFor(key);
-  if (!providers.some(p => p.keys.length)) throw new Error("no AI key for this account");
-
-  const blocked = blockedOf(account);
+// One mix by the model, matched to real uploads.
+async function aiMix(account, blocked, providers, history) {
   const instruction = "You are a music curator for a specific listener. " +
     "What they've been listening to: " + history + " " +
     "This is their request: \"Suggest a well-rounded mix of real songs this listener would enjoy right now. " +
@@ -578,19 +575,89 @@ async function buildMixOnce(key) {
   // worse than one with a few unfamiliar names in it.
   const picked = inWorld.length >= 6 ? inWorld : found;
 
+  return { name: String(parsed.name || "").trim().slice(0, 60), tracks: picked, matched: picked.length + " of " + suggestions.length + " suggestion(s) matched" +
+    (picked.length < found.length ? ", " + (found.length - picked.length) + " outside this listener's world" : "") };
+}
+
+// A mix from the listening profile alone, with no model in the loop: the artists this
+// listener plays most, searched for the rest of their songs, and what the search engine
+// files next to the songs they play. Songs already in the profile are left out, an artist
+// gets at most two, and the artists are dealt out so none runs in a row. Everyone with a
+// history gets a fresh row this way; a key only makes it wider.
+const PROFILE_PER_ARTIST = 2;
+async function profileSuggestions(account, blocked) {
+  const artists = topListeningArtists(account, 8).filter(a => a.name);
+  const tracks = topListeningTracks(account, 10);
+  if (!artists.length && !tracks.length) throw new Error("nothing listened to yet to build a taste profile from");
+  const heard = new Set(Object.keys(profileOf(account).tracks));
+  const queries = artists.slice(0, 6).map(a => a.name + " songs")
+    .concat(tracks.slice(0, 4).map(t => (t.artist ? t.artist + " " : "") + t.title));
+  const pools = new Array(queries.length);
+  const queue = queries.map((query, index) => ({ query, index }));
+  await Promise.all(Array.from({ length: 3 }, async () => {
+    while (queue.length) {
+      const entry = queue.shift();
+      try {
+        const items = await searchTracks(entry.query);
+        pools[entry.index] = items.filter(t => t && t.id && !heard.has(t.id) && t.duration > 45 && t.duration < 900 &&
+          looksLikeMusic(t) && !isBlocked(blocked, t));
+      } catch (e) { pools[entry.index] = []; }
+    }
+  }));
+  const seen = new Set();
+  const perArtist = new Map();
+  const picked = [];
+  // Round-robin across the pools: one from each in turn, so no single search fills the row.
+  for (let round = 0; picked.length < MIX_SONGS; round++) {
+    let any = false;
+    for (const pool of pools) {
+      if (!pool || round >= pool.length) continue;
+      any = true;
+      const t = pool[round];
+      const artist = foldText(t.artist || "");
+      if (seen.has(t.id) || (perArtist.get(artist) || 0) >= PROFILE_PER_ARTIST) continue;
+      seen.add(t.id);
+      perArtist.set(artist, (perArtist.get(artist) || 0) + 1);
+      picked.push(t);
+      if (picked.length >= MIX_SONGS) break;
+    }
+    if (!any) break;
+  }
+  if (!picked.length) throw new Error("nothing matched");
+  return picked;
+}
+
+async function buildMixOnce(key) {
+  const account = readAccount(key);
+  if (!account) throw new Error("nothing synced for this account yet");
+  const history = historyContext(account);
+  if (!history) throw new Error("nothing listened to yet to build a taste profile from");
+  const { providers, mine } = providersFor(key);
+  const blocked = blockedOf(account);
+  let built = null;
+  let source = "the listening profile";
+  if (providers.some(p => p.keys.length)) {
+    try {
+      built = await aiMix(account, blocked, providers, history);
+      source = mine ? "their own key" : "the shared key";
+    } catch (e) {
+      // A provider down at 4am is not a night without a mix: the profile still says enough.
+      console.log("model mix for " + key + " failed (" + String((e && e.message) || e).slice(0, 80) + "), building from the profile instead");
+    }
+  }
+  if (!built) built = { name: "", tracks: await profileSuggestions(account, blocked), matched: "" };
+
   // A build runs for a while. A key withdrawn in the meantime took the old mix with it,
   // and a mix written now would be one made with that key that nothing ever removes.
-  if (mine && !readOwnKeys(key)) throw new Error("the key was withdrawn while the mix was being built");
+  if (mine && source === "their own key" && !readOwnKeys(key)) throw new Error("the key was withdrawn while the mix was being built");
   const mix = {
     at: Date.now(),
     sig: signatureOf(account),
-    name: String(parsed.name || "Picked for you today").trim().slice(0, 60) || "Picked for you today",
-    tracks: picked
+    name: built.name || "Picked for you today",
+    tracks: built.tracks
   };
   writeJson(mixFile(key), mix);
-  console.log("built a mix for " + key + " with " + (mine ? "their own key" : "the shared key") + ": " +
-    picked.length + " of " + suggestions.length + " suggestion(s) matched" +
-    (picked.length < found.length ? ", " + (found.length - picked.length) + " outside this listener's world" : ""));
+  console.log("built a mix for " + key + " with " + source + ": " + built.tracks.length + " song(s)" + (built.matched ? ", " + built.matched : ""));
   return mix;
 }
 
@@ -615,7 +682,7 @@ async function runAccounts(reason) {
   const accounts = listAccounts().filter(key => canBuildFor(key) && wantsHomeMix(key));
   let ok = 0;
   let failed = 0;
-  console.log("nightly mix run started (" + reason + ") for " + accounts.length + " account(s) with a key");
+  console.log("nightly mix run started (" + reason + ") for " + accounts.length + " account(s) with a key or a listening profile");
   for (const key of accounts) {
     try { await buildMix(key); ok++; }
     catch (e) { failed++; console.log("mix for " + key + " failed: " + String((e && e.message) || e).slice(0, 100)); }
@@ -776,7 +843,7 @@ const server = http.createServer((req, res) => {
   }
 
   if (route === "/rebuild" && req.method === "POST") {
-    if (!canBuildFor(key)) { send(res, 503, { error: "no AI key for this account on the server" }); return; }
+    if (!canBuildFor(key)) { send(res, 503, { error: "nothing to build a mix from for this account yet" }); return; }
     const existing = readMix(key);
     // Counted from the last attempt as well as the last mix: with no mix yet (or the mix
     // just deleted with the key) every failing rebuild was another AI call.
