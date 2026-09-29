@@ -641,7 +641,11 @@
     doSearch(name);
   }
 
+  // The cards on the Search page each bring their own rows (see covers.js). A category
+  // opened by anything else - a query with no card behind it - gets the general rows.
   function categorySpecs(sv) {
+    const plan = V.categoryPlan(sv.query);
+    if (plan) return plan.sections;
     return [
       ["Popular " + sv.title, sv.query + " popular hits"],
       ["New in " + sv.title, sv.query + " new releases"],
@@ -685,11 +689,13 @@
   function renderCategory(sv) {
     if (!sv.initialized) {
       sv.initialized = true;
+      const plan = V.categoryPlan(sv.query);
+      const keep = (plan && plan.keep) || (() => true);
       sv.sections = categorySpecs(sv).map(spec => ({ title: spec[0], query: spec[1], tracks: [], status: "loading" }));
       sv.sections.forEach(section => {
         categorySearch(section.query).then(result => {
           const seen = new Set(sv.sections.flatMap(item => item.tracks).map(track => track.id));
-          section.tracks = (result.items || []).filter(track => !seen.has(track.id) && seen.add(track.id) && !Store.isBlocked(track)).slice(0, 10);
+          section.tracks = (result.items || []).filter(track => keep(track) && !seen.has(track.id) && seen.add(track.id) && !Store.isBlocked(track)).slice(0, 10);
           section.status = "ready";
           if (V.subView === sv) V.render();
         }).catch(() => {
