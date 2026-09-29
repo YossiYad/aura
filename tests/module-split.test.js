@@ -36,6 +36,7 @@ for (const name of SPLIT) {
         const lines = [];
         source.split('\n').forEach((line, i) => {
           // Strings and comments are not code: "song(s)" in a log line is not a call.
+          if (/^\s*(?:\*|\/\*)/.test(line)) return;
           const code = line.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""').replace(/\/\/.*$/, '');
           if (bare.test(code)) lines.push(i + 1);
           bare.lastIndex = 0;

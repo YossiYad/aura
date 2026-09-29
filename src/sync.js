@@ -40,12 +40,26 @@
   const V = (window.Aura = window.Aura || /** @type {typeof Aura} */ ({})).sync = {};
   // Published on V for the other files of this module; see src/sync.js.
   Object.defineProperties(V, {
+    available: { get: () => available },
+    changeRevision: { get: () => changeRevision, set: value => { changeRevision = value; } },
+    CONFLICT: { get: () => CONFLICT },
+    conflictOnServer: { get: () => conflictOnServer, set: value => { conflictOnServer = value; } },
     describe: { get: () => describe },
-    hasConflict: { get: () => hasConflict },
+    ENDPOINT: { get: () => ENDPOINT },
+    importing: { get: () => importing, set: value => { importing = value; } },
     init: { get: () => init },
+    lastError: { get: () => lastError, set: value => { lastError = value; } },
+    log: { get: () => log },
+    notifyListeners: { get: () => notifyListeners },
     onChange: { get: () => onChange },
+    PUSH_DEBOUNCE_MS: { get: () => PUSH_DEBOUNCE_MS },
     pushNow: { get: () => pushNow },
-    recoverConflict: { get: () => recoverConflict }
+    pushTimer: { get: () => pushTimer, set: value => { pushTimer = value; } },
+    queueSync: { get: () => queueSync },
+    readState: { get: () => readState },
+    reloadWhenIdle: { get: () => reloadWhenIdle },
+    schedulePush: { get: () => schedulePush },
+    writeState: { get: () => writeState }
   });
 
   const ENDPOINT = "/api/sync/";
@@ -149,144 +163,6 @@
     notifyListeners();
   }
 
-  // A keepalive upload on the way out of the app is one the page never hears back from:
-  // the server's stamp moves, the local one does not, and the copy comes back on the next
-  // launch looking like another device's newer changes. Recognise this device's own data.
-  // The server keeps the whole backup it was sent; the library is what is inside it.
-  /**
-   * @param {{ data?: Object }} remote
-   * @returns {boolean} True when the server copy holds exactly this device's data.
-   */
-  function sameAsLocal(remote) {
-    try { return JSON.stringify(remote && remote.data) === JSON.stringify(Store.exportData().data); }
-    catch (e) { return false; }
-  }
-
-  // FNV-1a over the text: enough to tell the copy this device sent from any other.
-  /**
-   * @param {string} text
-   * @returns {string}
-   */
-  function textHash(text) {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
-    return h.toString(16);
-  }
-
-  // The keepalive upload is remembered by a hash of what went out. Comparing the server
-  // copy with the local data instead broke as soon as anything local moved on before the
-  // next pull - the queue position, a resume point, the server that answered last - and the
-  // device then filed its own newer data as a conflict and adopted its own older copy.
-  /**
-   * @param {{ data?: Object }} remote
-   * @param {{ sentHash?: string }} state
-   * @returns {boolean} True when the server copy is the one this device last sent out.
-   */
-  function sentByThisDevice(remote, state) {
-    if (!state.sentHash) return false;
-    try { return textHash(JSON.stringify(remote && remote.data)) === state.sentHash; }
-    catch (e) { return false; }
-  }
-
-  // A device with nothing in it has nothing worth a conflict copy: a fresh install
-  // whose first instance lookup marked it dirty used to upload an empty library over
-  // another device's waiting changes.
-  /**
-   * @param {Object} data Backup data.
-   * @returns {boolean} True when there is nothing in the library, history or follows.
-   */
-  function bareStore(data) {
-    return ["library", "playlists", "liked", "recents", "follows"]
-      .every(key => !Array.isArray(data && data[key]) || !data[key].length);
-  }
-
-  async function adoptRemote(body) {
-    const state = readState();
-    // Nothing here worth a conflict copy, but the server's library still has to come in:
-    // taking its stamp without its data let the next edit upload the empty library over it.
-    const bare = state.dirty && bareStore(Store.exportData().data);
-    if (state.dirty && !bare && (sameAsLocal(body.data) || sentByThisDevice(body.data, state))) {
-      // Edits since that upload are still this device's to push, on top of its own copy.
-      const stillDirty = !sameAsLocal(body.data);
-      writeState({
-        stamp: body.stamp || 0,
-        at: Date.now(),
-        email: body.email || state.email || "",
-        size: body.size || 0,
-        dirty: stillDirty
-      });
-      notifyListeners();
-      if (stillDirty) schedulePush(PUSH_DEBOUNCE_MS);
-      return;
-    }
-    let announce = false;
-    if (state.dirty && !bare) {
-      const revision = changeRevision;
-      try {
-        // The server refuses to replace a waiting copy unless it is named. The one this
-        // device left while edits were still arriving is its own older snapshot.
-        const headers = { "Content-Type": "application/json" };
-        if (state.ownConflict) headers["If-Match"] = String(state.ownConflict);
-        const res = await fetch(CONFLICT, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify(Store.exportData()),
-          cache: "no-store"
-        });
-        if (!res.ok) throw Object.assign(new Error("HTTP " + res.status), { status: res.status });
-        conflictOnServer = true;
-        // The copy just left is this device's own until the adopt below completes; if
-        // that adopt fails, the next attempt has to be able to name it to replace it.
-        let saved = null;
-        try { saved = await res.json(); } catch (e) {}
-        writeState(Object.assign(readState(), { ownConflict: (saved && saved.stamp) || 0 }));
-        if (revision !== changeRevision) {
-          lastError = "Local changes continued during sync; retrying without replacing them";
-          schedulePush(PUSH_DEBOUNCE_MS);
-          return;
-        }
-        announce = true;
-      } catch (e) {
-        log("could not save a conflict copy: " + String((e && e.message) || e));
-        // Adopting now would destroy this device's newer changes with no copy of them
-        // anywhere. Stay dirty; the next contact tries the backup again.
-        if (window.Views && Views.toast) {
-          Views.toast(e && e.status === 409
-            ? "Another device's changes are already waiting under Settings - this device's changes stay here until those are restored or discarded"
-            : "Couldn't back up this device's newer changes, so they were kept here for now", "err");
-        }
-        writeState(Object.assign({}, state, { at: Date.now(), email: body.email || state.email || "" }));
-        notifyListeners();
-        return;
-      }
-    }
-    importing = true;
-    try {
-      Store.importData(body.data, { preserveDownloads: true });
-    } catch (e) {
-      lastError = "Remote copy rejected: " + String((e && e.message) || e);
-      log(lastError);
-      notifyListeners();
-      return;
-    } finally {
-      importing = false;
-    }
-    writeState({
-      stamp: body.stamp || 0,
-      at: Date.now(),
-      email: body.email || state.email || "",
-      size: body.size || 0,
-      dirty: false
-    });
-    if (announce && window.Views && Views.toast) Views.toast("Updated from your other devices - a copy of this device's newer changes is kept under Settings");
-    // A push armed before this adopt would upload the copy just adopted, moving the
-    // server stamp and making every other device adopt and reload once more.
-    clearTimeout(pushTimer);
-    pushTimer = 0;
-    notifyListeners();
-    reloadWhenIdle();
-  }
-
   // Coming back to the app should notice another device's changes, but every app switch
   // asking for the whole copy again is a phone's battery and data spent on nothing. A
   // regained connection is a real reason to look now; a glance at the screen is not.
@@ -376,14 +252,14 @@
       return;
     }
     if (remoteStamp > (state.stamp || 0)) {
-      await adoptRemote(body);
+      await V.adoptRemote(body);
       return;
     }
     if (remoteStamp < (state.stamp || 0)) {
       // The server went back in time (a restored volume, a moved data directory). A
       // device with local changes goes through the conflict path; a clean device holds
       // the newest copy there is and must offer it, not replace it with the old one.
-      if (state.dirty) { await adoptRemote(body); return; }
+      if (state.dirty) { await V.adoptRemote(body); return; }
       writeState(Object.assign({}, state, { stamp: remoteStamp, dirty: true }));
       await push();
       return;
@@ -419,7 +295,7 @@
       });
       if (res.status === 409) {
         const remote = await res.json();
-        if (remote.data) await adoptRemote(remote);
+        if (remote.data) await V.adoptRemote(remote);
         else {
           writeState(Object.assign(readState(), { stamp: remote.stamp || 0, dirty: true }));
           pushQueued = true;
@@ -475,87 +351,6 @@
     return queueSync(pullOrPush);
   }
 
-  /**
-   * @returns {Promise<boolean>} Whether the server holds a conflict copy to recover.
-   */
-  async function hasConflict() {
-    if (!available) return conflictOnServer;
-    try {
-      const res = await fetch(CONFLICT, { cache: "no-store" });
-      conflictOnServer = res.status === 200;
-      return conflictOnServer;
-    } catch (e) {
-      return conflictOnServer;
-    }
-  }
-
-  /**
-   * Restores the other device's copy the server kept, and saves it as the current one.
-   * @returns {Promise<void>}
-   */
-  function recoverConflict() { return queueSync(recoverConflictNow); }
-
-  async function recoverConflictNow() {
-    const startingRevision = changeRevision;
-    const res = await fetch(CONFLICT, { cache: "no-store" });
-    if (!res.ok) throw new Error("No recovered copy was found");
-    const body = await res.json();
-    const head = await fetch(ENDPOINT, { cache: "no-store" });
-    if (!head.ok) throw new Error("Couldn't read the server copy; nothing was restored");
-    const remote = await head.json();
-    if (startingRevision !== changeRevision) throw new Error("Local changes were made during recovery; retry to restore the copy");
-    // Changes this device has not uploaded exist nowhere else. Recovering the waiting copy
-    // used to import over them and then empty the slot, and they were gone. They take the
-    // recovered copy's place in the slot instead, to be restored or discarded in turn.
-    const before = readState();
-    const own = before.dirty && !bareStore(Store.exportData().data) ? Store.exportData() : null;
-    // A device with nothing of its own to keep has no business replacing a server copy it
-    // has never seen: those are another device's changes, and the slot the recovered copy
-    // leaves would be emptied, so they would exist nowhere. A pull first puts it in step.
-    if (!own && (remote.stamp || 0) !== (before.stamp || 0)) {
-      throw new Error("The server copy changed since this device last synced; sync first, then restore the copy");
-    }
-    importing = true;
-    try { Store.importData(body.data, { preserveDownloads: true }); } finally { importing = false; }
-    const revision = ++changeRevision;
-    writeState(Object.assign(readState(), { stamp: remote.stamp || 0, dirty: true }));
-    try {
-      const saved = await fetch(ENDPOINT, {
-        method: "PUT", headers: { "Content-Type": "application/json", "If-Match": String(remote.stamp || 0) },
-        body: JSON.stringify(Store.exportData()), cache: "no-store"
-      });
-      if (!saved.ok) throw new Error("Recovered locally; server save failed. The other-device copy was kept.");
-      const out = await saved.json();
-      writeState(Object.assign(readState(), { stamp: out.stamp, dirty: revision !== changeRevision, at: Date.now() }));
-      if (own) {
-        const kept = await fetch(CONFLICT, { method: "PUT", cache: "no-store",
-          headers: { "Content-Type": "application/json", "If-Match": String(body.stamp || 0) }, body: JSON.stringify(own) });
-        if (!kept.ok) throw new Error("Recovered and saved; this device's earlier changes could not be kept on the server");
-        conflictOnServer = true;
-        if (window.Views && Views.toast) Views.toast("Restored the other device's copy - this device's earlier changes are kept under Settings");
-      } else {
-        const removed = await fetch(CONFLICT, { method: "DELETE", headers: { "If-Match": String(body.stamp || 0) } });
-        if (!removed.ok) throw new Error("Recovered and saved; a newer other-device copy was kept");
-        conflictOnServer = false;
-      }
-    } catch (e) {
-      // Until this device's own changes are in the slot they exist only here: a failure
-      // on the way puts them back in place of the recovered copy, which the server still
-      // keeps, instead of leaving them nowhere behind a message that says otherwise.
-      if (own && revision === changeRevision) {
-        importing = true;
-        try { Store.importData(own, { preserveDownloads: true }); } finally { importing = false; }
-        writeState(Object.assign(readState(), { stamp: before.stamp || 0, dirty: true }));
-        if (window.Views) Views.render();
-        throw new Error("Couldn't restore the copy; this device's changes were kept (" + String((e && e.message) || e) + ")");
-      }
-      throw e;
-    }
-    notifyListeners();
-    if (revision !== changeRevision) schedulePush(PUSH_DEBOUNCE_MS);
-    if (window.Views) Views.render();
-  }
-
   function contacted() { return everReady || unsupported; }
 
   /**
@@ -585,7 +380,7 @@
         const sent = Store.exportData();
         const body = JSON.stringify(sent);
         if (new TextEncoder().encode(body).byteLength > KEEPALIVE_LIMIT) return;
-        writeState(Object.assign(readState(), { sentHash: textHash(JSON.stringify(sent.data)) }));
+        writeState(Object.assign(readState(), { sentHash: V.textHash(JSON.stringify(sent.data)) }));
         fetch(ENDPOINT, {
           method: "PUT",
           headers: { "Content-Type": "application/json", "If-Match": String(readState().stamp || 0) },

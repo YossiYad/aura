@@ -2,16 +2,10 @@
   const V = window.Aura.views;
   // Published on V for the other files of this module; see src/views.js.
   Object.defineProperties(V, {
-    backupHandle: { get: () => V.backupHandle },
     BROWSE: { get: () => BROWSE },
     browseHtml: { get: () => browseHtml },
     categoryPlan: { get: () => categoryPlan },
-    downloadBackup: { get: () => V.downloadBackup },
-    freshSearchHtml: { get: () => freshSearchHtml },
-    pickPlaylistCover: { get: () => V.pickPlaylistCover },
-    playlistArtHtml: { get: () => V.playlistArtHtml },
-    playlistCoverSrc: { get: () => V.playlistCoverSrc },
-    writeBackupFile: { get: () => V.writeBackupFile }
+    freshSearchHtml: { get: () => freshSearchHtml }
   });
 
   // A card is [title, key, colour, badge, sections, kind?]. The key is what the tile

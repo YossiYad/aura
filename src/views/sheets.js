@@ -2,12 +2,6 @@
   const V = window.Aura.views;
   // Published on V for the other files of this module; see src/views.js.
   Object.defineProperties(V, {
-    beginTitleRename: { get: () => V.beginTitleRename },
-    downloadAll: { get: () => V.downloadAll },
-    openCreateSheet: { get: () => V.openCreateSheet },
-    openPlaylistMenu: { get: () => V.openPlaylistMenu },
-    openPlaylistPicker: { get: () => V.openPlaylistPicker },
-    openPlaylistPickerBulk: { get: () => V.openPlaylistPickerBulk },
     openSleepTimerSheet: { get: () => openSleepTimerSheet },
     openSpeedSheet: { get: () => openSpeedSheet },
     openTrackMenu: { get: () => openTrackMenu },

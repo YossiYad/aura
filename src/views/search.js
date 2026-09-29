@@ -6,20 +6,11 @@
     BLOCKED_MSG: { get: () => BLOCKED_MSG },
     blockedAvoidLabels: { get: () => blockedAvoidLabels },
     cancelLiveSearch: { get: () => cancelLiveSearch },
-    categorySearch: { get: () => V.categorySearch },
     discoverState: { get: () => discoverState },
     doSearch: { get: () => doSearch },
     drRow: { get: () => drRow },
-    openArtistByName: { get: () => V.openArtistByName },
-    renderCategory: { get: () => V.renderCategory },
     renderSearch: { get: () => renderSearch },
-    submitAsk: { get: () => V.submitAsk },
     unblocked: { get: () => unblocked },
-    voice: { get: () => V.voice },
-    voiceEdit: { get: () => V.voiceEdit },
-    voiceEnd: { get: () => V.voiceEnd },
-    voiceOrbState: { get: () => V.voiceOrbState },
-    voiceStart: { get: () => V.voiceStart },
     watchLoadMore: { get: () => watchLoadMore }
   });
 
