@@ -100,9 +100,15 @@
     return null;
   }
 
-  async function resolvePipedOne(base, id, tier, remote) {
+  // Racing several servers, a slow one is cut loose so the others decide. A lone server
+  // has no others: cutting it off at six seconds, over a phone link to a home server that
+  // needed eight, failed the same song on every retry while the server was serving it.
+  const RACE_TIMEOUT_MS = 6000;
+  const SOLE_SOURCE_TIMEOUT_MS = 20000;
+
+  async function resolvePipedOne(base, id, tier, remote, timeoutMs) {
     try {
-      const data = await V.fetchJson(base + "/streams/" + id, 6000);
+      const data = await V.fetchJson(base + "/streams/" + id, timeoutMs || RACE_TIMEOUT_MS);
       let stream = playableAudio(data.audioStreams, tier, remote);
       if (!stream) {
         stream = playableMuxed((data.videoStreams || []).filter(s => s.videoOnly === false), remote);
@@ -147,9 +153,9 @@
     } finally { clearTimeout(timer); }
   }
 
-  async function resolveInvidiousOne(base, id, tier, remote) {
+  async function resolveInvidiousOne(base, id, tier, remote, timeoutMs) {
     try {
-      const data = await V.fetchJson(base + "/api/v1/videos/" + id + "?local=true", 6000);
+      const data = await V.fetchJson(base + "/api/v1/videos/" + id + "?local=true", timeoutMs || RACE_TIMEOUT_MS);
       let stream = playableAudio((data.adaptiveFormats || []).map(f => ({ url: V.absoluteUrl(f.url, base), mimeType: f.type, bitrate: parseInt(f.bitrate, 10) || 0 })), tier, remote);
       // YouTube ships how far this upload sits from its reference level. It was being
       // dropped on the floor; it is what makes one track blast after a quiet one.
@@ -301,9 +307,10 @@
     // Counting them is what tells the difference at the end.
     let serverFaults = 0;
     const noteFaults = p => p.catch(e => { if (V.shouldCooldownStream(e)) serverFaults++; throw e; });
+    const limit = trustedLive.length + pipedLive.length + invLive.length === 1 ? SOLE_SOURCE_TIMEOUT_MS : RACE_TIMEOUT_MS;
     const tasks = trustedLive.map(b => resolveCobaltOne(b, id, remote))
-      .concat(pipedLive.map(b => resolvePipedOne(b, id, tier, remote)))
-      .concat(invLive.map(b => resolveInvidiousOne(b, id, tier, remote)))
+      .concat(pipedLive.map(b => resolvePipedOne(b, id, tier, remote, limit)))
+      .concat(invLive.map(b => resolveInvidiousOne(b, id, tier, remote, limit)))
       .map(noteFaults);
     V.log("resolve", id + " racing " + trustedLive.length + " trusted + " + pipedLive.length + " piped + " + invLive.length + " invidious");
     let attempted = tasks.length;

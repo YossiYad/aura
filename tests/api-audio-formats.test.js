@@ -56,7 +56,7 @@ function resolver(fetch, options = {}) {
   const source = readModule('api');
   const context = { window: { location: options.location }, document: { getElementById: () => ({ canPlayType: () => 'probably' }) },
     navigator: {}, localStorage: { getItem: () => null, setItem() {} }, fetch,
-    Date: options.Date || Date, AbortController, setTimeout, clearTimeout, setInterval, clearInterval, Blob, URL, console };
+    Date: options.Date || Date, AbortController, setTimeout: options.setTimeout || setTimeout, clearTimeout, setInterval, clearInterval, Blob, URL, console };
   vm.runInNewContext(source, context);
   return context.window.Api;
 }
@@ -349,4 +349,20 @@ test('a cobalt tunnel is not served from the cache once it is about to expire', 
   now += 40000;
   await api.resolve('one');
   assert.equal(requests, 2, 'one within half a minute of its end is asked for again');
+});
+
+// A lone server has nothing to race: cut off at six seconds over a slow phone link, the
+// same song failed on every retry while the server was still working on it.
+test('a lone stream server is given longer to answer than one racing others', async () => {
+  const limits = async instances => {
+    const delays = [];
+    const api = resolver(async url => ({ ok: true, json: async () => url === 'config.json'
+      ? { invidiousInstances: instances }
+      : { adaptiveFormats: [{ url: instances[0] + '/opus', type: 'audio/webm; codecs="opus"', bitrate: 256000 }] } }),
+    { setTimeout: (fn, ms) => { delays.push(ms); return setTimeout(fn, ms); } });
+    await api.resolve('one', { quality: 'best' });
+    return delays;
+  };
+  assert((await limits(['https://only'])).some(ms => ms >= 15000));
+  assert(!(await limits(['https://a', 'https://b'])).some(ms => ms >= 15000));
 });
