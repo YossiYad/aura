@@ -336,6 +336,12 @@
 
   function schedulePush(delay) {
     clearTimeout(pushTimer);
+    // A taken conflict slot refuses every upload until it is restored or discarded; the
+    // next pull (a return to the app, a regained connection, Sync now) looks again.
+    if (V.blockedByConflict()) {
+      pushTimer = 0;
+      return;
+    }
     pushTimer = setTimeout(() => {
       pushTimer = 0;
       // After a failed contact push has nothing to do, and nothing asked the server
@@ -375,7 +381,7 @@
       syncOnFocus(false);
     });
     window.addEventListener("pagehide", () => {
-      if (!available || syncTasks || pushing || !readState().dirty) return;
+      if (!available || syncTasks || pushing || !readState().dirty || V.blockedByConflict()) return;
       try {
         const sent = Store.exportData();
         const body = JSON.stringify(sent);

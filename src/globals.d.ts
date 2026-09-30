@@ -284,6 +284,7 @@ interface AuraSync {
   pushNow(): Promise<void>;
   hasConflict(): Promise<boolean>;
   recoverConflict(): Promise<void>;
+  discardConflict(): Promise<void>;
   onChange(fn: () => void): void;
   describe(): SyncStatus;
   sharedList(): Promise<{ email: string, playlists: SharedPlaylist[] }>;

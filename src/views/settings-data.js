@@ -71,6 +71,7 @@
       const syncStatus = document.getElementById("set-sync-status");
       const syncNow = /** @type {HTMLButtonElement} */ (document.getElementById("set-sync-now"));
       const syncConflict = /** @type {HTMLButtonElement} */ (document.getElementById("set-sync-conflict"));
+      const syncDiscard = /** @type {HTMLButtonElement} */ (document.getElementById("set-sync-discard"));
       const fmtBytes = n => n >= 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB";
       const paintSync = () => {
         // The subscription outlives the page - a sync event can land after the user has
@@ -80,7 +81,7 @@
         if (!d.ready) {
           syncStatus.textContent = d.error && !d.available ? "Sync is offline right now - changes stay on this device and upload when it returns" : "Checking sync…";
           syncNow.hidden = true;
-          syncConflict.hidden = true;
+          syncConflict.hidden = syncDiscard.hidden = true;
           return;
         }
         if (!d.available) {
@@ -90,7 +91,7 @@
             ? "This server does not run sync - your data lives only on this device"
             : "Sync is offline right now - changes stay on this device and upload when it returns";
           syncNow.hidden = !!d.unsupported;
-          syncConflict.hidden = true;
+          syncConflict.hidden = syncDiscard.hidden = true;
           return;
         }
         let line = "Server copy for " + d.email;
@@ -100,7 +101,7 @@
         if (d.error) line = d.error + " · " + line;
         syncStatus.textContent = line;
         syncNow.hidden = false;
-        Sync.hasConflict().then(has => { syncConflict.hidden = !has; }).catch(() => {});
+        Sync.hasConflict().then(has => { syncConflict.hidden = syncDiscard.hidden = !has; }).catch(() => {});
       };
       // A subscription cannot be removed, and this page is rendered again and again;
       // one standing subscription forwards to whichever painter belongs to the current
@@ -125,6 +126,21 @@
         } catch (error) {
           V.toast(error.message || "Could not recover that copy", "err");
           syncConflict.disabled = false;
+        }
+      };
+      // The notice that a waiting copy holds this device back names two ways out; recovering
+      // was the only one here, and it replaces this device's library with that copy.
+      syncDiscard.onclick = async () => {
+        if (!confirm("Discard the copy another device left on the server? The changes in it will be lost.")) return;
+        syncDiscard.disabled = true;
+        try {
+          await Sync.discardConflict();
+          V.toast("Discarded the other device's copy");
+        } catch (error) {
+          V.toast(error.message || "Could not discard that copy", "err");
+        } finally {
+          syncDiscard.disabled = false;
+          paintSync();
         }
       };
     } else {

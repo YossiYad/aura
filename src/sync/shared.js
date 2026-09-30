@@ -155,7 +155,7 @@
   function sharedRemove(id) { return sharedCall("/" + id, "DELETE").then(out => { sharedForget(id); return out; }); }
 
   window.Sync = {
-    init: V.init, pushNow: V.pushNow, hasConflict: V.hasConflict, recoverConflict: V.recoverConflict,
+    init: V.init, pushNow: V.pushNow, hasConflict: V.hasConflict, recoverConflict: V.recoverConflict, discardConflict: V.discardConflict,
     onChange: V.onChange, describe: V.describe,
     sharedList, sharedOpen, sharedCreate, sharedReplace, sharedAppend, sharedRemove, sharedRemoveTrack,
     sharedCached, sharedForget

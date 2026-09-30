@@ -4,6 +4,8 @@
   // Published on V for the other files of this module; see src/sync.js.
   Object.defineProperties(V, {
     adoptRemote: { get: () => adoptRemote },
+    blockedByConflict: { get: () => blockedByConflict },
+    discardConflict: { get: () => discardConflict },
     hasConflict: { get: () => hasConflict },
     recoverConflict: { get: () => recoverConflict },
     textHash: { get: () => textHash }
@@ -60,6 +62,34 @@
       .every(key => !Array.isArray(data && data[key]) || !data[key].length);
   }
 
+  const BLOCKED_MESSAGE = "Another device's changes are already waiting under Settings - this device's changes stay here until those are restored or discarded";
+  let toldBlocked = false;
+
+  // A slot the server refused to hand over stays taken until someone restores or discards
+  // what is in it. Each edit used to upload the whole library twice to hear the same
+  // refusal again, and put the same notice on the screen every song.
+  /**
+   * @returns {boolean} True while this device waits on a conflict slot another copy holds.
+   */
+  function blockedByConflict() {
+    return !!V.readState().conflictBlocked && V.conflictOnServer;
+  }
+
+  function tellBlocked() {
+    V.lastError = "Another device's changes are waiting - recover or discard them to sync this device";
+    if (toldBlocked) return;
+    toldBlocked = true;
+    if (window.Views && Views.toast) Views.toast(BLOCKED_MESSAGE, "err");
+  }
+
+  function clearBlocked() {
+    const state = V.readState();
+    if (!state.conflictBlocked) return;
+    delete state.conflictBlocked;
+    V.writeState(state);
+    toldBlocked = false;
+  }
+
   async function adoptRemote(body) {
     const state = V.readState();
     // Nothing here worth a conflict copy, but the server's library still has to come in:
@@ -80,6 +110,14 @@
       return;
     }
     let announce = false;
+    if (!body.hasConflict) clearBlocked();
+    else if (state.dirty && !bare && state.conflictBlocked) {
+      // Still taken: asking again would only be refused again.
+      tellBlocked();
+      V.writeState(Object.assign(V.readState(), { at: Date.now(), email: body.email || state.email || "" }));
+      V.notifyListeners();
+      return;
+    }
     if (state.dirty && !bare) {
       const revision = V.changeRevision;
       try {
@@ -100,6 +138,7 @@
         let saved = null;
         try { saved = await res.json(); } catch (e) {}
         V.writeState(Object.assign(V.readState(), { ownConflict: (saved && saved.stamp) || 0 }));
+        clearBlocked();
         if (revision !== V.changeRevision) {
           V.lastError = "Local changes continued during sync; retrying without replacing them";
           V.schedulePush(V.PUSH_DEBOUNCE_MS);
@@ -109,13 +148,17 @@
       } catch (e) {
         V.log("could not save a conflict copy: " + String((e && e.message) || e));
         // Adopting now would destroy this device's newer changes with no copy of them
-        // anywhere. Stay dirty; the next contact tries the backup again.
-        if (window.Views && Views.toast) {
-          Views.toast(e && e.status === 409
-            ? "Another device's changes are already waiting under Settings - this device's changes stay here until those are restored or discarded"
-            : "Couldn't back up this device's newer changes, so they were kept here for now", "err");
+        // anywhere. Stay dirty; a taken slot waits for a pull to find it empty, anything
+        // else is tried again on the next contact.
+        const taken = !!(e && e.status === 409);
+        if (taken) {
+          V.conflictOnServer = true;
+          tellBlocked();
+        } else if (window.Views && Views.toast) {
+          Views.toast("Couldn't back up this device's newer changes, so they were kept here for now", "err");
         }
-        V.writeState(Object.assign({}, state, { at: Date.now(), email: body.email || state.email || "" }));
+        V.writeState(Object.assign({}, state, { at: Date.now(), email: body.email || state.email || "" },
+          taken ? { conflictBlocked: true } : {}));
         V.notifyListeners();
         return;
       }
@@ -223,8 +266,36 @@
       }
       throw e;
     }
+    clearBlocked();
     V.notifyListeners();
     if (revision !== V.changeRevision) V.schedulePush(V.PUSH_DEBOUNCE_MS);
     if (window.Views) Views.render();
+  }
+
+  /**
+   * Drops the copy waiting on the server. A device holding changes of its own then syncs,
+   * which leaves them in the emptied slot and takes the server copy.
+   * @returns {Promise<void>}
+   */
+  async function discardConflict() {
+    await V.queueSync(discardConflictNow);
+    if (V.readState().dirty) await V.pushNow();
+  }
+
+  async function discardConflictNow() {
+    const res = await fetch(V.CONFLICT, { cache: "no-store" });
+    if (res.status !== 404) {
+      if (!res.ok) throw new Error("Couldn't read the waiting copy; nothing was discarded");
+      const body = await res.json();
+      const removed = await fetch(V.CONFLICT, { method: "DELETE", headers: { "If-Match": String(body.stamp || 0) }, cache: "no-store" });
+      if (!removed.ok) throw new Error("The waiting copy changed since it was read, so it was kept");
+    }
+    V.conflictOnServer = false;
+    const state = V.readState();
+    delete state.ownConflict;
+    V.writeState(state);
+    clearBlocked();
+    V.lastError = "";
+    V.notifyListeners();
   }
 })();

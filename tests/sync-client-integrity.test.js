@@ -10,8 +10,8 @@ function client(fetch,clock,extra={}){
  const {Store}=createStore();if(!extra.bare)Store.importData(backup('initial'));const window=new FakeEventTarget(),document=new FakeEventTarget();document.hidden=false;
  const state=new Map([['aura.syncState',JSON.stringify(extra.state||{stamp:10,dirty:false})]]);const timers=[];
  const time=clock||{value:Date.now()};const clockDate={now:()=>time.value};
- let reloads=0;if(extra.player)window.Player=extra.player;
- vm.runInNewContext(readModule('sync'),{window,document,Store,fetch,console,Date:clockDate,Map,Set,JSON,Promise,TextEncoder,location:{reload(){reloads++;}},
+ let reloads=0;if(extra.player)window.Player=extra.player;if(extra.views)window.Views=extra.views;
+ vm.runInNewContext(readModule('sync'),{window,document,Store,fetch,console,Views:extra.views,Date:clockDate,Map,Set,JSON,Promise,TextEncoder,location:{reload(){reloads++;}},
  localStorage:{getItem:k=>state.get(k)||null,setItem:(k,v)=>state.set(k,v)},setTimeout:(fn,ms)=>{const t={fn,ms};timers.push(t);return t;},clearTimeout:t=>{if(t)t.cancelled=true;}});
  window.Sync.init();
  // Timers are collected rather than run, so a test decides when the clock's work happens.
@@ -327,4 +327,58 @@ test('a keepalive upload followed by a local edit is still this device\'s own co
  c.runTimers();await flushMicrotasks(40);
  assert(requests.some(x=>x.method==='PUT'&&x.headers['If-Match']==='30'),'the later edit is pushed on top of it');
  assert.equal(c.state().dirty,false);assert.equal(c.reloads(),0);
+});
+// With the one slot taken, every edit (a song counted as played, a queue move) uploaded the
+// whole library twice to hear the same refusal, and put the same notice on the screen again.
+function takenSlotServer(requests){
+ const server={main:{stamp:10,data:backup('initial')},conflict:null};
+ server.fetch=async(url,opts={})=>{const isC=url.endsWith('/conflict'),m=opts.method||'GET';requests.push({url,...opts,method:m});
+  if(m==='PUT'){
+   if(isC){if(server.conflict&&(opts.headers||{})['If-Match']!==String(server.conflict.stamp))return {ok:false,status:409,json:async()=>({stamp:server.conflict.stamp,hasConflict:true})};
+    server.conflict={stamp:500,data:JSON.parse(opts.body)};return response({stamp:500});}
+   if(opts.headers['If-Match']!==String(server.main.stamp))return {ok:false,status:409,json:async()=>({...server.main,hasConflict:!!server.conflict})};
+   server.main={stamp:server.main.stamp+1,data:JSON.parse(opts.body)};return response({stamp:server.main.stamp});}
+  if(m==='DELETE'){if(isC&&server.conflict&&opts.headers['If-Match']!==String(server.conflict.stamp))return {ok:false,status:409,json:async()=>({})};if(isC)server.conflict=null;return response({ok:true});}
+  if(isC)return server.conflict?response(server.conflict):{ok:false,status:404,json:async()=>({})};
+  return response({...server.main,hasConflict:!!server.conflict});};
+ return server;
+}
+test('a taken conflict slot is not asked again on every edit, and says so once',async()=>{
+ const requests=[],toasts=[];const server=takenSlotServer(requests);
+ const c=client(server.fetch,null,{views:{toast:(msg,kind)=>toasts.push(msg)}});
+ await flushMicrotasks(40);
+ server.conflict={stamp:300,data:backup('from-other')};server.main={stamp:20,data:backup('from-third')};
+ c.Store.addTrack({id:'a'});await c.Sync.pushNow();await flushMicrotasks(40);
+ assert.equal(c.state().dirty,true);assert.equal(toasts.length,1);
+ const puts=()=>requests.filter(r=>r.method==='PUT').length;const before=puts();
+ c.Store.addTrack({id:'b'});c.runTimers();await flushMicrotasks(40);
+ c.window.dispatch('pagehide');
+ assert.equal(puts(),before,'an edit uploads nothing while the slot is taken');
+ await c.Sync.pushNow();await flushMicrotasks(40);
+ assert.equal(puts(),before,'a pull that finds the slot still taken asks nothing');
+ assert.equal(toasts.length,1,'the notice is shown once');
+ assert.match(c.Sync.describe().error,/recover or discard/);
+ assert(c.Store.findTrack('b'),'this device keeps its changes');
+});
+test('discarding the waiting copy lets this device sync, keeping its changes in the slot',async()=>{
+ const requests=[];const server=takenSlotServer(requests);
+ const c=client(server.fetch,null,{views:{toast(){}}});
+ await flushMicrotasks(40);
+ server.conflict={stamp:300,data:backup('from-other')};server.main={stamp:20,data:backup('from-third')};
+ c.Store.addTrack({id:'only-here'});await c.Sync.pushNow();await flushMicrotasks(40);
+ await c.Sync.discardConflict();await flushMicrotasks(40);
+ const del=requests.find(r=>r.method==='DELETE');assert.equal(del.headers['If-Match'],'300');
+ assert(server.conflict&&server.conflict.data.data.library.some(t=>t.id==='only-here'),'this device\'s changes wait in the slot');
+ assert(c.Store.findTrack('from-third'));assert.equal(c.state().dirty,false);assert.equal(c.state().conflictBlocked,undefined);
+});
+test('a slot emptied elsewhere is noticed on the next pull',async()=>{
+ const requests=[];const server=takenSlotServer(requests);
+ const c=client(server.fetch,null,{views:{toast(){}}});
+ await flushMicrotasks(40);
+ server.conflict={stamp:300,data:backup('from-other')};server.main={stamp:20,data:backup('from-third')};
+ c.Store.addTrack({id:'only-here'});await c.Sync.pushNow();await flushMicrotasks(40);
+ server.conflict=null;
+ c.time.value+=61000;c.window.dispatch('online');await flushMicrotasks(60);
+ assert(server.conflict&&server.conflict.data.data.library.some(t=>t.id==='only-here'));
+ assert(c.Store.findTrack('from-third'));assert.equal(c.state().dirty,false);
 });

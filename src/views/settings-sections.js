@@ -180,7 +180,7 @@
       '<div class="set-note">Your library, playlists, likes, listening history, settings and queue - in one file.</div>' +
       '<div class="set-status status-card" id="set-backup-status">' + V.esc(lastBackup) + '</div>' + autoBackupNote +
       '<div class="set-status status-card" id="set-sync-status">Checking sync…</div>' +
-      '<div class="settings-actions">' + autoBackupButton + '<button class="btn ghost" id="set-sync-now" hidden>Sync now</button><button class="btn ghost" id="set-sync-conflict" hidden>Recover other-device copy</button><button class="btn ghost" id="set-backup">Download backup</button><button class="btn ghost" id="set-restore">Restore backup</button></div>' +
+      '<div class="settings-actions">' + autoBackupButton + '<button class="btn ghost" id="set-sync-now" hidden>Sync now</button><button class="btn ghost" id="set-sync-conflict" hidden>Recover other-device copy</button><button class="btn ghost" id="set-sync-discard" hidden>Discard other-device copy</button><button class="btn ghost" id="set-backup">Download backup</button><button class="btn ghost" id="set-restore">Restore backup</button></div>' +
       '<input type="file" id="set-restore-file" accept="application/json,.json" hidden />');
   }
 
