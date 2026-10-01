@@ -110,7 +110,12 @@
       return;
     }
     let announce = false;
-    if (!body.hasConflict) clearBlocked();
+    if (!body.hasConflict) {
+      clearBlocked();
+      // The copy read above still carries the flag, and a failed backup below writes that
+      // copy back: the slot would be marked taken again by a pull that found it empty.
+      delete state.conflictBlocked;
+    }
     else if (state.dirty && !bare && state.conflictBlocked) {
       // Still taken: asking again would only be refused again.
       tellBlocked();
