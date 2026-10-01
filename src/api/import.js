@@ -93,16 +93,23 @@
     const data = JSON.parse(m[1]);
     const tracks = [];
     const seen = new Set();
+    let rows = 0;
+    // The page marks its song rows as a section of their own. The other sections (featured
+    // artists, and albums on some pages) carry a title and an artist name too, and are not
+    // songs in the playlist; they are only read when no section is marked.
+    let sections = [];
+    try { sections = data.data[0].data.sections.filter(sec => sec && sec.itemKind === "trackLockup"); } catch (e) {}
     (function scan(n) {
       if (!n || typeof n !== "object") return;
       if (Array.isArray(n)) { n.forEach(scan); return; }
       if (typeof n.title === "string" && typeof n.artistName === "string") {
+        rows++;
         const key = n.title + "|" + n.artistName;
         if (!seen.has(key)) { seen.add(key); tracks.push({ title: n.title, artist: n.artistName }); }
         return;
       }
       for (const k in n) if (n[k] && typeof n[k] === "object") scan(n[k]);
-    })(data);
+    })(sections.length ? sections : data);
     if (!tracks.length) throw new Error("No tracks found - playlist may be private");
     // The page's own header is the first item of the first section; the document title
     // has the owner's name and "Apple Music" folded into it.
@@ -113,8 +120,15 @@
       name = nameM ? V.decodeHtml(nameM[1]).replace(/\s+on Apple Music\s*$/i, "") : "";
     }
     name = name.replace(/[\u200e\u200f]/g, "").trim();
-    V.log("import", "read the playlist from Apple's page data: " + tracks.length + " song(s)");
-    return { name: name || "Apple Music import", tracks };
+    // The header says how many songs the playlist holds. A page that lists fewer rows than
+    // that was cut short by Apple, and an import that says "40 of 40" for a playlist of
+    // 300 has lost songs without a word; the caller is told how many never arrived.
+    let listed = 0;
+    try { listed = Number(data.data[0].data.sections[0].items[0].trackCount) || 0; } catch (e) {}
+    const missing = Math.max(0, listed - rows);
+    V.log("import", "read the playlist from Apple's page data: " + tracks.length + " song(s)" +
+      (missing ? ", " + missing + " more were not on the page" : ""));
+    return { name: name || "Apple Music import", tracks, missing };
   }
 
   // The one source that needs no guessing. Spotify and Apple hand over a title and an

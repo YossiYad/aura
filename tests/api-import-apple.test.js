@@ -42,16 +42,17 @@ const USER_PAGE = "https://music.apple.com/il/playlist/%D7%A9%D7%99%D7%A8%D7%99%
 function applePage(name, items, extra) {
   const data = {
     data: [{ data: { sections: [
-      { items: [{ title: name, subtitleLinks: [{ title: "אסנת ידגר" }] }] },
-      { items: items.map((t, i) => ({ id: "track-lockup - pl.u-NpXmzl7ClpYRoG - " + i, title: t[0], artistName: t[1], duration: 200000,
-        tertiaryLinks: [{ title: t[0] + " - Single" }] })) }
+      { itemKind: "containerDetailHeaderLockup", items: [Object.assign({ title: name, subtitleLinks: [{ title: "אסנת ידגר" }] }, extra && extra.header)] },
+      { itemKind: "trackLockup", items: items.map((t, i) => ({ id: "track-lockup - pl.u-NpXmzl7ClpYRoG - " + i, title: t[0], artistName: t[1], duration: 200000,
+        tertiaryLinks: [{ title: t[0] + " - Single" }] })) },
+      { itemKind: "bubbleLockup", items: (extra && extra.others) || [] }
     ] } }],
     userTokenHash: "x"
   };
   return "<!DOCTYPE html><html><head><title>‎" + name + " by אסנת ידגר - Apple Music</title>" +
     '<meta property="og:title" content="' + name + ' by אסנת ידגר on Apple Music">' +
     '<script type="application/json" id="serialized-server-data">' + JSON.stringify(data) + "</script>" +
-    (extra || "") + "</head><body>" + "<div>".repeat(60) + "</body></html>";
+    "</head><body>" + "<div>".repeat(60) + "</body></html>";
 }
 
 // What the same page looks like read as text: durations and artwork slots, no song names.
@@ -97,4 +98,21 @@ test("a link without a language is read as it is, and a text-only fallback keeps
   const { Api: Api2, calls: calls2 } = createApi(url => /r\.jina\.ai/.test(url) ? USER_MARKDOWN : null);
   await assert.rejects(Api2.importPlaylist(USER_LINK), /Apple Music playlist/);
   assert(calls2.some(u => u === "https://r.jina.ai/" + USER_PAGE + "?l=he"), "the text reader is asked for the same page, language included");
+});
+
+test("rows that are not songs are left out, and songs the page never listed are counted", async () => {
+  const page = applePage("שירים", [["אחי", "מושיקו מור & ליאור נרקיס"], ["אלינור", "זוהר ארגוב"]],
+    { header: { trackCount: 300 }, others: [{ title: "אלבום", artistName: "עומר אדם" }] });
+  const { Api } = createApi(url => url === USER_PAGE + "?l=he" ? page : null);
+  const out = await Api.importPlaylist(USER_LINK);
+  assert.deepEqual(plain(out.tracks), [{ title: "אחי", artist: "מושיקו מור & ליאור נרקיס" }, { title: "אלינור", artist: "זוהר ארגוב" }]);
+  assert.equal(out.missing, 298);
+});
+
+test("a playlist read whole, with the same song in it twice, reports nothing missing", async () => {
+  const page = applePage("שירים", [["אחי", "מושיקו מור"], ["אחי", "מושיקו מור"]], { header: { trackCount: 2 } });
+  const { Api } = createApi(url => url === USER_PAGE + "?l=he" ? page : null);
+  const out = await Api.importPlaylist(USER_LINK);
+  assert.equal(out.tracks.length, 1);
+  assert.equal(out.missing, 0);
 });

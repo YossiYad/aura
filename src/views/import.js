@@ -109,7 +109,10 @@
       const existing = !!targetId && pl && pl.id === targetId;
       shutImport();
       const tail = already ? " (" + already + " already there)" : (imported < total ? " (rest not found)" : "");
-      V.toast((existing ? 'Added to "' : 'Imported "') + pl.name + '": ' + imported + " of " + total + " songs" + tail);
+      // A source that served only part of the playlist is said out loud, not folded into
+      // a count that looks complete.
+      const cut = parsed.missing > 0 ? " - " + parsed.missing + " more were not on the page the service sent" : "";
+      V.toast((existing ? 'Added to "' : 'Imported "') + pl.name + '": ' + imported + " of " + total + " songs" + tail + cut);
       V.render();
     };
     goBtn.onclick = run;

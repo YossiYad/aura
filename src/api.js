@@ -84,6 +84,7 @@
  * @typedef {Object} ImportedPlaylist
  * @property {string} name
  * @property {{ title: string, artist: string, match?: Track }[]} tracks
+ * @property {number} [missing] Songs the playlist holds that the page read did not list.
  */
 
 (function () {
