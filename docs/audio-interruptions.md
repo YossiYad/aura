@@ -66,6 +66,25 @@ interruption state; Chrome can also pause and resume the media element natively.
   until the next focus-return signal or foreground/user resume. Preserve the
   checkpoint across delayed metadata so restoring a seek is not mistaken for
   resumed playback. Explicit seeks cancel the old verification.
+- The two bullets above are WebKit recovery and run only on an engine that
+  exposes the Audio Session API, or on iOS. Chrome and the Android browsers
+  resume the element themselves and never freeze its clock; what they do is take
+  their time, because a pipeline suspended through a call reopens the stream over
+  whatever network the phone has, and that alone can outlast the one-second
+  budget. Run there, the recipe can throw the resume away twice and park the
+  song as a platform hold, which on Chrome nothing lifts until the app is
+  reopened: music that simply stops, which is the Galaxy report (not yet
+  confirmed by its log). On those engines the
+  native resume is trusted, and a clock that stays still falls to the ordinary
+  stall watchdog, whose fresh stream URL at the same position is also the right
+  answer when the link expired during the interruption.
+- On a phone whose page is hidden, YouTube's embedded player pauses itself and
+  keeps the song for a reopening that, with the phone in a pocket, is not coming.
+  So with the screen off the iframe fallback is never started (the song is skipped
+  and the queue carries on, as "Never fall back to YouTube" does all the time), and
+  a song already playing through it hands over to the next one the moment the page
+  goes hidden, unless it is the last in the queue or the listener paused it. A
+  desktop browser plays the embed in a background tab and keeps the fallback.
 - On iOS, keep one `AudioContext` alongside the media element as a second
   client of the same platform audio session. It renders a one-frame buffer of
   digital silence in an endless loop: iOS treats a context with nothing to
@@ -311,6 +330,8 @@ On Android Chrome/installed PWA and iPhone Safari/installed PWA, verify:
 | --- | --- |
 | Incoming call; answer and remain connected | Music stops; no recovery while talking. On browsers with a readable session state, reopening Aura stays paused; where the state is unknowable, reopening makes bounded resume attempts the OS rejects while the call holds audio |
 | Hang up or reject the call while Aura remains hidden/locked | Resume the same track and position only after focus returns; no double start |
+| Android, screen off, on mobile data: a call of several minutes, then hang up | The log shows `play event after interruption` and then `playback progress confirmed`, with no `restarting once`, no `reloading the same source` and no `interruption recovery still blocked`. If the clock never moves, a `stalled at ... recovering via watchdog` line follows within about twenty seconds and the same song continues from the same place on a fresh stream |
+| Android, screen off: a song whose stream is unavailable (every server refuses it), then one that was already playing through the YouTube fallback when the screen went off | The first is skipped with `skipped: the YouTube player cannot start while the screen is off` and the next song plays; the second hands over to the next song as the screen goes off (`was playing through YouTube ... moving on`). The last song in the queue, and a song the listener paused, stay put |
 | Another app takes the audio (Instagram video, voice memo) and later releases it | Playback intent survives; music resumes when focus returns, or at the latest when Aura is reopened |
 | Exit an Instagram reel quickly, then repeat after 7-10 seconds and after 30 seconds | Check both background return and reopening Aura, with the same track and position retained; repeat on iPhone installed PWA and Android Chrome/installed PWA. The `hold hidden` line on reopening shows how long the page ran after the interruption: ticks stopping a fixed interval after the pause mean the process was suspended, not that a platform signal went missing. A `page ran throughout` hold followed by `play event after interruption` with no `playing event` or progress is the frozen-element case: compare `buffered` and the `ctx` clock across the lines, and repeat once with a downloaded track |
 | A second call during recovery | Hold again until the second interruption releases focus |

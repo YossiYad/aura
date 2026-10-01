@@ -1001,7 +1001,9 @@ function statelessHarness(options) {
   return h;
 }
 
-for (const browser of ["iPhone", "Android"]) {
+// The restart-and-reload recipe answers WebKit's frozen element, so it runs on an engine
+// with the Audio Session API (or iOS); Chrome's native resume is covered just below.
+for (const browser of ["iPhone"]) {
   for (const progressing of [false, true]) {
     test(browser + " verifies position after a native resume event, progressing=" + progressing, async () => {
       let now = 1000000;
@@ -1035,6 +1037,58 @@ for (const browser of ["iPhone", "Android"]) {
       }
     });
   }
+}
+
+// Chrome and the Android browsers resume the element themselves after a call, and the
+// resumed pipeline may need more than a second to reopen the stream over a phone network.
+// Restarting and reloading it on that budget, then parking the song as a platform hold
+// that nothing on Chrome lifts until the app is reopened, is how a Galaxy went silent.
+// The native resume is trusted there; a clock that stays still is the stall watchdog's,
+// whose fresh stream URL at the same place is also what an expired link needs.
+for (const progressing of [false, true]) {
+  test("Android trusts a native resume event and leaves a still clock to the stall watchdog, progressing=" + progressing, async () => {
+    let now = 1000000;
+    const h = statelessHarness({ withAudioSession: false, Date: { now: () => now },
+      navigator: { userAgent: "Mozilla/5.0 (Linux; Android 14; SM-S928B) Chrome/140.0" } });
+    const resolved = [];
+    h.Api.resolve = id => { resolved.push(id); return Promise.resolve({ url: "https://example.test/fresh.mp3", base: "https://example.test" }); };
+    h.Api.invalidate = () => {};
+    h.play();
+    h.audio.currentTime = 8.95;
+    h.document.hidden = true;
+    h.document.dispatch("visibilitychange");
+    h.audio.pause(); // Chrome lost audio focus to a call.
+    h.runTimers(500);
+    now += 9319;
+    h.audio.play(); // Chrome resumes natively; its pipeline is still reopening the stream.
+    if (progressing) h.audio.currentTime += 0.5;
+    now += 1000;
+    h.runTimers(1000);
+    h.runTimers(1000);
+    h.runTimers(4000);
+    await flushMicrotasks();
+    assert.equal(h.audio.playCalls, 2, "no restart and no decoder reload on an engine that resumes natively");
+    assert.equal(h.audio.paused, false, "never parked as a platform hold");
+    assert.equal(h.audio.src, "https://example.test/track-1.mp3");
+    assert.equal(h.window.Player.playbackRequested(), true);
+    assert.equal(resolved.length, 0);
+    if (progressing) {
+      assert.equal(h.audio.currentTime, 9.45);
+      return;
+    }
+    // The clock never moved: the watchdog asks for a fresh stream at the same place.
+    now += 16000;
+    h.runIntervals(5000);
+    h.runImmediateTimers();
+    await flushMicrotasks(40);
+    h.runImmediateTimers();
+    await flushMicrotasks(40);
+    assert.deepEqual(resolved, ["track-1"]);
+    assert.equal(h.audio.src, "https://example.test/fresh.mp3");
+    assert.equal(h.audio.currentTime, 8.95);
+    assert.equal(h.audio.paused, false);
+    assert.equal(h.window.Player.current().id, "track-1");
+  });
 }
 
 test("reopening the app checks a native resume whose background timer was frozen", async () => {

@@ -331,8 +331,9 @@
             V.scheduleSourceRetry(track, resumeAt, "TV stream unavailable");
             return;
           }
-          if (Store.settings().noYtFallback) {
-            V.log("play", track.id + " skipped (noYtFallback on)");
+          if (Store.settings().noYtFallback || V.backgroundIframeBlocked()) {
+            V.log("play", track.id + (Store.settings().noYtFallback ? " skipped (noYtFallback on)"
+              : " skipped: the YouTube player cannot start while the screen is off"));
             V.failedQueueIds.add(track.id);
             V.stopAudio(true);
             V.emit({ type: "state" });

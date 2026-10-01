@@ -53,8 +53,25 @@ function interruptedPlayer(source, withAudioSession = true) {
   };
 }
 
+// Chrome resumes the element itself and never freezes its clock the way WebKit does, so
+// the same-source reload is a WebKit (Audio Session or iOS) recovery only.
+test('Chrome keeps its native resume: no restart, no same-source reload, no platform hold', async () => {
+  const h = interruptedPlayer('https://example.test/track.mp4', false);
+  h.reload();
+  await flushMicrotasks();
+  assert.equal(h.loads, 0, 'no decoder reload on an engine that resumes natively');
+  assert.equal(h.audio.playCalls, 2, 'the native play is the only play');
+  assert.equal(h.audio.paused, false);
+  h.advance(4000);
+  h.runTimers(4000);
+  await flushMicrotasks();
+  assert.equal(h.audio.paused, false, 'never parked as a platform hold');
+  assert.equal(h.audio.src, 'https://example.test/track.mp4');
+  assert.equal(h.window.Player.playbackRequested(), true);
+});
+
 for (const source of ['blob:downloaded-song', 'https://example.test/track.mp4']) {
-  for (const withAudioSession of [true, false]) {
+  for (const withAudioSession of [true]) {
     test('same-source interruption reload progresses while hidden: ' + source + ', session=' + withAudioSession, async () => {
       const h = interruptedPlayer(source, withAudioSession);
       h.reload();

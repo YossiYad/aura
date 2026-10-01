@@ -62,7 +62,7 @@
         // A native resume can arrive on a still-inactive session. Request the
         // session alongside it so the decoder has audio to render into.
         V.resumeSessionKick("native resume");
-        if (!V.nativeResumeCheck && V.backend === "audio" && !V.remotePlaybackActive()) {
+        if (!V.nativeResumeCheck && V.nativeResumeNeedsVerification() && V.backend === "audio" && !V.remotePlaybackActive()) {
           const held = V.interruptionCheckpoint;
           const position = held && held.target === el && held.source === el.src && held.token === V.loadingToken
             ? held.position : el.currentTime || 0;
@@ -237,7 +237,8 @@
           V.holdRemotePlayback();
           return;
         }
-        if (Store.settings().noYtFallback) {
+        if (Store.settings().noYtFallback || V.backgroundIframeBlocked()) {
+          if (!Store.settings().noYtFallback) V.log("play", t.id + " skipped after a stream error: the YouTube player cannot start while the screen is off");
           V.failedQueueIds.add(t.id);
           V.stopAudio(true);
           V.emit({ type: "state" });

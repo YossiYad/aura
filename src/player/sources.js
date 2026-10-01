@@ -2,6 +2,7 @@
   const V = window.Aura.player;
   // Published on V for the other files of this module; see src/player.js.
   Object.defineProperties(V, {
+    backgroundIframeBlocked: { get: () => backgroundIframeBlocked },
     blobUrl: { get: () => blobUrl, set: value => { blobUrl = value; } },
     downgraded: { get: () => downgraded },
     loadSkipSegments: { get: () => loadSkipSegments },
@@ -104,6 +105,17 @@
     finally { started.cancel(); }
     V.updatePlaybackState();
     return true;
+  }
+
+  // YouTube's embedded player will not play on a phone whose page is hidden: it pauses
+  // itself the moment the screen goes off or the listener switches apps, and keeps the
+  // song for a return that, with the phone in a pocket, is not coming. The settings
+  // page already names that cost ("won't play in background"). Falling back to the
+  // iframe there is a silent dead end, so with the screen off the song is skipped and
+  // the queue carries on, as "Never fall back to YouTube" does all the time. A desktop
+  // browser plays the embed in a background tab fine, so it keeps the fallback.
+  function backgroundIframeBlocked() {
+    return !!document.hidden && (V.isIOS || /Android/i.test(String(navigator.userAgent || "")));
   }
 
   function focusUnavailableError() {

@@ -6,6 +6,7 @@
     adoptUnconfirmedInterruption: { get: () => adoptUnconfirmedInterruption },
     confirmNativeResumeProgress: { get: () => confirmNativeResumeProgress },
     holdNativeResume: { get: () => holdNativeResume },
+    nativeResumeNeedsVerification: { get: () => nativeResumeNeedsVerification },
     pauseIfRunning: { get: () => pauseIfRunning },
     reportBackgroundHold: { get: () => reportBackgroundHold },
     scheduleUnconfirmedFocusResume: { get: () => scheduleUnconfirmedFocusResume },
@@ -127,6 +128,25 @@
       ", " + V.describeElementState() + "; source and position retained");
     V.updatePlaybackState();
     V.emit({ type: "state" });
+  }
+
+  // The restart-reload-hold sequence below answers a WebKit fault: after an
+  // interruption the element reports play with a clock that never moves (bug
+  // 323022), and the page's audio session cannot be repaired from the background.
+  // Chromium has no such fault - Chrome and the Android browsers resume the
+  // element natively - but it does take its time: a pipeline suspended through a
+  // call has to reopen the stream over whatever network the phone has, and that
+  // alone can outlast the one-second budget. On a phone network the recipe can
+  // then throw the resume away twice and park the song as a platform hold, which
+  // on Chrome nothing lifts until the app is reopened: music that simply stops,
+  // as reported from a Galaxy (not yet confirmed by its log). So the check
+  // runs only on an engine that exposes the Audio Session API, or on iOS, where
+  // the fault lives. Elsewhere the native resume is trusted, and a clock that
+  // stays still is left to the stall watchdog, whose remedy - a fresh stream URL
+  // at the same position - is also the right one when a link expired during the
+  // interruption.
+  function nativeResumeNeedsVerification() {
+    return V.isIOS || !!navigator.audioSession;
   }
 
   // A native play event changes the element's pause flag before its decoder

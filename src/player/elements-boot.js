@@ -97,6 +97,15 @@
       }
       V.configureAudioSession();
       V.saveListeningPosition();
+      // A song playing through the YouTube fallback stops here: the embed pauses itself
+      // on a hidden phone page and waits for the app to be reopened. Move on to the next
+      // song now, while this callback runs, rather than leave the queue silent until
+      // then. The last song in the queue is left for the reopening to resume.
+      if (V.backend === "yt" && V.wantsPlayback && !V.loadingInProgress && !V.platformBlocksAutoPlay() &&
+          V.backgroundIframeBlocked() && V.pickNextIndex() !== -1) {
+        V.log("play", (V.current() || {}).id + " was playing through YouTube, which pauses in the background; moving on to the next song");
+        V.next(false);
+      }
       // The stand-in confirmation below lasts only while the app stays open.
       // Leaving the app returns recovery to platform signals alone.
       if (V.sessionStateUnknowable()) V.focusResumeConfirmed = false;
