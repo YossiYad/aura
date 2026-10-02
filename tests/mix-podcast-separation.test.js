@@ -107,3 +107,30 @@ test('a mix is built from the listening profile alone when there is no key', asy
   m.readAccount = () => null;
   assert.equal(m.canBuildFor('nobody'), false);
 });
+
+// A deploy restarts the container part way through the night. Catching up used to build
+// every account again, spending each listener's own quota twice.
+test('a run after a restart skips the mixes already built tonight', async () => {
+  const m = mix();
+  const built = [];
+  m.listAccounts = () => ['done', 'waiting'];
+  m.canBuildFor = () => true;
+  m.wantsHomeMix = () => true;
+  m.readMix = key => key === 'done' ? { at: Date.now(), tracks: [{ id: 'x' }] } : null;
+  m.buildMix = async key => { built.push(key); return {}; };
+  m.writeJson = () => {};
+  await m.runAccounts('catching up after a restart');
+  assert.deepEqual(built, ['waiting']);
+});
+
+// A 400 also answers a request Gemini will not take, which is not the key's fault: with
+// two shared keys one listener's refused request rested a key for everyone for half an hour.
+test('a Gemini 400 rests the key only when the answer blames the key', async () => {
+  const m = mix();
+  m.AbortController = AbortController;
+  const provider = { name: 'gemini', model: 'gemini-2.5-flash', fallbackModel: 'gemini-2.5-flash', keys: ['k'] };
+  m.fetch = async () => new Response(JSON.stringify({ error: { message: 'User location is not supported for the API use.' } }), { status: 400 });
+  await assert.rejects(m.callGemini('k', provider, 'prompt'), e => e.keyBad === false && /location/.test(e.message));
+  m.fetch = async () => new Response(JSON.stringify({ error: { status: 'API_KEY_INVALID' } }), { status: 400 });
+  await assert.rejects(m.callGemini('k', provider, 'prompt'), e => e.keyBad === true);
+});

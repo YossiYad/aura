@@ -37,6 +37,10 @@
     // dash says which release it is ("Song - Remastered 2011", "Song - Live"), and read as
     // "Artist - Title" it asked for lyrics to "Remastered 2011" by "Song".
     if (topic) title = title.replace(/\s+[-–—]\s+(?:(?:\d{4}\s+)?(?:digital(?:ly)?\s+)?remaster(?:ed)?\b.*|live\b.*|mono\b.*|stereo\b.*|demo\b.*|acoustic\b.*|bonus track\b.*|.*\b(?:edit|version|mix)\s*)$/i, "");
+    // On any other channel a last segment that is nothing but a release marker ("Hey Jude
+    // - Live", "Artist - Song - Remastered 2015") names the version too; split as "Artist -
+    // Title" it asked for "Live" by "Hey Jude".
+    title = title.replace(/\s+[-–—]\s+(?:(?:\d{4}\s+)?(?:digital(?:ly)?\s+)?remaster(?:ed)?(?:\s+\d{4})?|live|mono|stereo|demo|acoustic|bonus track|(?:radio|single|album|original|extended|club)\s+(?:edit|version|mix))\s*$/i, "");
     const split = topic ? null : /^(.{1,60}?)\s+[-–—]\s+(.+)$/.exec(title);
     if (split) {
       artist = split[1].trim() || artist;

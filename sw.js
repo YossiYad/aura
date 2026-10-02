@@ -1,4 +1,4 @@
-const CACHE = "aura-v241";
+const CACHE = "aura-v242";
 const SHELL = [
   "./",
   "./index.html",
@@ -266,7 +266,9 @@ function isShellRequest(request, url) {
 
 function revalidate(request) {
   return fetch(request, { cache: "no-cache" }).then(async res => {
-    if (res && res.ok && res.status === 200) {
+    // A lapsed login session answers with a redirect to the sign-in page; stored under
+    // the requested path, that page would be served as the file from then on.
+    if (res && res.ok && res.status === 200 && !res.redirected) {
       const copy = res.clone();
       await caches.open(CACHE).then(c => c.put(request, copy)).catch(() => {});
     }

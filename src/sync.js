@@ -346,7 +346,12 @@
       pushTimer = 0;
       // After a failed contact push has nothing to do, and nothing asked the server
       // again until the app was left and reopened. An edit is reason enough to try.
-      queueSync(available || unsupported ? push : pullOrPush);
+      // Decided when its turn comes: a pull queued ahead of this push may adopt another
+      // device's copy, and that copy must not go back up as this device's edit.
+      queueSync(() => {
+        if (!(available || unsupported)) return pullOrPush();
+        return readState().dirty ? push() : Promise.resolve();
+      });
     }, delay);
   }
 

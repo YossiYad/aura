@@ -101,3 +101,15 @@ test("a match with no line breaks still reports a line", () => {
 
   assert.equal(Store.searchLyrics("unbroken")[0].line, "one long unbroken lyric line");
 });
+
+// Cached lyrics name every song they were fetched for, and the search above reads them:
+// a wipe that left them behind still answered "the one that goes..." with a wiped song.
+test("erasing the library and listening data takes the lyrics cache with it", () => {
+  const { Store, read } = createStore();
+  Store.cacheLyrics("a", { plainLyrics: PLAIN });
+  assert.equal(Store.searchLyrics("count the boats").length, 1);
+  Store.clearAll();
+  assert.equal(Store.searchLyrics("count the boats").length, 0);
+  assert.equal(read("aura.lyrics"), null);
+  assert.equal(Store.cachedLyrics("a"), null);
+});

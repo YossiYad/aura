@@ -134,7 +134,7 @@
         if (token !== V.loadingToken) return false;
         if (!/^https?:\/\//i.test(info.url)) throw new Error("No TV-compatible stream");
         V.activeLocalKind = null;
-        if (!reuseSource) V.activeGain = V.gainFor(info.loudnessDb);
+        if (!reuseSource) V.activeGain = V.gainFor(V.noteStreamLoudness(track.id, info.loudnessDb));
         remoteSource = true;
         if (V.audio.isCast) { V.audio.mediaTrack = track; V.audio.mediaMime = info.mime || "audio/mpeg"; }
         V.rememberStreamDuration(track, info);

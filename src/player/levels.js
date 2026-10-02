@@ -69,7 +69,7 @@
     V.volume = Math.max(0, Math.min(1, v));
     try { localStorage.setItem("aura.volume", String(V.volume)); } catch (e) {}
     V.audio.volume = levelled();
-    if (V.yt && V.ytReady) { try { V.yt.setVolume(Math.round(v * 100)); } catch (e) {} }
+    if (V.yt && V.ytReady) { try { V.yt.setVolume(Math.round(V.volume * 100)); } catch (e) {} }
   }
 
   // A 90 minute episode at 1.5x is an hour, which is the whole reason this exists - and why

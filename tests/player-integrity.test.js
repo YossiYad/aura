@@ -248,3 +248,14 @@ test('a cache limit left on Unlimited is held to the default',async()=>{
  await flushMicrotasks(80);
  assert.deepEqual([...cache.keys()],['b']);
 });
+// A track refused for its size is refused for the session. With no Content-Length on the
+// stream the refusal cost the whole limit in bytes, and the prepare, the play and the
+// next listen each spent it again.
+test('a track too big to cache is not fetched again on the next play',async()=>{
+ const h=createHarness({withStorage:true,storageDb:memoryDb()});let fetches=0;
+ h.Api.fetchStreamBlob=async()=>{fetches++;throw Object.assign(new Error('too big'),{oversize:true});};
+ const P=h.window.Player;await P.cacheTrack('huge');await P.cacheTrack('huge');await flushMicrotasks(40);
+ assert.equal(fetches,1);
+ h.Api.fetchStreamBlob=async()=>{fetches++;return {size:1024};};
+ await P.cacheTrack('other');assert.equal(fetches,2,'other tracks are still cached');
+});

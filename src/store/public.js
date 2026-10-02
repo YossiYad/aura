@@ -134,6 +134,13 @@
       V.erase("aura.positions");
       V.blocked = { tracks: [], artists: [] };
       V.positions = {};
+      // Cached lyrics are searchable and name every song they were fetched for, so they
+      // are listening data too; the skip segments cache names the same songs.
+      V.erase("aura.lyrics");
+      V.erase("aura.segments");
+      V.lyrics = {};
+      V.lyricsIndex = null;
+      V.segments = {};
       // Follows are a subscription, not listening data - a library wipe should not
       // silently unfollow anyone, so they are deliberately left alone here.
       V.notify("library");

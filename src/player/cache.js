@@ -130,8 +130,13 @@
   function localCopyBypassed(id) {
     return rejectedLocalCache.has(id) && navigator.onLine !== false;
   }
+  // A track refused for its size stays refused for the session: with no Content-Length
+  // on the stream the refusal costs the whole limit in bytes, and the prepare, the play
+  // and the next listen each asked again.
+  const oversizeTracks = new Set();
+
   async function autoCache(id) {
-    if (cachingNow.has(id) || rejectedLocalCache.has(id) || V.downloadsBlockedByWifi()) return;
+    if (cachingNow.has(id) || rejectedLocalCache.has(id) || oversizeTracks.has(id) || V.downloadsBlockedByWifi()) return;
     cachingNow.add(id);
     try {
       if (await V.getDownload(id)) return;
@@ -141,7 +146,7 @@
       const blob = await Api.fetchStreamBlob(id, TRACK_MAX_BYTES, null,
         { receiverCompatible: typeof V.audio.webkitShowPlaybackTargetPicker === "function" });
       if (rejectedLocalCache.has(id)) return;
-      if (blob.size > TRACK_MAX_BYTES) { V.log("cache", id + " too big, skipped"); return; }
+      if (blob.size > TRACK_MAX_BYTES) { oversizeTracks.add(id); V.log("cache", id + " too big, skipped"); return; }
       V.log("cache", id + " saved " + Math.round(blob.size / 1024) + "KB");
       const d = await V.openDb();
       if (!d || !d.objectStoreNames.contains("cache")) return;
@@ -151,7 +156,9 @@
         tx.onerror = () => rej(tx.error);
       });
       evictCache().catch(() => {});
-    } catch (e) {} finally {
+    } catch (e) {
+      if (e && e.oversize) oversizeTracks.add(id);
+    } finally {
       cachingNow.delete(id);
     }
   }

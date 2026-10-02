@@ -454,7 +454,16 @@ async function callGemini(key, provider, prompt) {
   if ((res.status >= 500 || res.status === 404) && provider.fallbackModel && provider.fallbackModel !== model) {
     res = await send(provider.fallbackModel);
   }
-  if (res.status === 400 || res.status === 403 || res.status === 429) {
+  if (res.status === 400) {
+    // A 400 also answers a request Gemini will not take (an unsupported location, an
+    // over-long prompt), which is not the key's fault and no reason to rest a shared key
+    // for everyone for half an hour. The app's own Gemini call reads it the same way.
+    let detail = "";
+    try { const err = await res.json(); detail = String((err && err.error && (err.error.message || err.error.status)) || ""); } catch (e) {}
+    const keyBad = !detail || /api key|API_KEY|permission/i.test(detail);
+    throw Object.assign(new Error(keyBad ? "gemini rejected the key (HTTP 400)" : "gemini rejected the request: " + detail.slice(0, 120)), { keyBad });
+  }
+  if (res.status === 403 || res.status === 429) {
     throw Object.assign(new Error("gemini rejected the key (HTTP " + res.status + ")"), { keyBad: true });
   }
   if (!res.ok) throw new Error("gemini HTTP " + res.status);
@@ -683,7 +692,12 @@ async function runAccounts(reason) {
   let ok = 0;
   let failed = 0;
   console.log("nightly mix run started (" + reason + ") for " + accounts.length + " account(s) with a key or a listening profile");
+  const slot = lastSlot(Date.now());
   for (const key of accounts) {
+    // A restart part way through the night (a deploy, say) catches up with the accounts
+    // still waiting, not with the ones already built on their own quota tonight.
+    const built = readMix(key);
+    if (built && Number(built.at || 0) >= slot) { ok++; continue; }
     try { await buildMix(key); ok++; }
     catch (e) { failed++; console.log("mix for " + key + " failed: " + String((e && e.message) || e).slice(0, 100)); }
   }

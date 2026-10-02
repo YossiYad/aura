@@ -138,8 +138,10 @@
   // near-misses, and the same list every time.
   function youtubeListId(u) {
     let m;
-    if ((m = /[?&]list=([A-Za-z0-9_-]+)/.exec(u))) return m[1];
-    if ((m = /(?:music\.)?youtube\.com\/playlist\/([A-Za-z0-9_-]+)/.exec(u))) return m[1];
+    // YouTube Music prefixes a list id with "VL" in its own browse links; the playlist
+    // endpoints want the id without it, whichever way the link arrived.
+    if ((m = /[?&]list=([A-Za-z0-9_-]+)/.exec(u))) return m[1].replace(/^VL/, "");
+    if ((m = /(?:music\.)?youtube\.com\/playlist\/([A-Za-z0-9_-]+)/.exec(u))) return m[1].replace(/^VL/, "");
     // A bare list id pasted on its own, which is what sharing sheets sometimes leave behind.
     if (/^(?:PL|OLAK5uy_|RD|LL|FL|UU|VL)[A-Za-z0-9_-]{5,}$/.test(u)) return u.replace(/^VL/, "");
     return null;

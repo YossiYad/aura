@@ -183,3 +183,20 @@ test('removed songs stay after the running queue and replay returns them to play
   assert.deepEqual(entries(h), [['a', 'earlier'], ['b', 'current'], ['c', 'upcoming'], ['d', 'upcoming']]);
   p.dismiss();
 });
+
+// A private session's queue lives with the session. Switching the session off used to
+// leave that queue playing as the personal one, and the next save wrote it to the
+// personal slot, which is exported and synced to the other devices.
+test("ending a private session brings the personal queue back and never saves the private one", () => {
+  const h = createHarness({ tracks: [{ id: "personal", title: "Personal", duration: 180 }] });
+  const P = h.window.Player;
+  assert.equal(P.current().id, "personal");
+  h.setPrivate(true);
+  P.playQueue([{ id: "secret", title: "Secret", duration: 180 }], 0);
+  assert.equal(P.current().id, "secret");
+  h.setPrivate(false);
+  assert.equal(P.current().id, "personal", "the queue from before the session is back");
+  assert.equal(P.playbackRequested(), false, "as at a relaunch, nothing plays until asked");
+  assert.deepEqual(h.savedQueues[h.savedQueues.length - 1].extra.map(t => t.id), ["personal"],
+    "the personal queue is what the store holds once the session is over");
+});

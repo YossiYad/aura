@@ -32,6 +32,10 @@
         document.body.appendChild(holder);
       }
       const boot = () => {
+        // A player whose ready never came (a boot that timed out) still owns the holder.
+        // A second player built over it would hand the waiters whichever of the two
+        // reports ready; the stuck one goes first.
+        if (yt && !ytReady) { try { yt.destroy(); } catch (e) {} }
         yt = new YT.Player("yt-holder", {
           width: 200, height: 200,
           playerVars: { playsinline: 1, controls: 0, disablekb: 1 },

@@ -64,8 +64,13 @@
     V.syncSessionKick();
     const session = V.audio.isCast ? null : navigator.audioSession;
     const sessionInterrupted = V.audioSessionInterrupted || !!(session && session.state === "interrupted");
-    const confirmedFocusReturn = V.focusResumeConfirmed &&
-      (V.sessionStateUnknowable() || (!!session && session.state === "active"));
+    // A platform pause that was not an interruption is also over for a load started
+    // while the app is on screen: the song was tapped there, which is the listener's own
+    // gesture, as the reopening that stands in for a confirmation is. Hidden, only the
+    // platform's own return confirms it. Automatic restarts never reach here under a
+    // platform pause.
+    const confirmedFocusReturn = !document.hidden || (V.focusResumeConfirmed &&
+      (V.sessionStateUnknowable() || (!!session && session.state === "active")));
     const focusBlocked = sessionInterrupted || !!V.mediaSessionPauseDecisionTimer ||
       !!(V.platformPaused && !confirmedFocusReturn);
     V.platformPaused = focusBlocked;

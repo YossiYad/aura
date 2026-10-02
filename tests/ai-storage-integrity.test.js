@@ -198,3 +198,18 @@ test('the provider chosen in Settings limits transcription too, and no key says 
   const none = aiTranscribe(async () => assert.fail('nothing is sent without a key'), {});
   await assert.rejects(none.transcribe(recording(), 'he-IL'), error => error.noKey === true);
 });
+
+// The playlist request already hands a retired default model to the rolling alias; the
+// recording went to the default model alone and failed with its 404 after the sunset.
+test('a retired default Gemini model hands the recording to the fallback model too', async () => {
+  const calls = [];
+  const Ai = aiTranscribe(async (url, options) => {
+    calls.push(String(url));
+    if (String(url).includes('gemini-2.5-flash:')) return { ok: false, status: 404, json: async () => ({}) };
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: 'play Song' }] } }] }) };
+  }, { 'aura.aiKeys.gemini': '["gemini-key"]' });
+  assert.equal(await Ai.transcribe(recording(), 'he-IL'), 'play Song');
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /models\/gemini-2\.5-flash:generateContent/);
+  assert.match(calls[1], /models\/gemini-flash-latest:generateContent/);
+});

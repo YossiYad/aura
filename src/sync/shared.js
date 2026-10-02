@@ -100,6 +100,9 @@
    */
   async function sharedList() {
     const out = await sharedCall("", "GET");
+    // A captive portal answers 200 with a sign-in page to any address. Read as an empty
+    // list, that page would delete every cached shared playlist on the device.
+    if (!out || !Array.isArray(out.playlists)) throw new Error("invalid shared playlist response");
     const live = new Set((out.playlists || []).map(p => p.id));
     const map = readSharedCache();
     Object.keys(map).forEach(id => { if (!live.has(id)) delete map[id]; });

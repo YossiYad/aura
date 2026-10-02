@@ -382,3 +382,32 @@ test('a slot emptied elsewhere is noticed on the next pull',async()=>{
  assert(server.conflict&&server.conflict.data.data.library.some(t=>t.id==='only-here'));
  assert(c.Store.findTrack('from-third'));assert.equal(c.state().dirty,false);
 });
+// A push armed by an edit, fired after a pull was queued, waited its turn behind that
+// pull; when the pull adopted another device's copy the push uploaded that copy as this
+// device's edit, moving the server stamp and making every other device adopt again.
+test('a push queued behind a pull that adopted another device\'s copy does not upload it',async()=>{
+ const requests=[];let stamp=10;
+ const c=client(async(url,opts={})=>{requests.push({url,...opts});
+ if(opts.method==='PUT'&&url.endsWith('/conflict'))return response({stamp:21});
+ if(opts.method==='PUT')return response({stamp:stamp+1});
+ return response({stamp,data:backup(stamp===10?'initial':'remote')});});
+ await flushMicrotasks(40);
+ c.Store.addTrack({id:'mine'});
+ stamp=20;c.time.value+=61000;c.document.dispatch('visibilitychange');
+ c.runTimers();await flushMicrotasks(60);c.runTimers();await flushMicrotasks(60);
+ assert(c.Store.findTrack('remote'),'the newer remote copy was adopted');
+ assert.equal(c.state().dirty,false);
+ assert.equal(requests.filter(x=>x.method==='PUT'&&!x.url.endsWith('/conflict')).length,0,'nothing uploads the adopted copy');
+});
+// A captive portal answers 200 with its sign-in page to any address. Read as an empty
+// list, it deleted every cached shared playlist on the device.
+test('a shared playlist list that is not a list leaves the cache alone',async()=>{
+ const record={id:'sp_1',name:'House',owner:'a@b',updatedAt:5,tracks:[{id:'s1',title:'One'}]};
+ const summary={id:'sp_1',name:'House',owner:'a@b',mine:true,count:1,updatedAt:5};
+ let portal=false;
+ const c=client(async(url)=>{if(url.endsWith('/shared'))return portal?{ok:true,status:200,json:async()=>{throw new Error('not json');}}:response({playlists:[summary]});
+ if(url.endsWith('/shared/sp_1'))return response(record);return response({stamp:10,data:backup('initial')});});
+ await flushMicrotasks(40);await c.Sync.sharedList();await c.Sync.sharedOpen('sp_1');
+ portal=true;await assert.rejects(c.Sync.sharedList(),/invalid shared playlist response/);
+ assert.equal(c.Sync.sharedCached('sp_1').tracks.length,1,'the cached list is still there');
+});

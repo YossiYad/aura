@@ -1522,3 +1522,42 @@ test("hiding the app again drops the stand-in focus confirmation", async () => {
   assert.equal(h.audio.playCalls, 2, "no hidden retries once the app is left again");
   assert.equal(h.audio.paused, true);
 });
+
+// A pause the browser or OS made with no interruption reported (a route change, another
+// app's sound) held every song tapped afterwards in the open app until the Play button:
+// the load was refused as a return of focus nobody had confirmed. The tap is the
+// listener's own gesture, as the reopening that stands in for the confirmation is. Hidden,
+// the hold stays with the platform's own return.
+for (const readable of [true, false]) {
+  test("a song tapped in the open app plays through a generic platform pause, readable session=" + readable, async () => {
+    const h = createHarness({ withAudioSession: readable,
+      tracks: [{ id: "one", title: "One", duration: 180 }, { id: "two", title: "Two", duration: 180 }] });
+    h.Api.resolve = async id => ({ url: "https://test/" + id, base: "https://test" });
+    if (readable) h.audioSession.state = "active";
+    h.play();
+    h.audio.pause();
+    assert.equal(h.audio.paused, true);
+    h.window.Player.jumpTo(1);
+    await flushMicrotasks(40); h.runImmediateTimers(); await flushMicrotasks(40);
+    assert.equal(h.window.Player.current().id, "two");
+    assert.equal(h.audio.src, "https://test/two");
+    assert.equal(h.audio.paused, false, "the tap is a gesture, not a load to hold");
+    assert.equal(h.audio.playCalls, 2);
+  });
+}
+
+test("a song started while the app is hidden under a generic platform pause is still held", async () => {
+  const h = createHarness({ withAudioSession: false,
+    tracks: [{ id: "one", title: "One", duration: 180 }, { id: "two", title: "Two", duration: 180 }] });
+  h.Api.resolve = async id => ({ url: "https://test/" + id, base: "https://test" });
+  h.play();
+  h.document.hidden = true;
+  h.document.visibilityState = "hidden";
+  h.document.dispatch("visibilitychange");
+  h.audio.pause();
+  h.window.Player.jumpTo(1);
+  await flushMicrotasks(40); h.runImmediateTimers(); await flushMicrotasks(40);
+  assert.equal(h.window.Player.current().id, "two");
+  assert.equal(h.audio.playCalls, 1, "nothing reclaims focus from a hidden page");
+  assert.equal(h.audio.paused, true);
+});

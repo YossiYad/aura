@@ -304,7 +304,8 @@
     if (!settingsNav.some(item => item[0] === activeSettingsTab)) activeSettingsTab = "appearance";
     const settingsTabs = settingsNav.map(item => {
       const controls = item[0] === "storage" ? "settings-storage settings-backup" :
-        item[0] === "blocked" ? "settings-private settings-blocked settings-danger" : "settings-" + item[0];
+        item[0] === "blocked" ? "settings-private settings-blocked settings-danger" :
+        item[0] === "ai" ? "settings-ai settings-daily" : "settings-" + item[0];
       return '<button type="button" role="tab" id="settings-tab-' + item[0] + '" data-settings-target="' + item[0] + '" aria-controls="' + controls + '" aria-selected="' + (activeSettingsTab === item[0]) + '" tabindex="' + (activeSettingsTab === item[0] ? '0' : '-1') + '"' + (activeSettingsTab === item[0] ? ' class="on"' : '') + '>' +
         settingsIcon(item[0]) + '<span>' + item[1] + '</span></button>';
     }).join('');

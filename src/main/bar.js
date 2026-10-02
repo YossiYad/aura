@@ -59,7 +59,8 @@
     V.$("fp-title").textContent = t.title;
     V.$("fp-artist").textContent = Player.needsPlaybackGesture() ? tr("לחצו על ניגון כדי להתחיל") : t.artist || "";
     document.querySelector(".fp-eyebrow").textContent = t.album || t.artist || "Now playing";
-    V.$("fp-art").style.backgroundImage = "url('" + coverFor(t).replace("mqdefault", "hqdefault") + "')";
+    // An apostrophe in an address would close url('...') early and blank the art.
+    V.$("fp-art").style.backgroundImage = "url('" + coverFor(t).replace("mqdefault", "hqdefault").replace(/'/g, "%27") + "')";
     const saved = Store.isLiked(t.id) || Store.playlists().some(p => p.ids.includes(t.id));
     V.$("fp-like").classList.toggle("on", saved);
     V.$("pb-like").classList.toggle("on", saved);
@@ -71,7 +72,7 @@
     }
     V.$("fp-about-name").textContent = t.artist || "Unknown artist";
     V.$("fp-credit-name").textContent = t.artist || "Unknown artist";
-    V.$("fp-about-cover").style.backgroundImage = "url('" + (t.artistThumb || t.thumb || Api.thumbFor(t.id)).replace("mqdefault", "hqdefault") + "')";
+    V.$("fp-about-cover").style.backgroundImage = "url('" + (t.artistThumb || t.thumb || Api.thumbFor(t.id)).replace("mqdefault", "hqdefault").replace(/'/g, "%27") + "')";
     V.applyFpAccent(t);
     V.loadLyrics(t);
     V.refreshDrive();

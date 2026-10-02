@@ -71,22 +71,31 @@
 
   async function transcribeGemini(key, blob, lang) {
     const audio = await audioBase64(blob);
-    const url = "https://generativelanguage.googleapis.com/v1beta/models/" +
-      encodeURIComponent(V.getModel("gemini")) + ":generateContent?key=" + encodeURIComponent(key);
+    const model = V.getModel("gemini");
+    // The same handoff as callGemini: when the pinned default model is retired or down,
+    // the rolling alias takes the recording, so voice requests outlive the sunset too.
+    const candidates = model === V.PROVIDERS.gemini.defaultModel && V.GEMINI_FALLBACK_MODEL !== model
+      ? [model, V.GEMINI_FALLBACK_MODEL] : [model];
     const ctl = new AbortController();
     let timedOut = false;
     const timer = setTimeout(() => { timedOut = true; ctl.abort(); }, TRANSCRIBE_MS);
+    // text/plain, as in callGemini: no CORS preflight, and Gemini parses the JSON anyway.
+    const send = candidate => fetch("https://generativelanguage.googleapis.com/v1beta/models/" +
+      encodeURIComponent(candidate) + ":generateContent?key=" + encodeURIComponent(key), {
+      method: "POST", headers: { "Content-Type": "text/plain" }, signal: ctl.signal,
+      body: JSON.stringify({ contents: [{ parts: [
+        { text: "Transcribe this spoken request word for word" + (lang === "he" ? ", in Hebrew" : "") +
+          ". Reply with only the words that were said, nothing else, and with nothing at all if no words were said." },
+        { inlineData: { mimeType: geminiAudioMime(blob.type), data: audio } }
+      ] }] })
+    });
     let res, data;
     try {
-      // text/plain, as in callGemini: no CORS preflight, and Gemini parses the JSON anyway.
-      res = await fetch(url, {
-        method: "POST", headers: { "Content-Type": "text/plain" }, signal: ctl.signal,
-        body: JSON.stringify({ contents: [{ parts: [
-          { text: "Transcribe this spoken request word for word" + (lang === "he" ? ", in Hebrew" : "") +
-            ". Reply with only the words that were said, nothing else, and with nothing at all if no words were said." },
-          { inlineData: { mimeType: geminiAudioMime(blob.type), data: audio } }
-        ] }] })
-      });
+      res = await send(candidates[0]);
+      for (let i = 1; i < candidates.length && (res.status >= 500 || res.status === 404); i++) {
+        V.log("ai", "gemini " + candidates[0] + " unavailable (HTTP " + res.status + "), transcribing with " + candidates[i]);
+        res = await send(candidates[i]);
+      }
       if (res.ok) data = await V.readJson(res, "Gemini");
     } catch (e) {
       throw V.extractError(e, timedOut, TRANSCRIBE_MS / 1000);

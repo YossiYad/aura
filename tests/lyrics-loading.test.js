@@ -135,3 +135,17 @@ test('lyrics lookups read a Topic channel title as the song and its release, not
   // Everywhere else the title still names the artist.
   assert.deepEqual(query({ title: 'Daft Punk - Get Lucky (feat. Pharrell)', artist: 'DaftPunkVEVO' }), { title: 'Get Lucky', artist: 'Daft Punk' });
 });
+
+// "Hey Jude - Live" on a label or fan channel is the song and its release too; read as
+// "Artist - Title" it asked lrclib for "Live" by "Hey Jude" and cached the miss.
+test('lyrics lookups keep a release marker after the dash from naming an artist on any channel', () => {
+  const context = vm.createContext({ window: {}, URL, AbortController, setTimeout, clearTimeout,
+    localStorage: { getItem: () => null, setItem() {} } });
+  vm.runInContext(readModule('api'), context);
+  const query = track => JSON.parse(JSON.stringify(context.window.Api.lyricsQuery(track)));
+  assert.deepEqual(query({ title: 'Hey Jude - Live', artist: 'The Beatles' }), { title: 'Hey Jude', artist: 'The Beatles' });
+  assert.deepEqual(query({ title: 'The Beatles - Hey Jude - Remastered 2015', artist: 'BeatlesVEVO' }), { title: 'Hey Jude', artist: 'The Beatles' });
+  assert.deepEqual(query({ title: 'Singer - Song - Radio Edit', artist: 'Label' }), { title: 'Song', artist: 'Singer' });
+  // A second part that is a name, not a marker, still reads as "Artist - Title".
+  assert.deepEqual(query({ title: 'Daft Punk - Get Lucky', artist: 'Channel' }), { title: 'Get Lucky', artist: 'Daft Punk' });
+});

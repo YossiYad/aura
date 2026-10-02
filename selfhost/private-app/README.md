@@ -74,7 +74,7 @@ a deploy key or an authenticated Git client. No scheduler is installed by setup.
 
 ## Library sync
 
-A small `aura-sync` container keeps one JSON copy of each signed-in user's data (library, playlists, likes, history, settings, queue) on a Docker volume. It holds metadata only - audio files are never uploaded and stay on the device that downloaded them. A typical copy is well under 1 MB and the server rejects anything over `SYNC_MAX_BYTES` (default 2 MB).
+A small `aura-sync` container keeps one JSON copy of each signed-in user's data (library, playlists, likes, history, settings, queue) on a Docker volume. It holds metadata only - audio files are never uploaded and stay on the device that downloaded them. A typical copy is well under 1 MB and the server rejects anything over `SYNC_MAX_BYTES` (default 2 MB; keep it under the 4 MB request limit `nginx.conf` sets for `/api/sync/`, or raise both together).
 
 - The app pushes a fresh copy whenever something changes (a few seconds after), and pulls at startup when the server holds something newer. Clearing site data on any device therefore gets everything back on the next sign-in.
 - The identity comes from oauth2-proxy's `X-Forwarded-Email` header, so there is nothing to configure or sign into inside the app. Requests only ever reach `aura-sync` through the authenticated proxy.

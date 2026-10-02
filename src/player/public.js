@@ -79,10 +79,25 @@
     navigator.connection.addEventListener("change", V.wakeDownloadQueue);
   }
   if (window.Store) Store.onChange(what => {
+    if (what === "privateSession") { endPrivateQueue(); return; }
     if (what !== "settings") return;
     V.wakeDownloadQueue();
     V.evictCache().catch(() => {});
   });
+
+  // A private session's queue lives with the session. When the session is switched off
+  // (or hidden from Settings, which ends it) the queue built under it must not become
+  // the personal one at the next save, which is exported and synced to other devices:
+  // as at a relaunch, playback stops and the queue from before the session comes back.
+  function endPrivateQueue() {
+    if (!Store.privateSession || Store.privateSession() || V.shareSession || !V.queue.length) return;
+    // No position note for the private song: the session is already over, so the note
+    // would be written under its id in the open.
+    const personal = Store.loadQueue();
+    V.playQueue([]);
+    restore(personal);
+    V.persist();
+  }
 
   window.Player = {
     /** @param {(ev: PlayerEvent) => void} fn */

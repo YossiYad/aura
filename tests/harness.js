@@ -131,6 +131,10 @@ function createHarness(options = {}) {
   if (options.withAudioSession !== false) navigator.audioSession = audioSession;
 
   const savedQueues = [];
+  // What the player registered with Store.onChange, and whether a private session runs:
+  // a test changes the second and fires the first, as the store would.
+  const storeListeners = [];
+  let privateNow = !!options.privateSession;
   const Store = {
     loadQueue() {
       return {
@@ -141,7 +145,8 @@ function createHarness(options = {}) {
       };
     },
     isBlocked() { return false; },
-    onChange() {},
+    onChange(fn) { storeListeners.push(fn); },
+    privateSession() { return privateNow; },
     recents() { return []; },
     likedTracks() { return []; },
     library() { return []; },
@@ -337,6 +342,7 @@ function createHarness(options = {}) {
     ytPlayer: () => ytPlayer,
     play() { actions.get("play")(); },
     pause() { actions.get("pause")(); },
+    setPrivate(on) { privateNow = !!on; storeListeners.forEach(fn => fn("privateSession")); },
     runIntervals(delay) {
       for (const timer of [...intervals.values()]) if (timer.delay === delay) timer.callback();
     },

@@ -116,3 +116,17 @@ test("a playlist read whole, with the same song in it twice, reports nothing mis
   assert.equal(out.tracks.length, 1);
   assert.equal(out.missing, 0);
 });
+
+// YouTube Music's own links carry the list id behind a "VL" prefix; only a bare id lost it,
+// so a pasted link asked the servers for a list named "VLPL...", which none of them have.
+test("a VL-prefixed list id is read without the prefix however the link arrived", () => {
+  const fs = require("node:fs");
+  const source = fs.readFileSync(require.resolve("../src/api/import.js"), "utf8");
+  const start = source.indexOf("  function youtubeListId(");
+  const youtubeListId = vm.runInNewContext("(" + source.slice(start, source.indexOf("\n  }\n", start) + 4) + ")", {});
+  assert.equal(youtubeListId("https://music.youtube.com/playlist?list=VLPLabcdefgh"), "PLabcdefgh");
+  assert.equal(youtubeListId("https://www.youtube.com/playlist?list=PLabcdefgh"), "PLabcdefgh");
+  assert.equal(youtubeListId("https://music.youtube.com/playlist/VLPLabcdefgh"), "PLabcdefgh");
+  assert.equal(youtubeListId("VLPLabcdefgh"), "PLabcdefgh");
+  assert.equal(youtubeListId("https://www.youtube.com/watch?v=abcdefghijk"), null);
+});

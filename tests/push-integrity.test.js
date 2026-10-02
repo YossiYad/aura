@@ -116,7 +116,8 @@ test('the push server registers only https endpoints on public hosts', () => {
  assert.equal(pushEndpoint('https://fcm.googleapis.com/fcm/send/abc'), true);
  assert.equal(pushEndpoint('https://web.push.apple.com/QAbc'), true);
  for (const bad of ['http://fcm.googleapis.com/x', 'https://localhost/x', 'https://127.0.0.1:8088/api/sync/', 'https://192.168.1.4/x',
-  'https://172.20.0.3/x', 'https://[::1]/x', 'ftp://push.test/x', 'not a url', 42, 'https://' + 'a'.repeat(2100)]) {
+  'https://172.20.0.3/x', 'https://[::1]/x', 'https://100.100.7.8/x', 'https://169.254.169.254/x', 'ftp://push.test/x', 'not a url', 42,
+  'https://' + 'a'.repeat(2100)]) {
   assert.equal(pushEndpoint(bad), false, String(bad).slice(0, 40));
  }
 });

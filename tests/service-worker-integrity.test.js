@@ -276,3 +276,16 @@ test('the shell holds every script and stylesheet the app page loads', () => {
   assert(loaded.includes('src/views.js') && loaded.includes('src/app.css'), 'the page was not read');
   for (const file of loaded) assert(shell.has(file), file + ' is loaded by index.html but missing from SHELL in sw.js');
 });
+
+// A lapsed login session answers any file with a redirect to the sign-in page. Stored
+// under the file's own address, that page was served as the file from then on.
+test('a redirected answer is never stored as the file that was asked for', async () => {
+  const h = worker();
+  const signIn = new Response('<html>sign in</html>');
+  Object.defineProperty(signIn, 'redirected', { value: true });
+  signIn.clone = () => signIn;
+  h.serve('/resource?id=first', signIn);
+  assert.equal(await (await h.get('/resource?id=first')).text(), '<html>sign in</html>');
+  h.offline();
+  assert.equal((await h.get('/resource?id=first')).type, 'error', 'nothing was kept');
+});

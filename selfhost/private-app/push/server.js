@@ -90,7 +90,10 @@ function pushEndpoint(value) {
   if (typeof value !== "string" || value.length > 2048) return false;
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && !!url.hostname && !/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[|0\.)/.test(url.hostname);
+    // Private, loopback, link-local and carrier-grade NAT ranges (the tailnet this box
+    // may sit on) are nowhere a push service lives.
+    return url.protocol === "https:" && !!url.hostname &&
+      !/^(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.|\[|0\.)/.test(url.hostname);
   } catch (e) { return false; }
 }
 
@@ -126,7 +129,10 @@ const server = http.createServer((req, res) => {
     readBody(req, 16 * 1024).then(raw => {
       let sub;
       try { sub = JSON.parse(raw.toString("utf8")); } catch (e) { send(res, 400, { error: "bad json" }); return; }
-      if (!sub || !sub.endpoint || !sub.keys) { send(res, 400, { error: "not a push subscription" }); return; }
+      // The two keys are what every notification is encrypted with; a subscription
+      // without them fails on every send without ever being dropped as gone.
+      if (!sub || !sub.endpoint || !sub.keys || typeof sub.keys.p256dh !== "string" || !sub.keys.p256dh ||
+          typeof sub.keys.auth !== "string" || !sub.keys.auth) { send(res, 400, { error: "not a push subscription" }); return; }
       if (!pushEndpoint(sub.endpoint)) { send(res, 400, { error: "not a push service endpoint" }); return; }
       const subs = getSubs(key).filter(s => s.endpoint !== sub.endpoint);
       subs.push({ endpoint: sub.endpoint, keys: sub.keys, addedAt: Date.now() });
@@ -297,8 +303,11 @@ async function pollFollowsOnce() {
       if (latest.album) prior.album = latest.album.id;
       dirty = true;
     }
+    // Written as each channel is done, not once at the end: a restart part way through
+    // the poll (a deploy, an out-of-memory kill) used to lose every watermark advanced so
+    // far, and the next poll sent the same "New from" pushes again.
+    if (dirty) { writeJson(notifiedFile, notified); dirty = false; }
   }
-  if (dirty) writeJson(notifiedFile, notified);
 }
 
 setTimeout(() => pollFollows().catch(e => console.log("poll failed: " + e.message)), 15000);
