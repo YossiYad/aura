@@ -32,7 +32,7 @@
    */
   function cacheLyrics(id, data) {
     // Cached lyrics are searchable, which would name a privately played song later.
-    if (!id || V.privateOn()) return;
+    if (!id || V.privateListening()) return;
     delete lyrics[id];
     lyrics[id] = data || { none: true };
     const keys = Object.keys(lyrics);
@@ -117,7 +117,7 @@
   function cacheSegments(id, list) {
     // Kept in memory only during a private session: the entry records that this video
     // was played, and when.
-    if (!id || V.privateOn()) return;
+    if (!id || V.privateListening()) return;
     delete segments[id];
     segments[id] = { list: list || [], at: Date.now() };
     const keys = Object.keys(segments);

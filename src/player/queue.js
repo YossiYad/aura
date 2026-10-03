@@ -14,7 +14,8 @@
     playQueue: { get: () => playQueue },
     prefetchNext: { get: () => prefetchNext },
     removeAt: { get: () => removeAt },
-    replaceCurrent: { get: () => replaceCurrent }
+    replaceCurrent: { get: () => replaceCurrent },
+    setQueuePlaylist: { get: () => setQueuePlaylist }
   });
 
   // Prepare only the next track as soon as playback starts. The standby element
@@ -41,12 +42,24 @@
     V.prepNextSource(ni);
   }
 
+  // The playlist the queue was started from stays with the queue, through everything
+  // added to it later and through a reload. The store is told, because it is the one that
+  // decides whether a play is recorded and a private playlist is one of its reasons not to.
+  let queuePlaylist = "";
+
+  function setQueuePlaylist(pid) {
+    queuePlaylist = typeof pid === "string" ? pid : "";
+    if (Store.setQueuePlaylist) Store.setQueuePlaylist(queuePlaylist);
+  }
+
   function persist() {
     V.queue.forEach(V.rememberRadioTrack);
     if (V.shuffle) {
       if (!V.shuffleOrder.length) V.buildShuffleOrder(); else V.syncShuffleOrder();
     }
+    /** @type {SavedQueue} */
     const saved = { extra: V.queue, pos: V.pos, shuffle: V.shuffle, repeat: V.repeat, shuffleOrder: V.shuffleOrder };
+    if (queuePlaylist) saved.playlist = queuePlaylist;
     if (V.shareSession) Store.sharedQueuePlayback({ id: V.shareSession, ...saved });
     else Store.saveQueue(saved);
     V.emit({ type: "queue" });
@@ -72,7 +85,8 @@
    * In a shared session the tracks are added to the session instead.
    * @param {Track[]} tracks
    * @param {number} [startIndex]
-   * @param {{ shuffle?: boolean }} [options]
+   * @param {{ shuffle?: boolean, playlist?: string }} [options] `playlist` is the id of the
+   *   playlist the tracks were taken from.
    * @returns {boolean} False when every track is blocked.
    */
   function playQueue(tracks, startIndex, options) {
@@ -97,11 +111,13 @@
       V.shuffleOrder = [];
       V.failedQueueIds.clear();
       V.swappedFor.clear();
+      setQueuePlaylist("");
       persist();
       return true;
     }
     const at = firstPlayableIndex(tracks, startIndex);
     if (at === -1) return false;
+    setQueuePlaylist(options && options.playlist);
     // Apply an explicit playback order only after accepting the new queue. Changing
     // shuffle first would prefetch recommendations for the queue being replaced.
     if (options && typeof options.shuffle === "boolean") V.shuffle = options.shuffle;

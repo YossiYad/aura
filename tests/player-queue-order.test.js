@@ -44,6 +44,70 @@ test('ordered playlist playback replaces inherited shuffle and persists the sele
   player.dismiss();
 });
 
+// A private playlist keeps what plays from it out of history, and the store decides that
+// from the playlist the queue was started at - so the queue has to say which, carry it
+// through everything done to it, and drop it when another queue takes its place.
+test('a queue started from a playlist names it to the store and keeps it until the queue is replaced', async () => {
+  const h = setup(['old', 'old-next']);
+  const player = h.window.Player;
+  const told = [];
+  h.Store.setQueuePlaylist = pid => told.push(pid);
+  player.playQueue(['a', 'b'].map(id => ({ id })), 0, { shuffle: false, playlist: 'pl_kids' });
+  await flushMicrotasks(80);
+  assert.equal(told.at(-1), 'pl_kids');
+  assert.equal(h.savedQueues.at(-1).playlist, 'pl_kids');
+  // Songs joining the queue are part of the same sitting.
+  player.playNext({ id: 'c' });
+  player.addToQueue({ id: 'd' });
+  await player.next();
+  await flushMicrotasks(80);
+  assert.equal(told.at(-1), 'pl_kids');
+  assert.equal(h.savedQueues.at(-1).playlist, 'pl_kids');
+  // A blocked selection is refused and leaves the running queue, and its playlist, alone.
+  h.Store.isBlocked = t => t.id === 'blocked';
+  assert.equal(player.playQueue([{ id: 'blocked' }], 0), false);
+  assert.equal(told.at(-1), 'pl_kids');
+  h.Store.isBlocked = () => false;
+  player.playQueue([{ id: 'e' }], 0);
+  await flushMicrotasks(80);
+  assert.equal(told.at(-1), '');
+  assert.equal('playlist' in h.savedQueues.at(-1), false);
+  player.playQueue([{ id: 'a' }], 0, { playlist: 'pl_kids' });
+  player.dismiss();
+  assert.equal(told.at(-1), '');
+  assert.equal('playlist' in h.savedQueues.at(-1), false);
+});
+
+test('a restored queue is still the queue of the playlist it was started from', () => {
+  const h = setup(['old']);
+  const told = [];
+  h.Store.setQueuePlaylist = pid => told.push(pid);
+  h.window.Player.restore({ extra: [{ id: 'a' }, { id: 'b' }], pos: 1, playlist: 'pl_kids' });
+  assert.equal(told.at(-1), 'pl_kids');
+  h.window.Player.restore({ extra: [{ id: 'a' }], pos: 0 });
+  assert.equal(told.at(-1), '');
+  h.window.Player.dismiss();
+});
+
+test('an AuraShare session is not part of the private playlist it interrupted, and closing it brings the playlist back', async () => {
+  const h = setup(['personal', 'personal-next']), player = h.window.Player;
+  const told = [];
+  h.Store.setQueuePlaylist = pid => told.push(pid);
+  let shared = null;
+  h.Store.sharedQueuePlayback = value => { if (value !== undefined) shared = value; return shared; };
+  h.Store.loadQueue = () => ({ extra: [{ id: 'personal' }, { id: 'personal-next' }], pos: 0, playlist: 'pl_kids' });
+  player.restore();
+  assert.equal(told.at(-1), 'pl_kids');
+  player.beginShare('room');
+  assert.equal(told.at(-1), '');
+  player.addToQueue({ id: 'guest', duration: 180 });
+  await flushMicrotasks(80);
+  assert.equal('playlist' in shared, false);
+  player.endShare();
+  assert.equal(told.at(-1), 'pl_kids');
+  player.dismiss();
+});
+
 test('ordinary selections keep shuffle and a rejected playlist cannot change it', () => {
   const h = setup(['old', 'old-next']);
   const player = h.window.Player;

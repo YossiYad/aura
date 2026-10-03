@@ -55,10 +55,12 @@ interface AuraStore {
   movePlaylistTrack(pid: string, id: string, targetId: string): boolean;
   playlistTracks(pid: string): Track[];
   setPlaylistShared(pid: string, sharedId: string | null): void;
+  /** Keeps what plays from a queue started at this playlist out of history, or records it again. */
+  setPlaylistPrivate(pid: string, on: boolean): void;
 
   /** Most recent first. */
   recents(kind?: MediaFilter): Track[];
-  /** Records a play. Does nothing in a private session. */
+  /** Records a play. Does nothing in a private session, or while a private playlist's queue plays. */
   pushRecent(track: Track, kind?: MediaKind): void;
   topListeningTracks(limit?: number, kind?: MediaFilter): Track[];
   topListeningArtists(limit?: number): { name: string, plays: number, lastPlayed: number, thumb: string, artistId: string | null }[];
@@ -121,6 +123,10 @@ interface AuraStore {
   privateSession(): boolean;
   /** @returns Whether a private session is running now. */
   setPrivateSession(on: boolean): boolean;
+  /** Whether plays are kept out of history now: a private session, or the queue of a private playlist. */
+  privateListening(): boolean;
+  /** Told by the player: the playlist the play queue was started from, if any. */
+  setQueuePlaylist(pid: string | null | undefined): void;
   patchSettings(patch: Partial<Settings>): void;
   saveQueue(q: SavedQueue): void;
   loadQueue(): SavedQueue | null;
@@ -201,7 +207,7 @@ interface AuraPlayer {
   next(): Promise<void>;
   prev(): void;
   /** Replaces the queue and starts playing; an empty list stops and clears it. */
-  playQueue(tracks: Track[], startIndex?: number, options?: { shuffle?: boolean }): boolean;
+  playQueue(tracks: Track[], startIndex?: number, options?: { shuffle?: boolean, playlist?: string }): boolean;
   playNext(track: Track): boolean | void;
   addToQueue(track: Track): boolean;
   removeAt(i: number): void;
@@ -267,7 +273,8 @@ interface AuraPlayer {
   localIds(): Promise<Set<string>>;
   /** Only the tracks the listener downloaded. */
   downloadedIds(): Promise<Set<string>>;
-  restore(saved?: SavedQueue | null): void;
+  /** @param sameSitting The app was not reopened, so the song keeps its place whatever Settings says. */
+  restore(saved?: SavedQueue | null, sameSitting?: boolean): void;
 }
 
 // ---------------- the smaller modules ----------------

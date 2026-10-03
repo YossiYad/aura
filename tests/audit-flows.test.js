@@ -147,7 +147,7 @@ test('library bulk playback and downloads use the same visible unblocked tracks'
  const {Store}=require('./store-harness').createStore({'aura.library':[{id:'a',title:'Song A'},{id:'b',title:'Song B'},{id:'c',title:'Different'}]});
  Store.blockTrack(Store.findTrack('a'));
  const nodes={'play-all':{},'shuffle-all':{},'download-all':{}};
- let played,downloaded;const c=functions('src/views.js',['wireSongsHandlers','shuffleSelection'],{
+ let played,downloaded;const c=functions('src/views.js',['wireSongsHandlers','shuffleSelection','playlistPlaybackOptions'],{
   Store,libraryQuery:'Song',document:{getElementById:id=>nodes[id]},
   Player:{playQueue:tracks=>played=tracks,setShuffle(){},shareSession:()=>''},downloadAll:tracks=>downloaded=tracks
  });
@@ -158,14 +158,22 @@ test('library bulk playback and downloads use the same visible unblocked tracks'
 // A shared queue takes a list from its start index on and has no shuffle of its own, so
 // starting at a random index contributed only a random tail of the list.
 test('shuffling a list into a shared queue contributes all of it',()=>{
- const tracks=['a','b','c','d','e'].map(id=>({id}));let shuffled=false,played,start;
- const c=functions('src/views.js',['shuffleSelection'],{Math,
-  Player:{shareSession:()=>'room',setShuffle(){shuffled=true;},playQueue:(list,at)=>{played=list;start=at;}}});
+ const tracks=['a','b','c','d','e'].map(id=>({id}));let shuffled=false,played,start,options;
+ const c=functions('src/views.js',['shuffleSelection','playlistPlaybackOptions'],{Math,
+  Player:{shareSession:()=>'room',setShuffle(){shuffled=true;},playQueue:(list,at,opts)=>{played=list;start=at;options=opts;}}});
  c.shuffleSelection(tracks);
  assert.equal(start,0);assert.equal(shuffled,false);
  assert.deepEqual(Array.from(played,t=>t.id).sort(),['a','b','c','d','e']);
  c.Player.shareSession=()=>'';c.shuffleSelection(tracks);
- assert.equal(shuffled,true);assert.equal(played,tracks);
+ assert.equal(shuffled,true);assert.equal(played,tracks);assert.equal(options,undefined);
+ // Shuffling a playlist is still playing that playlist: the queue names it, so a private
+ // one stays private, and the shuffle just switched on is not switched back off.
+ c.shuffleSelection(tracks,'pl:pl_kids');
+ assert.deepEqual({...options},{playlist:'pl_kids'});
+ assert.deepEqual({...c.playlistPlaybackOptions('pl:pl_kids')},{shuffle:false,playlist:'pl_kids'});
+ assert.deepEqual({...c.playlistPlaybackOptions('shared:abc')},{shuffle:false});
+ assert.equal(c.playlistPlaybackOptions('library'),undefined);
+ c.shuffleSelection(tracks,'shared:abc');assert.equal(options,undefined);
 });
 // The nightly run rebuilds "Made for you" in place. A run whose lookups all failed used
 // to replace the row on screen with nothing.

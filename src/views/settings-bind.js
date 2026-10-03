@@ -248,6 +248,7 @@
       };
     };
     bindSeg("set-quality-seg", "audioQuality");
+    bindSeg("set-reopen-seg", "reopenSong");
     bindSeg("set-progress-style", "progressStyle", null, V.applyAppearance);
     bindSeg("set-text-size", "textSize", null, V.applyAppearance);
     bindSeg("set-drive-look", "driveLook");

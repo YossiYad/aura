@@ -50,7 +50,7 @@
   });
 
   // The same number as CACHE in sw.js; a test holds the two together.
-  const APP_VERSION = "v242";
+  const APP_VERSION = "v243";
   const view = /** @type {PaintedElement} */ (document.getElementById("view"));
   const sheetEl = document.getElementById("sheet");
   const scrimEl = document.getElementById("scrim");
@@ -92,8 +92,12 @@
         (screen.subView === undefined || subView === screen.subView)));
   }
 
+  // A queue started from one of the listener's own playlists says which: a private
+  // playlist keeps what plays from it out of history, and the player has to know where
+  // the songs came from to honour that.
   function playlistPlaybackOptions(ctx) {
-    return /^(pl|shared):/.test(ctx || "") ? { shuffle: false } : undefined;
+    if (!/^(pl|shared):/.test(ctx || "")) return undefined;
+    return ctx.startsWith("pl:") ? { shuffle: false, playlist: ctx.slice(3) } : { shuffle: false };
   }
 
   function playSelection(tracks, index, options) {
@@ -105,7 +109,7 @@
   // Shuffle is a queue-wide setting a shared queue does not take, and a shared queue
   // takes a list from its start index on: there the whole list goes in, in a random
   // order, rather than the random tail of it that starting at a random index gave.
-  function shuffleSelection(tracks) {
+  function shuffleSelection(tracks, ctx) {
     if (!tracks.length) return;
     if (Player.shareSession && Player.shareSession()) {
       const order = tracks.slice();
@@ -117,7 +121,8 @@
       return;
     }
     Player.setShuffle(true);
-    Player.playQueue(tracks, Math.floor(Math.random() * tracks.length));
+    const from = playlistPlaybackOptions(ctx);
+    Player.playQueue(tracks, Math.floor(Math.random() * tracks.length), from && from.playlist ? { playlist: from.playlist } : undefined);
   }
 
   function setViewMotion(animate) {

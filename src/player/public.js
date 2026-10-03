@@ -4,14 +4,17 @@
   /**
    * Loads a saved queue without starting playback.
    * @param {SavedQueue | null} [saved] Default: the queue saved by Store.
+   * @param {boolean} [sameSitting] The app was not reopened: a queue is being put back
+   *   inside a running one, and its song keeps its place whatever Settings says.
    */
-  function restore(saved = Store.loadQueue()) {
+  function restore(saved = Store.loadQueue(), sameSitting) {
     if (!saved || !Array.isArray(saved.extra) || !saved.extra.length) return;
     const tracks = saved.extra.filter(t => t && typeof t.id === "string" && t.id);
     const wanted = Number.isInteger(saved.pos) ? Math.max(0, tracks.indexOf(saved.extra[saved.pos])) : 0;
     const at = V.firstPlayableIndex(tracks, wanted);
     if (at === -1) return;
     V.queue = tracks;
+    V.setQueuePlaylist(saved.playlist);
     V.resetRadioSession();
     V.queue.forEach(V.rememberRadioTrack);
     V.pos = at;
@@ -24,9 +27,14 @@
     }
     V.repeat = ["off", "all", "one"].includes(saved.repeat) ? saved.repeat : "off";
     V.restoredPosition = null;
+    // Coming back to the app, the song that was left carries on from where it stopped -
+    // or from its start, for a listener who would rather hear it whole: that is theirs to
+    // choose in Settings. An episode is not asked here; its own bookmark and its own
+    // setting decide where it picks up.
+    const fromStart = !sameSitting && Store.settings && Store.settings().reopenSong === "restart";
     try {
       const noted = JSON.parse(localStorage.getItem(V.queuePositionKey()) || "null");
-      if (noted && V.current() && noted.id === V.current().id && noted.at > 5) V.restoredPosition = noted;
+      if (!fromStart && noted && V.current() && noted.id === V.current().id && noted.at > 5) V.restoredPosition = noted;
     } catch (e) {}
     // Register the OS handlers and publish the track now. Without this, after the app has
     // been evicted - which on iOS is constantly - the headphone button and the lock screen
@@ -51,7 +59,7 @@
     V.shareExhausted = false;
     V.playQueue([]);
     V.shuffle = false; V.repeat = "off";
-    if (saved && saved.id === id) restore({ ...saved, shuffle: false, repeat: "off" });
+    if (saved && saved.id === id) restore({ ...saved, shuffle: false, repeat: "off" }, true);
     V.persist();
   }
 
@@ -62,7 +70,7 @@
     V.shareSession = ""; V.shareExhausted = false;
     Store.sharedQueuePlayback(null);
     try { localStorage.removeItem("aura.shareQueueAt"); } catch (e) {}
-    restore();
+    restore(undefined, true);
   }
 
   // Downloads left over from the last session pick up as soon as there is a network to
@@ -95,7 +103,7 @@
     // would be written under its id in the open.
     const personal = Store.loadQueue();
     V.playQueue([]);
-    restore(personal);
+    restore(personal, true);
     V.persist();
   }
 

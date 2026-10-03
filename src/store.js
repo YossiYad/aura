@@ -42,6 +42,7 @@
  * @property {number} [createdAt]
  * @property {string} [cover] A small square picture as a data URL.
  * @property {string} [sharedId] The copy of this playlist on the sync server, if any.
+ * @property {boolean} [private] Nothing played from a queue started here is recorded.
  */
 
 /**
@@ -93,6 +94,7 @@
  * @property {"wave" | "line"} progressStyle
  * @property {boolean} animations
  * @property {boolean} rememberPosition
+ * @property {"resume" | "restart"} reopenSong Where the song that was left picks up when the app is opened again.
  * @property {number} cacheLimitMB
  * @property {boolean} notifyNewReleases
  * @property {number} playbackRate
@@ -144,6 +146,7 @@
  * @property {boolean} shuffle
  * @property {RepeatMode} repeat
  * @property {string[]} shuffleOrder Track ids.
+ * @property {string} [playlist] Id of the playlist the queue was started from.
  */
 
 /**
@@ -259,7 +262,7 @@
     autoplay: true, sort: "added", crossfade: 4,
     normalize: true, musicOnly: true, skipSegments: false,
     audioQuality: "best", noYtFallback: false, wifiOnlyDownloads: false,
-    accent: "green", progressStyle: "wave", animations: true, rememberPosition: true, cacheLimitMB: 400,
+    accent: "green", progressStyle: "wave", animations: true, rememberPosition: true, reopenSong: "resume", cacheLimitMB: 400,
     notifyNewReleases: true, playbackRate: 1, aiHomeSection: false,
     nightlyPrebuild: true, nightlyHour: 4, serverMixKey: true,
     driveMode: true, driveLook: "night", driveKeepAwake: true,

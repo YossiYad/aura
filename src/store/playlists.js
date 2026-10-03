@@ -11,6 +11,7 @@
     removeFromPlaylist: { get: () => removeFromPlaylist },
     renamePlaylist: { get: () => renamePlaylist },
     setPlaylistCover: { get: () => setPlaylistCover },
+    setPlaylistPrivate: { get: () => setPlaylistPrivate },
     setPlaylistShared: { get: () => setPlaylistShared }
   });
 
@@ -90,6 +91,22 @@
     if (!p) return;
     if (sharedId) p.sharedId = sharedId;
     else delete p.sharedId;
+    V.save("aura.playlists", V.playlists);
+    V.notify("playlists");
+  }
+
+  // What a private session does for a sitting, kept on one playlist for good: it plays as
+  // usual and nothing played from it is recorded. The mark is part of the record, so it
+  // travels with a backup and with sync, and the playlist is private on every device.
+  /**
+   * @param {string} pid
+   * @param {boolean} on
+   */
+  function setPlaylistPrivate(pid, on) {
+    const p = getPlaylist(pid);
+    if (!p || !!p.private === !!on) return;
+    if (on) p.private = true;
+    else delete p.private;
     V.save("aura.playlists", V.playlists);
     V.notify("playlists");
   }

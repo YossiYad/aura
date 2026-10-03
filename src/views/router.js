@@ -39,7 +39,7 @@
       if (V.subView.kind === "playlist") {
         const p = Store.getPlaylist(V.subView.id);
         if (p) return V.renderCollection(Store.playlistTracks(p.id), {
-          eyebrow: "Playlist", title: p.name,
+          eyebrow: p.private ? "Playlist · private listening" : "Playlist", title: p.name,
           thumb: V.playlistCoverSrc(p), art: V.playlistArtHtml(p), coverPl: p.id, renamePl: p.id
         }, "pl:" + p.id);
       }

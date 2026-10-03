@@ -91,6 +91,8 @@ on the device that saved them, even when library sync is enabled.
 | SponsorBlock | Optionally skip known intros, outros and sponsor segments. |
 | Driving mode | Use large playback controls and keep the screen awake where supported. |
 | Private session | Pause additions to listening history, stats and recommendations. |
+| Private playlist | Mark a playlist for private listening from its menu; what plays from it is never recorded. |
+| Reopening | Choose whether the song you left continues where it stopped or starts over when you open the app again. |
 
 ### Language choice
 

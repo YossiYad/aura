@@ -342,7 +342,7 @@
     // Play and shuffle follow what is on screen, so filtering then playing does what it looks like.
     if (playBtn) playBtn.onclick = () => { const shown = collectionView(tracks); if (shown.length) Player.playQueue(shown, 0, V.playlistPlaybackOptions(ctx)); };
     const shufBtn = document.getElementById("hero-shuffle");
-    if (shufBtn) shufBtn.onclick = () => V.shuffleSelection(collectionView(tracks));
+    if (shufBtn) shufBtn.onclick = () => V.shuffleSelection(collectionView(tracks), ctx);
     const dlAll = document.getElementById("hero-download");
     if (dlAll) dlAll.onclick = () => V.downloadAll(collectionView(tracks));
   }

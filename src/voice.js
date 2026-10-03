@@ -29,6 +29,7 @@
  * @property {Track[]} tracks
  * @property {string} label What to call the result on screen.
  * @property {"play" | "next" | "append" | "skip"} action Skip names no music: the queue moves on.
+ * @property {string} [playlist] Id of the listener's own playlist the tracks were taken from, if they were.
  */
 
 (function () {

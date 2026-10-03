@@ -13,7 +13,8 @@
   });
 
   /**
-   * Records a play in history and in the listening profile. Does nothing in a private session.
+   * Records a play in history and in the listening profile. Does nothing in a private
+   * session, or while the queue of a private playlist plays.
    * @param {Track} track
    * @param {MediaKind} [kind] Overrides the stored classification.
    */
@@ -21,7 +22,7 @@
     // The whole of private listening is this line. Everything downstream of recents and the
     // listening profile - Home's rows, the stats page, what the AI is told this listener
     // likes - is fed from here, so a play that never lands here never reaches any of them.
-    if (V.privateOn()) return;
+    if (V.privateListening()) return;
     track = V.rememberMedia(kind === "podcast" || kind === "music" ? Object.assign({}, track, { kind }) : track);
     const now = Date.now();
     const classified = kind === "podcast" || kind === "music" ? kind : V.mediaKind(track);

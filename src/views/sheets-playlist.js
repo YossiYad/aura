@@ -67,12 +67,15 @@
     const canShare = !!(window.Sync && Sync.describe && Sync.describe().available);
     V.openSheet(
       '<div class="sheet-head"><div class="meta"><div class="song-title" dir="auto">' + V.esc(p.name) + '</div><div class="song-sub" dir="auto">' + p.ids.length + ' songs' +
-      (p.sharedId ? ' · shared' : '') + '</div></div></div>' +
+      (p.sharedId ? ' · shared' : '') + (p.private ? ' · private listening' : '') + '</div></div></div>' +
       V.sheetItem("play", "Play", V.IC.play) +
       V.sheetItem("download", "Download all for offline", V.IC.dl) +
       V.sheetItem("rename", "Rename", V.IC.plus) +
       V.sheetItem("cover", p.cover ? "Change cover" : "Choose a cover", V.IC.plus) +
       (p.cover ? V.sheetItem("clearcover", "Use the songs' artwork", V.IC.trash) : "") +
+      // A private session for one playlist, kept on it: what plays from here stays out of
+      // history, stats and recommendations until this is switched back.
+      V.sheetItem("private", p.private ? "Record plays from here again" : "Listen privately from here", V.IC.person) +
       (canShare && !p.sharedId ? V.sheetItem("share", "Share with everyone on this server", V.IC.plus) : "") +
       (canShare && p.sharedId ? V.sheetItem("republish", "Update the shared copy", V.IC.plus) : "") +
       (canShare && p.sharedId ? V.sheetItem("unshare", "Stop sharing", V.IC.trash) : "") +
@@ -89,7 +92,13 @@
       // rather than behind a history.back() the browser would count as a gesture ending.
       if (act === "cover") { V.closeSheet(); V.pickPlaylistCover(pid); return; }
       V.dismissViaHistory(V.closeSheet);
-      if (act === "play") { const ts = Store.playlistTracks(pid); if (ts.length) Player.playQueue(ts, 0, { shuffle: false }); }
+      if (act === "play") { const ts = Store.playlistTracks(pid); if (ts.length) Player.playQueue(ts, 0, { shuffle: false, playlist: pid }); }
+      else if (act === "private") {
+        const on = !p.private;
+        Store.setPlaylistPrivate(pid, on);
+        V.toast(on ? 'Plays from "' + p.name + '" stay out of your history and recommendations' : 'Plays from "' + p.name + '" are recorded again');
+        V.render();
+      }
       else if (act === "download") V.downloadAll(Store.playlistTracks(pid));
       else if (act === "share") {
         V.toast("Sharing…");

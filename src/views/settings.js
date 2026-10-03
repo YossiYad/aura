@@ -196,10 +196,14 @@
   // The lit button in the player is the only other place this shows, and the player is not
   // on screen while Settings is. Someone who came here to check has come to the right place.
   function privateStatusText() {
-    if (Store.settings().privateSession === false) return "Hidden. Everything you play is recorded.";
+    // A playlist marked private is not this switch's to hide or to end, and "everything
+    // is recorded" would be untrue while one exists.
+    const marked = Store.playlists().filter(p => p.private).length;
+    const except = marked ? ", except what plays from " + (marked === 1 ? "the playlist" : "the " + marked + " playlists") + " set to private listening." : ".";
+    if (Store.settings().privateSession === false) return "Hidden. Everything you play is recorded" + except;
     return Store.privateSession()
       ? "A private session is running - nothing you play is being recorded. It ends when you close the app."
-      : "Off. Everything you play is recorded as usual.";
+      : "Off. Everything you play is recorded as usual" + except;
   }
 
   function nightlyStatusText() {

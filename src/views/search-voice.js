@@ -285,7 +285,7 @@
         const tracks = result.tracks.filter(track => !Store.isBlocked(track));
         if (!tracks.length) throw new Error(tr("לא ניתן להוסיף את השירים האלה לתור."));
         for (const track of tracks) { if (Player.addToQueue(track)) added++; }
-      } else if (!Player.playQueue(result.tracks, 0)) sharedAlready = mustBeShared(result.tracks);
+      } else if (!Player.playQueue(result.tracks, 0, result.playlist ? { playlist: result.playlist } : undefined)) sharedAlready = mustBeShared(result.tracks);
       // A request that only queued something hands the paused song back. One that
       // started new music must not: the song it paused is no longer the point.
       if (!queued) me.pausedTrack = null;

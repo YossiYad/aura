@@ -50,7 +50,7 @@
     /** @returns {Playlist[]} */
     playlists: () => V.playlists.slice(),
     createPlaylist: V.createPlaylist, getPlaylist: V.getPlaylist, renamePlaylist: V.renamePlaylist, deletePlaylist: V.deletePlaylist, setPlaylistCover: V.setPlaylistCover,
-    addToPlaylist: V.addToPlaylist, removeFromPlaylist: V.removeFromPlaylist, movePlaylistTrack: V.movePlaylistTrack, playlistTracks: V.playlistTracks, setPlaylistShared: V.setPlaylistShared,
+    addToPlaylist: V.addToPlaylist, removeFromPlaylist: V.removeFromPlaylist, movePlaylistTrack: V.movePlaylistTrack, playlistTracks: V.playlistTracks, setPlaylistShared: V.setPlaylistShared, setPlaylistPrivate: V.setPlaylistPrivate,
     /** @param {MediaFilter} [kind] @returns {Track[]} Most recent first. */
     recents: kind => V.mediaTracks(V.recents, kind),
     pushRecent: V.pushRecent,
@@ -80,6 +80,8 @@
     },
     privateSession: V.privateOn,
     setPrivateSession: V.setPrivateSession,
+    privateListening: V.privateListening,
+    setQueuePlaylist: V.setQueuePlaylist,
     /** @param {Partial<Settings>} patch */
     patchSettings(patch) {
       if (!patch || typeof patch !== "object" || Array.isArray(patch)) return;
@@ -204,7 +206,7 @@
     "markFollowSeen"]);
   ["rememberMedia", "addTrack", "removeTrack", "rememberDownload", "forgetDownload", "toggleLike",
     "createPlaylist", "renamePlaylist", "deletePlaylist", "setPlaylistCover", "addToPlaylist",
-    "removeFromPlaylist", "movePlaylistTrack", "setPlaylistShared", "pushRecent", "pushSearch", "clearSearches",
+    "removeFromPlaylist", "movePlaylistTrack", "setPlaylistShared", "setPlaylistPrivate", "pushRecent", "pushSearch", "clearSearches",
     "clearHistory", "savePosition", "clearPosition", "blockTrack", "blockArtist", "unblockTrack",
     "unblockArtist", "cacheLyrics", "cacheSegments", "follow", "unfollow", "savePodcastShows",
     "notePodcastChannel", "refreshFollowLatest", "markFollowSeen", "setPrivateSession", "patchSettings",

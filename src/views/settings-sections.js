@@ -107,6 +107,8 @@
     return V.setSection("playback", "Playback",
       V.toggleRow("set-autoplay", "Autoplay similar songs", "Keeps the music going when the queue ends", !!s.autoplay) +
       V.toggleRow("set-rempos", "Remember episode position", "Resume podcasts and spoken word where you left them", !!s.rememberPosition) +
+      V.choiceRow("When you reopen the app", "Where the song you left picks up once you press play. Episodes follow the setting above.",
+        V.segControl("set-reopen-seg", [["resume", "Where it stopped"], ["restart", "From the start"]], s.reopenSong === "restart" ? "restart" : "resume")) +
       V.toggleRow("set-skipseg", "Skip intros & sponsors", "Jumps over known sponsor reads, intros and outros inside a track", !!s.skipSegments) +
       V.toggleRow("set-musiconly", "Songs only", "Keep sketches, interviews and watch-videos out of autoplay", !!s.musicOnly) +
       V.toggleRow("set-normalize", "Even out volume", "Levels the loudness differences between tracks", !!s.normalize) +
@@ -159,7 +161,7 @@
 
   function privateSessionSettingsHtml(s) {
     return V.setSection("private", "Private session",
-      '<div class="set-note">A private session plays everything normally - your library, your playlists, the lot - and records none of it. Nothing played while it is on reaches your history, your stats, or what the AI is told you like, which is what keeps someone else\u2019s taste out of your recommendations after they have had the aux in the car. It is switched on with the detective at the top of the screen, and stays on until it is switched off.</div>' +
+      '<div class="set-note">A private session plays everything normally - your library, your playlists, the lot - and records none of it. Nothing played while it is on reaches your history, your stats, or what the AI is told you like, which is what keeps someone else\u2019s taste out of your recommendations after they have had the aux in the car. It is switched on with the detective at the top of the screen, and stays on until it is switched off. A single playlist can be kept private for good from its own menu, whether or not a session is running.</div>' +
       V.toggleRow("set-private", "Private session", "Turn off to hide the detective from the top bar. Hiding it also ends a session already running.", s.privateSession !== false) +
       '<div class="set-status" id="set-private-status">' + V.esc(V.privateStatusText()) + '</div>');
   }

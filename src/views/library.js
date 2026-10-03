@@ -106,7 +106,7 @@
       const tracks = Store.playlistTracks(p.id);
       return '<li class="pl-row"><button class="pl-open" data-pl="' + V.esc(p.id) + '">' +
         '<div class="art lg">' + V.playlistArtHtml(p) + '</div>' +
-        '<div class="meta"><div class="song-title" dir="auto">' + V.esc(p.name) + '</div><div class="song-sub" dir="auto">' + tracks.length + ' songs</div></div></button>' +
+        '<div class="meta"><div class="song-title" dir="auto">' + V.esc(p.name) + '</div><div class="song-sub" dir="auto">' + tracks.length + ' songs' + (p.private ? ' · private listening' : '') + '</div></div></button>' +
         '<button class="kebab" aria-label="Options for ' + V.esc(p.name) + '" data-plmenu="' + V.esc(p.id) + '"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></li>';
     }));
     return '<div class="row-actions"><button class="btn primary" id="new-pl">＋ New playlist</button>' +

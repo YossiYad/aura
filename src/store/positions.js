@@ -19,7 +19,7 @@
    * @param {number} seconds
    */
   function savePosition(id, seconds) {
-    if (!id || V.privateOn()) return;
+    if (!id || V.privateListening()) return;
     const at = Math.floor(seconds || 0);
     // Re-insert on every save so the key order is recency and the cap below evicts the
     // position that has gone longest without being touched, not the first ever stored.

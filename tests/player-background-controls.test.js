@@ -254,6 +254,74 @@ test('Play after a reload resumes a paused song where it stood', async () => {
   h.window.Player.dismiss();
 });
 
+// The same reload, for a listener who chose in Settings to hear the song they left from
+// its start: the note is still on disk, and it is not used.
+test('Play after reopening starts the song over when Settings asks for that', async () => {
+  const h = createHarness({ withStorage: true, tracks: tracks(['song']), settings: { autoplay: false, noYtFallback: true, reopenSong: 'restart' } });
+  h.Api.resolve = async id => ({ url: 'https://test/' + id });
+  h.Api.getSkipSegments = async () => [];
+  h.savedLocal.set('aura.queueAt', JSON.stringify({ id: 'song', at: 90 }));
+  h.window.Player.restore({ extra: tracks(['song']), pos: 0 });
+  h.audio.removeAttribute('src');
+  // A browser starts a newly attached resource at zero; the fake element keeps its clock.
+  h.audio.currentTime = 0;
+  h.play();
+  await flushMicrotasks(60);
+  h.audio.dispatch('playing');
+  await flushMicrotasks(20);
+  assert.equal(h.audio.src, 'https://test/song');
+  assert.equal(h.audio.currentTime, 0);
+  assert.deepEqual(JSON.parse(h.savedLocal.get('aura.queueAt')), { id: 'song', at: 0 });
+  h.window.Player.dismiss();
+});
+
+// That setting is about episodes not at all: theirs is the bookmark, with its own switch.
+test('an episode still resumes from its bookmark when songs start over on reopening', async () => {
+  const episode = [{ id: 'ep', title: 'Episode 12', duration: 3600, kind: 'podcast' }];
+  const h = createHarness({ withStorage: true, tracks: episode, settings: { autoplay: false, noYtFallback: true, reopenSong: 'restart' } });
+  h.Api.resolve = async id => ({ url: 'https://test/' + id });
+  h.Api.getSkipSegments = async () => [];
+  h.Store.getPosition = id => id === 'ep' ? 600 : 0;
+  h.Store.savePosition = () => {};
+  h.savedLocal.set('aura.queueAt', JSON.stringify({ id: 'ep', at: 610 }));
+  h.window.Player.restore({ extra: episode, pos: 0 });
+  h.audio.removeAttribute('src');
+  h.audio.duration = 3600;
+  h.play();
+  await flushMicrotasks(60);
+  h.audio.dispatch('playing');
+  await flushMicrotasks(20);
+  assert.equal(h.audio.currentTime, 600);
+  h.window.Player.dismiss();
+});
+
+// Closing an AuraShare session puts the personal queue back inside a running app. Nobody
+// reopened anything, so the personal song keeps its place whatever that setting says.
+test('leaving an AuraShare session keeps the personal song in place even when a reopened app starts songs over', async () => {
+  const h = createHarness({ withStorage: true, tracks: tracks(['personal', 'personal-next']), settings: { autoplay: false, noYtFallback: true, reopenSong: 'restart' } });
+  h.Api.resolve = async id => ({ url: 'https://test/' + id });
+  h.Api.getSkipSegments = async () => [];
+  let saved = null;
+  h.Store.sharedQueuePlayback = value => { if (value !== undefined) saved = value; return saved; };
+  for (const audio of h.audioElements) {
+    let source = audio.src;
+    Object.defineProperty(audio, 'src', { get: () => source, set(value) { source = value; this.currentTime = 0; } });
+    const play = audio.play;
+    audio.play = function () { const result = play.call(this); this.dispatch('playing'); return result; };
+  }
+  const player = h.window.Player;
+  h.play();
+  await flushMicrotasks(80);
+  h.audio.currentTime = 47;
+  player.beginShare('room');
+  player.endShare();
+  assert.equal(player.current().id, 'personal');
+  h.play();
+  await flushMicrotasks(80);
+  assert.equal(h.audio.currentTime, 47);
+  player.dismiss();
+});
+
 test('Play at the end of the queue replays the last song without a pending lookup cutting it off', async () => {
   const h = createHarness({ tracks: [{ id: 'a', title: 'A', artist: 'X', duration: 180 }], withStorage: true,
     withAudioSession: false, settings: { autoplay: true, noYtFallback: true } });

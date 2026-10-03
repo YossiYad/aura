@@ -103,6 +103,9 @@
     if (intent.kind === "clarify") throw new Error(intent.query || tr("איזה שיר, אמן או פלייליסט לנגן?"));
     if (onstatus) onstatus(tr("מחפש את המוזיקה שביקשת…"));
     let tracks = [], label = intent.query;
+    // Set when the request named one of the listener's own playlists, so a private one
+    // stays private however it was started.
+    let playlistId = "";
     const local = V.playable(Store.library("music").concat(Store.recents("music"), Player.queue()));
     /**
      * Every playable upload by the performer called `name`: the saved and recent ones, the
@@ -154,7 +157,7 @@
       label = tr("השירים שאהבתי");
     } else if (intent.kind === "playlist") {
       const playlist = V.uniqueMatch(V.named(Store.playlists(), intent.query, p => p.name), tr("יש כמה פלייליסטים בשם דומה. כתבו את השם המלא."));
-      if (playlist) { tracks = Store.playlistTracks(playlist.id); label = playlist.name; }
+      if (playlist) { tracks = Store.playlistTracks(playlist.id); label = playlist.name; playlistId = playlist.id; }
       else {
         const result = await Api.searchPlaylists(intent.query);
         check();
@@ -280,7 +283,7 @@
     // A song request that resolved to several uploads is ambiguous; a list (liked
     // songs, a playlist, an artist) goes in next as a whole, in order.
     if (placement.action === "next" && tracks.length !== 1 && intent.kind === "song") throw new Error(tr("כדי להוסיף שיר הבא, ציינו שיר אחד ואת שם האמן."));
-    return { tracks, label, action: placement.action };
+    return { tracks, label, action: placement.action, playlist: playlistId };
   }
 
   window.Voice = {
