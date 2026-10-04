@@ -185,6 +185,17 @@ const server = http.createServer((req, res) => {
       await page.evaluate(() => { sendSheetTouch('touchstart', 180, 400); sendSheetTouch('touchmove', 180, 540); sendSheetTouch('touchend', 180, 540); });
       await page.waitForFunction(() => sheet.hidden);
       assert.equal(await page.locator('#scrim').isVisible(), false, 'second downward drag dismisses');
+      // The closed sheet is empty at once; what slides away is a copy that starts at or
+      // below where the finger let go, cannot be touched, and is gone when it has left.
+      const leaving = await page.evaluate(() => {
+        const copy = document.querySelector('.sheet-leaving');
+        return copy && { top: copy.getBoundingClientRect().top, rows: copy.querySelectorAll('.sheet-item').length,
+          inert: copy.inert, empty: sheet.innerHTML === '', scrim: !!document.querySelector('.scrim-leaving') };
+      });
+      assert.ok(leaving, 'a dismissed sheet slides out instead of vanishing');
+      assert.ok(leaving.rows > 0 && leaving.inert && leaving.empty && leaving.scrim, JSON.stringify(leaving));
+      assert.ok(leaving.top >= 540 - 400 - 3, 'the copy does not jump back above the release point: ' + leaving.top);
+      await page.waitForFunction(() => !document.querySelector('.sheet-leaving, .scrim-leaving'));
 
       // Pick the menu up while its entrance animation still owns transform.
       const entry = await page.evaluate(async () => {

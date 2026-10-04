@@ -91,7 +91,7 @@
   V.fullPlayer.addEventListener("touchend", () => {
     if (!V.fpDragEligible) return;
     const elapsed = Math.max(1, performance.now() - V.fpDragStartAt);
-    const fastSwipe = V.fpDragY / elapsed > 0.65 && V.fpDragY > 54;
+    const fastSwipe = V.fpDragY / elapsed > 0.3 && V.fpDragY > 54;
     const crossedThreshold = V.fpDragY > Math.min(150, window.innerHeight * 0.18);
     V.fpDragEligible = false;
     if (V.fpDragging && (fastSwipe || crossedThreshold)) {
