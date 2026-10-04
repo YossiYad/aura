@@ -11,9 +11,69 @@
     promptModal: { get: () => promptModal }
   });
 
+  // What is left on screen of a sheet that has just closed: a copy of it sliding away and
+  // a copy of the scrim fading out. The sheet itself is closed and empty at once, as every
+  // caller expects, so the exit is only ever a picture of it and nothing can act on it.
+  /** @type {HTMLElement[]} */
+  let sheetLeaving = [];
+
+  const sheetLeaveMs = 200;
+
+  function dropSheetLeaving() {
+    for (const el of sheetLeaving) el.remove();
+    sheetLeaving = [];
+  }
+
+  // The sheet slides in, so it slides out the same way it came, from wherever it is at
+  // that moment: at rest, part way through its entry, or under the finger that dragged
+  // it down. Called while the sheet is still showing; closeSheet empties it afterwards.
+  // With reduced motion the sheet simply goes and only the scrim fades, as it faded in.
+  function leaveSheet() {
+    dropSheetLeaving();
+    if (document.documentElement.classList.contains("no-anim")) return;
+    const box = V.sheetEl.getBoundingClientRect();
+    const offset = Math.max(0, box.bottom - V.sheetEl.parentElement.getBoundingClientRect().bottom);
+    /** @type {HTMLElement[]} */
+    const leaving = [];
+    // The same curve and time as the full player's exit (--ease-exit in tokens.css).
+    const easing = "cubic-bezier(0.32, 0.72, 0, 1)";
+    if (box.height && offset < box.height && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const scrollTop = V.sheetEl.scrollTop;
+      const ghost = document.createElement("div");
+      ghost.className = "sheet sheet-leaving" + (V.sheetEl.classList.contains("expanded") ? " expanded" : "");
+      ghost.inert = true;
+      ghost.setAttribute("aria-hidden", "true");
+      ghost.style.maxHeight = box.height + "px";
+      ghost.append(...Array.from(V.sheetEl.childNodes));
+      V.sheetEl.after(ghost);
+      ghost.scrollTop = scrollTop;
+      // Animated by script because the starting point is only known here, and so that the
+      // animations switch in Settings, which stops stylesheet motion, is the check above.
+      ghost.animate([
+        { transform: "translate3d(0," + offset + "px,0)" },
+        { transform: "translate3d(0," + box.height + "px,0)" }
+      ], { duration: sheetLeaveMs, easing, fill: "forwards" });
+      leaving.push(ghost);
+    }
+    if (!V.scrimEl.hidden) {
+      const scrim = document.createElement("div");
+      scrim.className = "scrim scrim-leaving";
+      V.scrimEl.after(scrim);
+      scrim.animate([{ opacity: 1 }, { opacity: 0 }], { duration: sheetLeaveMs, easing, fill: "forwards" });
+      leaving.push(scrim);
+    }
+    if (!leaving.length) return;
+    sheetLeaving = leaving;
+    setTimeout(() => {
+      // A later close has its own copies by now; only this close's are taken away.
+      if (sheetLeaving === leaving) dropSheetLeaving();
+    }, sheetLeaveMs);
+  }
+
   function closeSheet() {
     V.resetQueueSelection();
     if (!V.sheetEl.hidden && !V.closingFromHistory && V.historyDepth > 0) V.handOverEntry();
+    if (!V.sheetEl.hidden) leaveSheet();
     V.sheetEl.hidden = true;
     V.scrimEl.hidden = true;
     V.sheetEl.innerHTML = "";
@@ -30,6 +90,7 @@
   function openSheet(html, keepQueueSelection = false) {
     if (!keepQueueSelection) V.resetQueueSelection();
     if (V.sheetEl.hidden) V.pushHistory();
+    dropSheetLeaving();
     resetSheetDrag();
     V.sheetEl.classList.remove("expanded");
     V.sheetEl.scrollTop = 0;
@@ -193,6 +254,7 @@
   function openModal(html) {
     if (modalCleanup) { const cleanup = modalCleanup; modalCleanup = null; cleanup(); }
     if (V.modalEl.hidden) V.pushHistory();
+    dropSheetLeaving();
     V.modalEl.innerHTML = html;
     V.modalEl.hidden = false;
     V.scrimEl.hidden = false;

@@ -1,4 +1,4 @@
-const CACHE = "aura-v244";
+const CACHE = "aura-v245";
 const SHELL = [
   "./",
   "./index.html",

@@ -755,6 +755,10 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   animation: sheet-in var(--dur-normal) var(--ease-entry);
 }
 @keyframes sheet-in { from { transform: translateY(100%); } to { transform: none; } }
+/* The copies a closing sheet leaves behind (leaveSheet in src/views/core-sheets.js). They
+   are moved by script from wherever the sheet was, so neither plays an entry of its own,
+   and a tap goes straight through them to the screen that is already back. */
+.sheet.sheet-leaving, .scrim.scrim-leaving { animation: none; transition: none; pointer-events: none; }
 .sheet-head {
   display: flex; align-items: center; gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
