@@ -1549,9 +1549,15 @@ html, body {
 }
 .home-top-filters button:active { transform: scale(.97); transition-duration: 80ms; }
 .home-top-filters button:focus-visible { outline: 2px solid var(--fg-strong); outline-offset: -2px; }
-/* A chosen tab only changes color. The press already gave under the finger and the screen
-   it opens moves in, so an icon bouncing as well was a third answer to one tap. */
+.bn-tab svg { transform-origin: center; }
+.bn-tab.active svg { animation: tab-select 280ms var(--ease-entry); }
+@keyframes tab-select {
+  0% { transform: scale(.86); }
+  65% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
 @media (prefers-reduced-motion: reduce) {
+  .bn-tab.active svg { animation: none; }
   .home-top-filters button, .home-top-filters button.active, .home-top-filters button::before,
   .home-filter-pill.moving { transition: none; }
   .home-top-filters button:active, .bn-tab:active { transform: none; }
