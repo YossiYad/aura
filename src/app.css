@@ -141,7 +141,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   background: none; border: none; color: var(--fg-faint);
   padding: 10px 0 2px; cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-standard), transform 100ms var(--ease-standard);
+  transition: color var(--dur-fast) var(--ease-standard), transform 100ms var(--ease-out);
 }
 .bn-tab svg { width: 22px; height: 22px; }
 .bn-tab span { font-size: 10px; font-weight: var(--weight-medium); letter-spacing: 0.01em; }
@@ -155,19 +155,22 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .ctl, .icon-btn, .chip {
   transition-property: transform, color, background-color, opacity;
   transition-duration: 120ms;
+  transition-timing-function: var(--ease-out);
 }
 /* Press feedback applies on every pointer type - mouse clicks get the same instant
    physical response as touch, so the interaction reads identically everywhere. */
-.bn-tab:active, .ctl:active, .icon-btn:active, .chip:active,
-.back-btn:active, .kebab:active, .row-play:active, .play-fab:active,
-.quick-tile:active, .browse-card:active, .section-play:active,
+/* A press is a small give, not a shrink: round controls a little more than wide ones,
+   where the same factor moves the edges further and reads as a wobble. */
+.ctl:active, .icon-btn:active, .back-btn:active, .kebab:active, .row-play:active,
+.play-fab:active, .section-play:active, .profile-btn:active, .private-btn:active,
+.search-clear:active, .round-action:active { transform: scale(0.96); }
+.bn-tab:active, .chip:active, .quick-tile:active, .browse-card:active,
 .home-top-filters button:active, .home-filter button:active,
 .fresh-rail button:active, .home-discovery-rail button:active,
-.profile-btn:active, .private-btn:active, .search-clear:active, .round-action:active,
 .section-head button:active, .text-action:active, .track-artist:active,
 .album-artist-row:active, .lyrics-head button:active, .fp-queue-link:active,
 .about-body button:active, .category-actions button:active,
-.queue-actions button:active { transform: scale(0.92); }
+.queue-actions button:active { transform: scale(0.97); }
 .card:active .card-art { transform: scale(0.975); }
 .song:active, .dr:active, .pl-row:active, .sheet-item:active,
 .lyrics-lines button:active, .set-item:active, .set-row:active { background: rgba(255,255,255,.075); }
@@ -176,7 +179,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .section-head button, .text-action, .track-artist, .album-artist-row,
 .lyrics-head button, .fp-queue-link, .about-body button,
 .category-actions button, .queue-actions button, .lyrics-lines button, .set-item {
-  transition: transform 120ms var(--ease-standard), background-color 120ms var(--ease-standard),
+  transition: transform 120ms var(--ease-out), background-color 120ms var(--ease-standard),
     color var(--dur-fast) var(--ease-standard);
 }
 
@@ -188,12 +191,14 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   border: none; display: inline-flex; align-items: center; justify-content: center;
   box-shadow: 0 4px 10px rgba(0,0,0,0.5);
   opacity: 0; transform: translateY(4px) scale(0.9);
-  transition: opacity var(--dur-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+  transition: opacity var(--dur-fade-fast) var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
   cursor: pointer;
 }
 .play-fab svg { width: 14px; height: 14px; margin-left: 1px; }
-@media (hover: hover) { .card:hover .play-fab, .dr:hover .play-fab, .art-hoverable:hover .play-fab { opacity: 1; transform: none; } }
-@media (hover: none) { .play-fab { opacity: 1; transform: none; } }
+@media (hover: hover) and (pointer: fine) { .card:hover .play-fab, .dr:hover .play-fab, .art-hoverable:hover .play-fab { opacity: 1; transform: none; } }
+/* Everything else - a finger, and a phone that claims a hover it cannot do - has no way
+   to reveal the button, so it is simply there. */
+@media not all and (hover: hover) and (pointer: fine) { .play-fab { opacity: 1; transform: none; } }
 .card-art, .dr-thumb, .hero-art { position: relative; }
 .artist-avatar { position: relative; }
 .image-missing { display: flex; align-items: center; justify-content: center; }
@@ -228,9 +233,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   background: none; border: none; color: var(--fg-faint);
   display: inline-flex; align-items: center; justify-content: center;
   cursor: pointer; border-radius: 50%;
-  transition: color 400ms var(--ease-standard);
+  transition: color 180ms var(--ease-standard), transform 120ms var(--ease-out);
 }
-.row-dl:active { transform: scale(0.9); }
+.row-dl:active { transform: scale(0.96); }
 .row-dl svg { width: 17px; height: 17px; }
 .row-dl .i-done, .row-dl .ring { display: none; }
 .row-dl.done { color: var(--accent); }
@@ -344,7 +349,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   padding: 10px var(--space-4); min-height: 72px; cursor: pointer;
   transition: background var(--dur-fast);
 }
-@media (hover: hover) { .dr:hover { background: var(--bg-1); } }
+@media (hover: hover) and (pointer: fine) { .dr:hover { background: var(--bg-1); } }
 .dr-thumb {
   flex-shrink: 0; width: 80px; aspect-ratio: 16 / 9;
   border-radius: var(--radius-sm); background: var(--bg-3);
@@ -371,31 +376,30 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   appearance: none; border: 0; padding: 0; background: transparent; color: inherit;
   font: inherit; cursor: pointer; vertical-align: baseline;
 }
-@media (hover: hover) { .track-artist:hover { color: var(--fg-strong); text-decoration: underline; } }
+@media (hover: hover) and (pointer: fine) { .track-artist:hover { color: var(--fg-strong); text-decoration: underline; } }
 .track-artist:focus-visible { border-radius: 2px; box-shadow: 0 0 0 2px var(--accent-glow); outline: none; }
 
-/* ---- Toggle bounce (components/Preview/Summary/AnimatedPressable/AnimatedPressable.tsx):
-   progress 0->1 over 400ms with Easing.elastic(2); scale interpolate([0,0.5,1],[1,1.25,1]);
-   border/background interpolateColor grey/transparent -> tint/tint. One-shot class,
-   added by JS on the same click that flips the toggle state. ---- */
+/* ---- Toggle pop (after components/Preview/Summary/AnimatedPressable/AnimatedPressable.tsx,
+   which bounces three times over 400ms). One swell and back: enough to say the toggle
+   took, short enough to be over before the color under it has finished changing.
+   One-shot class, added by JS on the same click that flips the toggle state. ---- */
 @keyframes rn-pop {
   0%   { transform: scale(1); }
-  32%  { transform: scale(1.25); }
-  55%  { transform: scale(0.93); }
-  75%  { transform: scale(1.06); }
+  40%  { transform: scale(1.12); }
   100% { transform: scale(1); }
 }
-.rn-pop { animation: rn-pop 400ms var(--ease-standard); }
+.rn-pop { animation: rn-pop 250ms var(--ease-out); }
+@media (prefers-reduced-motion: reduce) { .rn-pop { animation: none; } }
 
 .add-btn {
   flex-shrink: 0; height: 36px; min-width: 80px; padding: 0 16px;
   border: none; border-radius: var(--radius-pill);
   font-size: var(--text-sm); font-weight: var(--weight-bold);
   cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  transition: background-color 400ms var(--ease-standard), color 400ms var(--ease-standard), transform var(--dur-fast) var(--ease-standard);
+  transition: background-color 180ms var(--ease-standard), color 180ms var(--ease-standard), transform var(--dur-fast) var(--ease-out);
 }
 .add-btn.add { background: var(--accent); color: var(--accent-on); }
-@media (hover: hover) { .add-btn.add:hover { background: var(--accent-hover); } }
+@media (hover: hover) and (pointer: fine) { .add-btn.add:hover { background: var(--accent-hover); } }
 .add-btn.add:active { transform: scale(0.96); }
 .add-btn.add svg { width: 14px; height: 14px; }
 .add-btn.importing { background: var(--bg-3); color: var(--fg-muted); cursor: default; }
@@ -474,7 +478,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .artist-subs { margin-top: 4px; font-size: var(--text-xs); color: var(--fg-muted); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
 .artist-hero .hero-cta { justify-content: center; }
 .follow-btn {
-  transition: color 400ms var(--ease-standard), border-color 400ms var(--ease-standard), background-color 400ms var(--ease-standard);
+  transition: color 180ms var(--ease-standard), border-color 180ms var(--ease-standard), background-color 180ms var(--ease-standard),
+    transform var(--dur-fast) var(--ease-out);
 }
 .follow-btn:active { transform: scale(0.96); }
 .follow-btn.on { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
@@ -494,9 +499,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .card-art {
   aspect-ratio: 1 / 1; border-radius: var(--radius-md);
   background: var(--bg-3); overflow: hidden; box-shadow: var(--shadow-2);
-  transition: transform var(--dur-fast) var(--ease-standard);
+  transition: transform var(--dur-fast) var(--ease-out);
 }
-@media (hover: hover) { .card:hover .card-art { transform: scale(1.03); } }
+@media (hover: hover) and (pointer: fine) { .card:hover .card-art { transform: scale(1.03); } }
 .grid.artists .card-art { border-radius: 50%; }
 .grid.artists .card-title { text-align: center; }
 .grid.artists .card-sub { text-align: center; }
@@ -515,7 +520,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   padding: 8px var(--space-4); min-height: 60px; cursor: pointer;
   transition: background var(--dur-fast);
 }
-@media (hover: hover) { .pl-row:hover { background: var(--bg-1); } }
+@media (hover: hover) and (pointer: fine) { .pl-row:hover { background: var(--bg-1); } }
 .pl-row .meta { flex: 1; min-width: 0; }
 .pl-ph {
   width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
@@ -540,7 +545,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   color: #fff; background: rgba(0, 0, 0, .55);
   transition: opacity var(--dur-fast) var(--ease-standard);
 }
-@media (hover: hover) {
+@media (hover: hover) and (pointer: fine) {
   .hero-art-edit { opacity: 0; }
   .hero-art-editable:hover .hero-art-edit,
   .hero-art-editable:focus-visible .hero-art-edit { opacity: 1; }
@@ -651,7 +656,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   100% { transform: scale(1) translate(3%, -4%); }
 }
 @keyframes fp-in { from { transform: translate3d(0, 100%, 0); } to { transform: translate3d(0, 0, 0); } }
-.fullplayer.closing { animation: fp-out 240ms var(--ease-exit) forwards; }
+.fullplayer.closing { animation: fp-out 200ms var(--ease-exit) forwards; }
 @keyframes fp-out { to { transform: translate3d(0, 100%, 0); } }
 .fullplayer.dragging { animation: none; transition: none; border-radius: 18px 18px 0 0; }
 /* Once a drag has moved the player it must not slide in again from the bottom when the
@@ -665,7 +670,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .fullplayer.swipe-closing {
   animation: none;
   transform: translate3d(0,100dvh,0) !important;
-  transition: transform 240ms var(--ease-exit);
+  transition: transform 200ms var(--ease-exit);
 }
 .fp-top { display: flex; align-items: center; justify-content: space-between; }
 .fp-eyebrow {
@@ -677,7 +682,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   width: min(320px, 78vw, 42vh); aspect-ratio: 1 / 1;
   border-radius: var(--radius-lg); background: var(--bg-3) center/cover no-repeat;
   box-shadow: var(--shadow-3);
-  transition: transform var(--dur-normal) var(--ease-standard), box-shadow var(--dur-normal) var(--ease-standard);
+  transition: transform var(--dur-normal) var(--ease-out), box-shadow var(--dur-normal) var(--ease-out);
 }
 .fullplayer.paused .fp-art { transform: scale(0.93); box-shadow: var(--shadow-2); }
 .fp-meta { display: flex; align-items: center; gap: var(--space-3); }
@@ -739,7 +744,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .scrim {
   position: absolute; inset: 0; z-index: 50;
   background: var(--overlay-scrim);
-  animation: fade-in var(--dur-fast) var(--ease-standard);
+  animation: fade-in var(--dur-fade-fast) var(--ease-standard);
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 .sheet {
@@ -762,7 +767,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
   background: none; border: none; cursor: pointer;
   font-size: var(--text-md); color: var(--fg); text-align: left;
 }
-@media (hover: hover) { .sheet-item:hover { background: var(--bg-3); } }
+@media (hover: hover) and (pointer: fine) { .sheet-item:hover { background: var(--bg-3); } }
 .sheet-item svg { width: 20px; height: 20px; color: var(--fg-muted); flex-shrink: 0; }
 .sheet-item em { color: var(--fg-faint); font-style: normal; }
 .queue-list .song { min-height: 52px; }
@@ -885,7 +890,7 @@ html.keyboard-open .modal-wrap .modal {
   padding: 10px 18px; border-radius: var(--radius-pill);
   font-size: var(--text-sm); box-shadow: var(--shadow-2);
   opacity: 0; transform: translateY(8px);
-  transition: opacity var(--dur-normal), transform var(--dur-normal);
+  transition: opacity var(--dur-fade-normal), transform var(--dur-normal);
   max-width: 85%; text-align: center;
 }
 .toast.show { opacity: 1; transform: none; }
@@ -950,13 +955,13 @@ html, body {
   background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
-  transition: transform 120ms var(--ease-standard),
+  transition: transform 120ms var(--ease-out),
               color var(--dur-fast) var(--ease-standard);
 }
 .private-btn svg { width: 30px; height: 30px; }
 .private-btn.on { color: var(--accent); }
-@media (hover: hover) { .private-btn:hover { color: var(--fg-strong); } }
-.private-btn:active { transform: scale(0.92); }
+@media (hover: hover) and (pointer: fine) { .private-btn:hover { color: var(--fg-strong); } }
+.private-btn:active { transform: scale(0.96); }
 
 .topbar .brand {
   display: block;
@@ -1032,9 +1037,9 @@ html, body {
   color: var(--accent-on);
   box-shadow: var(--shadow-1);
   cursor: pointer;
-  transition: transform .14s var(--ease-standard), background .14s var(--ease-standard);
+  transition: transform .14s var(--ease-out), background .14s var(--ease-standard);
 }
-.section-play:active { transform: scale(.9); background: var(--accent-pressed); }
+.section-play:active { transform: scale(.96); background: var(--accent-pressed); }
 .section-play svg { width: 16px; height: 16px; margin-inline-start: 1px; }
 .section-head h3, .home-section .section-head h3 {
   margin: 0;
@@ -1311,7 +1316,7 @@ html, body {
 .song .art.lg { width: 48px; height: 48px; border-radius: 4px; }
 .dr { min-height: 64px; padding-top: 7px; padding-bottom: 7px; }
 .dr-thumb { width: 64px; height: 52px; aspect-ratio: auto; border-radius: 4px; }
-@media (hover: hover) { .song:hover, .dr:hover, .pl-row:hover { background: rgba(255,255,255,.06); } }
+@media (hover: hover) and (pointer: fine) { .song:hover, .dr:hover, .pl-row:hover { background: rgba(255,255,255,.06); } }
 .player {
   margin: 0 8px 3px;
   padding: 4px 6px;
@@ -1538,17 +1543,11 @@ html, body {
 .home-filter-pill.moving {
   transition: transform 320ms cubic-bezier(.2, .8, .2, 1), width 320ms cubic-bezier(.2, .8, .2, 1);
 }
-.home-top-filters button:active { transform: scale(.94); transition-duration: 80ms; }
+.home-top-filters button:active { transform: scale(.97); transition-duration: 80ms; }
 .home-top-filters button:focus-visible { outline: 2px solid var(--fg-strong); outline-offset: -2px; }
-.bn-tab svg { transform-origin: center; }
-.bn-tab.active svg { animation: tab-select 280ms var(--ease-entry); }
-@keyframes tab-select {
-  0% { transform: scale(.86); }
-  65% { transform: scale(1.08); }
-  100% { transform: scale(1); }
-}
+/* A chosen tab only changes color. The press already gave under the finger and the screen
+   it opens moves in, so an icon bouncing as well was a third answer to one tap. */
 @media (prefers-reduced-motion: reduce) {
-  .bn-tab.active svg { animation: none; }
   .home-top-filters button, .home-top-filters button.active, .home-top-filters button::before,
   .home-filter-pill.moving { transition: none; }
   .home-top-filters button:active, .bn-tab:active { transform: none; }
@@ -1743,9 +1742,9 @@ html.no-anim .home-top-filters button:active, html.no-anim .bn-tab:active { tran
   color: var(--accent-on);
   box-shadow: var(--shadow-2);
   cursor: pointer;
-  transition: transform .14s var(--ease-standard), background .14s var(--ease-standard);
+  transition: transform .14s var(--ease-out), background .14s var(--ease-standard);
 }
-.category-play:active { transform: scale(.93); background: var(--accent-pressed); }
+.category-play:active { transform: scale(.96); background: var(--accent-pressed); }
 .category-play:disabled { opacity: .4; cursor: default; }
 .category-play svg { width: 26px; height: 26px; margin-inline-start: 2px; }
 .category-hero h2 {
@@ -1910,8 +1909,8 @@ html[data-accent="mono"] {
   --accent-glow: rgba(233, 235, 230, 0.26);
 }
 
-/* Animations kill switch from Settings > Appearance. Mirrors the
-   prefers-reduced-motion collapse in tokens.css but user-controlled. */
+/* Animations kill switch from Settings > Appearance. Stricter than the
+   prefers-reduced-motion collapse in tokens.css, which keeps fades: this stops those too. */
 html.no-anim *, html.no-anim *::before, html.no-anim *::after {
   transition-duration: 0ms !important;
   animation-duration: 0ms !important;
@@ -2015,7 +2014,7 @@ html.no-anim *, html.no-anim *::before, html.no-anim *::after {
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   cursor: pointer;
-  transition: color var(--dur-fast), background var(--dur-fast), transform var(--dur-fast);
+  transition: color var(--dur-fast), background var(--dur-fast), transform var(--dur-fast) var(--ease-out);
 }
 .set-nav button svg { width: 15px; height: 15px; }
 .set-nav button.on { background: var(--accent); color: var(--accent-on); }
@@ -2121,7 +2120,7 @@ html.no-anim *, html.no-anim *::before, html.no-anim *::after {
   transition: background var(--dur-instant) var(--ease-standard), color var(--dur-instant) var(--ease-standard);
 }
 .seg button.on { background: var(--accent); color: var(--accent-on); box-shadow: none; }
-@media (hover: hover) { .seg button:not(.on):hover { color: var(--fg); } }
+@media (hover: hover) and (pointer: fine) { .seg button:not(.on):hover { color: var(--fg); } }
 
 /* Accent swatches */
 .swatches { display: flex; flex-wrap: wrap; gap: 14px; padding: 4px 3px 2px; }
@@ -2133,15 +2132,15 @@ html.no-anim *, html.no-anim *::before, html.no-anim *::after {
   background: var(--sw);
   cursor: pointer;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
-  transition: transform var(--dur-fast) var(--ease-emphasized), box-shadow var(--dur-fast) var(--ease-standard);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-standard);
 }
-.swatch:active { transform: scale(.88); }
+.swatch:active { transform: scale(.95); }
 .swatch.on { box-shadow: 0 0 0 3px #121212, 0 0 0 5px var(--sw); }
 
 /* Buttons and notes inside cards */
 .btn.wide { width: 100%; justify-content: center; margin: 6px 0; }
 .set-card .btn.danger { color: var(--danger); border-color: var(--danger-soft); }
-@media (hover: hover) { .set-card .btn.danger:hover { background: var(--danger-soft); border-color: var(--danger); } }
+@media (hover: hover) and (pointer: fine) { .set-card .btn.danger:hover { background: var(--danger-soft); border-color: var(--danger); } }
 .set-note { color: var(--fg-muted); font-size: var(--text-xs); line-height: 1.5; padding: 12px 0 4px; }
 .set-note a { color: var(--accent); }
 .set-card input[type="password"], .set-card input[type="text"] {
@@ -2215,7 +2214,7 @@ html.no-anim *, html.no-anim *::before, html.no-anim *::after {
   color: var(--fg-faint);
   transition: transform var(--dur-fast), color var(--dur-fast);
 }
-@media (hover: hover) { .set-link:hover .set-chevron { color: var(--fg); transform: translateX(2px); } }
+@media (hover: hover) and (pointer: fine) { .set-link:hover .set-chevron { color: var(--fg); transform: translateX(2px); } }
 .set-link:disabled { opacity: .55; cursor: wait; }
 .set-link:disabled .set-chevron { transform: none; }
 .set-link.danger .set-title,
@@ -2361,7 +2360,7 @@ html.no-anim *, html.no-anim *::before, html.no-anim *::after {
 /* Press feedback on controls that lacked it */
 .btn:active { transform: scale(.97); }
 .seg button:active { transform: scale(.96); }
-.recent-searches button { transition: transform var(--dur-fast) var(--ease-standard); }
+.recent-searches button { transition: transform var(--dur-fast) var(--ease-out); }
 .recent-searches button:active { transform: scale(.95); }
 
 /* ============================================================
@@ -2487,7 +2486,7 @@ html.ios-standalone .app:not(.category-mode):not(.hero-mode) > .topbar {
 .rail.artists .card-art,
 .grid.artists .card-art,
 .home-artists .card-art { border-radius: var(--sc-circle); }
-@media (hover: hover) { .card:hover .card-art { transform: none; } }
+@media (hover: hover) and (pointer: fine) { .card:hover .card-art { transform: none; } }
 .card-title {
   margin-top: 10px;
   font-size: 13px;
@@ -2587,7 +2586,7 @@ html.ios-standalone .app:not(.category-mode):not(.hero-mode) > .topbar {
 .song-dur { font-size: 13px; color: var(--sc-light-grey); }
 .kebab, .row-dl { color: var(--sc-lighter-grey); }
 .kebab svg { width: 20px; height: 20px; }
-@media (hover: hover) { .song:hover, .pl-row:hover, .dr:hover { background: rgba(255, 255, 255, 0.06); } }
+@media (hover: hover) and (pointer: fine) { .song:hover, .pl-row:hover, .dr:hover { background: rgba(255, 255, 255, 0.06); } }
 .song.active { background: transparent; }
 .song::before { display: none; }
 
@@ -2807,7 +2806,7 @@ html.ios-standalone:not(.ios-system-gap) .player {
   transition: color var(--dur-fast), background var(--dur-fast);
 }
 .search-mic svg { width: 18px; height: 18px; }
-@media (hover: hover) { .search-mic:hover { color: var(--fg-strong); } }
+@media (hover: hover) and (pointer: fine) { .search-mic:hover { color: var(--fg-strong); } }
 /* Listening has to read from arm's length and without a caption - the ring is the only
    thing saying the microphone is live. */
 .search-mic.listening { color: var(--accent-on); background: var(--accent); }
@@ -2943,10 +2942,9 @@ html.ios-standalone:not(.ios-system-gap) .player {
 }
 @keyframes art-in { from { opacity: 0; } }
 
+/* The fade stays under reduced motion: nothing travels, and without it a screenful of
+   pictures snaps in at once. */
 @media (prefers-reduced-motion: reduce) {
-  .art img, .dr-thumb img, .card-art img, .cover-grid img, .quick-tile .qt-art img {
-    animation: none;
-  }
   .fullplayer::before { animation: none; }
 }
 
@@ -2966,7 +2964,7 @@ thinking-orb { vertical-align: middle; pointer-events: none; }
   border: 0; border-radius: 50%; margin: 0 auto; padding: 0;
   background: none; cursor: pointer; position: relative;
   -webkit-tap-highlight-color: transparent;
-  transition: transform var(--dur-fast) var(--ease-standard);
+  transition: transform var(--dur-fast) var(--ease-out);
 }
 .voice-orb:active { transform: scale(0.97); }
 /* Busy is not dimmed: a request is out, and the orb is the one thing reporting on it. */
@@ -2979,7 +2977,7 @@ thinking-orb { vertical-align: middle; pointer-events: none; }
 .voice-orb::before {
   content: ""; position: absolute; inset: -10%; border-radius: 50%; pointer-events: none; opacity: 0;
   background: radial-gradient(circle, var(--accent-glow) 0%, transparent 68%);
-  transition: opacity var(--dur-slow) var(--ease-standard);
+  transition: opacity var(--dur-fade-slow) var(--ease-standard);
 }
 .voice-orb.listening::before { opacity: 1; animation: mic-pulse 1.6s ease-in-out infinite; }
 /* A pulse that will not stop is exactly what motion sensitivity cannot take, so the glow
@@ -2995,7 +2993,7 @@ thinking-orb { vertical-align: middle; pointer-events: none; }
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   padding: calc(24px + var(--safe-top)) 28px calc(28px + var(--safe-bottom));
   background: rgba(10, 16, 22, 0.86); color: #f4f5f6; text-align: center; cursor: pointer;
-  animation: fade-in var(--dur-normal) var(--ease-standard);
+  animation: fade-in var(--dur-fade-normal) var(--ease-standard);
 }
 .drive-voice-layer[hidden] { display: none; }
 .drive-voice-status { margin: 12px 0 0; font-size: clamp(24px, 6vw, 36px); font-weight: 500; line-height: 1.3; overflow-wrap: anywhere; }
@@ -3021,7 +3019,7 @@ thinking-orb { vertical-align: middle; pointer-events: none; }
 .swipe-plate svg { width: 20px; height: 20px; flex-shrink: 0; }
 /* The icon jumps once when the pull passes the depth that arms an action - the only
    moment in the gesture where something changes without the finger being lifted. */
-.swipe-plate.armed .swipe-label svg { animation: rn-pop 400ms var(--ease-standard); }
+.swipe-plate.armed .swipe-label svg { animation: rn-pop 250ms var(--ease-out); }
 .dr.swiping, .song.swiping {
   position: relative; z-index: 1; background: var(--sc-primary);
   will-change: transform;

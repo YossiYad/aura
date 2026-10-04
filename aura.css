@@ -91,7 +91,7 @@ button { font: inherit; color: inherit; }
   transition: background var(--dur-fast) var(--ease-standard),
               color var(--dur-fast) var(--ease-standard);
 }
-@media (hover: hover) { .icon-btn:hover { background: var(--bg-2); color: var(--fg-strong); } }
+@media (hover: hover) and (pointer: fine) { .icon-btn:hover { background: var(--bg-2); color: var(--fg-strong); } }
 .icon-btn:active { background: var(--bg-3); }
 .icon-btn svg { width: 20px; height: 20px; }
 
@@ -109,10 +109,10 @@ button { font: inherit; color: inherit; }
   font-weight: var(--weight-bold);
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: transform var(--dur-fast) var(--ease-standard),
+  transition: transform var(--dur-fast) var(--ease-out),
               background var(--dur-fast) var(--ease-standard);
 }
-@media (hover: hover) { .cta-pill:hover { background: var(--accent-hover); } }
+@media (hover: hover) and (pointer: fine) { .cta-pill:hover { background: var(--accent-hover); } }
 .cta-pill:active { transform: scale(0.97); background: var(--accent-pressed); }
 .cta-pill svg { width: 14px; height: 14px; }
 
@@ -142,7 +142,7 @@ button { font: inherit; color: inherit; }
   white-space: nowrap;
   transition: color var(--dur-fast) var(--ease-standard);
 }
-@media (hover: hover) { .tab:hover { color: var(--fg); } }
+@media (hover: hover) and (pointer: fine) { .tab:hover { color: var(--fg); } }
 .tab.active { color: var(--fg-strong); }
 .tab.active::after {
   /* SIGNATURE: pulse rail rotated horizontal - always 24px wide, sits centered. */
@@ -158,9 +158,10 @@ button { font: inherit; color: inherit; }
   box-shadow: 0 0 8px var(--accent-glow);
   animation: rail-in var(--dur-normal) var(--ease-emphasized);
 }
+/* Grows from its middle by transform, so the browser moves a layer instead of laying the
+   tab out again on every frame. */
 @keyframes rail-in {
-  from { width: 0; margin-left: 0; opacity: 0; }
-  to   { width: 24px; margin-left: -12px; opacity: 1; }
+  from { transform: scaleX(0.25); opacity: 0; }
 }
 
 /* ----- Sort bar (eyebrow) ----- */
@@ -192,7 +193,7 @@ button { font: inherit; color: inherit; }
   cursor: pointer;
 }
 .sort-trigger svg { width: 12px; height: 12px; color: var(--fg-muted); }
-@media (hover: hover) { .sort-trigger:hover { background: var(--bg-2); } }
+@media (hover: hover) and (pointer: fine) { .sort-trigger:hover { background: var(--bg-2); } }
 
 /* ----- Track row ----- */
 .song-list { list-style: none; margin: 0; padding: 0; }
@@ -218,7 +219,7 @@ button { font: inherit; color: inherit; }
   border-radius: 0 2px 2px 0;
   transition: background var(--dur-fast) var(--ease-standard);
 }
-@media (hover: hover) { .song:hover { background: var(--bg-1); } }
+@media (hover: hover) and (pointer: fine) { .song:hover { background: var(--bg-1); } }
 .song.active { background: linear-gradient(90deg, var(--accent-soft) 0%, transparent 30%); }
 .song.active::before { background: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 .song.active .song-title { color: var(--accent); }
@@ -280,7 +281,7 @@ button { font: inherit; color: inherit; }
   justify-content: center;
   transition: background var(--dur-fast), color var(--dur-fast);
 }
-@media (hover: hover) { .kebab:hover { background: var(--bg-3); color: var(--fg); } }
+@media (hover: hover) and (pointer: fine) { .kebab:hover { background: var(--bg-3); color: var(--fg); } }
 .kebab svg { width: 16px; height: 16px; }
 
 /* SIGNATURE: now-playing EQ - 4 bars pulsing in the artwork corner */
@@ -407,7 +408,7 @@ button { font: inherit; color: inherit; }
   align-items: center;
   justify-content: center;
 }
-@media (hover: hover) { .ctl:hover { background: var(--bg-3); color: var(--fg-strong); } }
+@media (hover: hover) and (pointer: fine) { .ctl:hover { background: var(--bg-3); color: var(--fg-strong); } }
 .ctl svg { width: 18px; height: 18px; }
 .ctl.play {
   background: var(--accent);
@@ -415,7 +416,7 @@ button { font: inherit; color: inherit; }
   width: 44px; height: 44px;
   box-shadow: 0 4px 12px var(--accent-glow);
 }
-@media (hover: hover) { .ctl.play:hover { background: var(--accent-hover); transform: scale(1.04); } }
+@media (hover: hover) and (pointer: fine) { .ctl.play:hover { background: var(--accent-hover); transform: scale(1.04); } }
 .ctl.play svg { width: 20px; height: 20px; }
 .ctl.toggle.on { color: var(--accent); }
 .ctl.toggle.on::after {
@@ -463,10 +464,10 @@ button { font: inherit; color: inherit; }
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   cursor: pointer;
-  transition: transform var(--dur-fast) var(--ease-standard),
+  transition: transform var(--dur-fast) var(--ease-out),
               background var(--dur-fast) var(--ease-standard);
 }
-@media (hover: hover) { .btn:hover { background: var(--bg-2); } }
+@media (hover: hover) and (pointer: fine) { .btn:hover { background: var(--bg-2); } }
 .btn:active { transform: scale(0.97); }
 .btn.primary {
   background: var(--accent);
@@ -474,7 +475,7 @@ button { font: inherit; color: inherit; }
   font-weight: var(--weight-bold);
   box-shadow: 0 4px 14px var(--accent-glow);
 }
-@media (hover: hover) { .btn.primary:hover { background: var(--accent-hover); } }
+@media (hover: hover) and (pointer: fine) { .btn.primary:hover { background: var(--accent-hover); } }
 .btn.ghost { background: transparent; border: 1px solid var(--border-strong); }
 .btn.lg { height: 48px; padding: 0 24px; font-size: var(--text-md); }
 .btn svg { width: 16px; height: 16px; }

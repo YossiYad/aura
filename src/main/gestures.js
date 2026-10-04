@@ -251,7 +251,7 @@
       // Anything that changed while the player covered the screen is caught up on here,
       // rather than moving under the listener while they were reading it.
       Views.refreshIfStale();
-    }, 240);
+    }, 200);
   }
 
   function dismissFullPlayerBySwipe() {
@@ -266,7 +266,7 @@
       // Same catch-up the close button does: whatever changed under the player is
       // painted now, rather than lingering stale until some unrelated event.
       Views.refreshIfStale();
-    }, 240);
+    }, 200);
   }
 
   function bindSingleTap(id, action) {

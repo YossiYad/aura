@@ -133,10 +133,18 @@
   --dur-fast:    140ms;
   --dur-normal:  220ms;
   --dur-slow:    360ms;
+  /* The same times for things that only fade. Reduced motion stops what moves and leaves
+     these running: a toast, a scrim or a picture that fades in still says it arrived. */
+  --dur-fade-fast:   140ms;
+  --dur-fade-normal: 220ms;
+  --dur-fade-slow:   360ms;
 
   /* Easings */
   --ease-entry:      cubic-bezier(0.16, 1, 0.3, 1);    /* expo-out - for things appearing */
-  --ease-exit:       cubic-bezier(0.7, 0, 0.84, 0);    /* expo-in - for things leaving */
+  /* Leaving starts at full speed and settles off screen. A curve that starts slowly
+     stalls under the finger that just threw the thing away. */
+  --ease-exit:       cubic-bezier(0.32, 0.72, 0, 1);   /* drawer curve - for things leaving */
+  --ease-out:        cubic-bezier(0.23, 1, 0.32, 1);   /* press feedback - moves on the first frame */
   --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);       /* M3 emphasized - for big moves */
   --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);     /* default */
 
@@ -192,7 +200,8 @@
   --sc-grid-gap:    12px;
 }
 
-/* Reduced motion respect - collapse durations, no transforms */
+/* Reduced motion respect - what moves arrives at once. Fades keep their own times
+   (--dur-fade-*), because a change of opacity is not motion. */
 @media (prefers-reduced-motion: reduce) {
   :root {
     --dur-instant: 0ms;
