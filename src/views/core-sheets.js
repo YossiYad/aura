@@ -200,7 +200,7 @@
   V.sheetEl.addEventListener("touchend", () => {
     if (!sheetDragEligible) return;
     const elapsed = Math.max(1, performance.now() - sheetDragAt);
-    const flick = Math.abs(sheetDragY) / elapsed > 0.6 && Math.abs(sheetDragY) > 40;
+    const flick = Math.abs(sheetDragY) / elapsed > 0.3 && Math.abs(sheetDragY) > 40;
     const dragged = sheetDragging;
     const dy = sheetDragY;
     if (dragged) {

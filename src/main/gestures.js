@@ -106,7 +106,7 @@
     fpDragFrame = 0;
     const pulled = Math.max(0, -dy);
     const elapsed = Math.max(1, performance.now() - barStartAt);
-    const flick = pulled / elapsed > 0.5 && pulled > 40;
+    const flick = pulled / elapsed > 0.3 && pulled > 40;
     const crossedThreshold = pulled > Math.min(160, barPullHeight * 0.25);
     fullPlayer.classList.remove("dragging");
     if (!(flick || crossedThreshold)) { dismissFullPlayerBySwipe(); return; }
@@ -209,6 +209,7 @@
     const dx = barDX;
     const width = playerBar.offsetWidth || window.innerWidth || 320;
     const elapsed = Math.max(1, performance.now() - barStartAt);
+    // A harder flick than the other gestures ask for: this one stops the music.
     const flick = Math.abs(dx) / elapsed > 0.5 && Math.abs(dx) > 40;
     const crossedThreshold = Math.abs(dx) > Math.min(140, width * 0.32);
     if (flick || crossedThreshold) { dismissBarBySwipe(dx); return; }
