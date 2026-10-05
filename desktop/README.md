@@ -7,8 +7,13 @@ app from your own server, in its [computer layout](../README.md#quick-start) - t
 library, sync, search and playback a browser gets there, and an update to the server is an
 update to the app.
 
-It is built with [Electron](https://www.electronjs.org/) and, for now, packaged for Linux
-(x86-64, as an AppImage).
+It is built with [Electron](https://www.electronjs.org/) and, for now, packaged for Linux:
+one file (an AppImage) for any 64-bit Intel or AMD distribution - Fedora, Ubuntu, Linux
+Mint, Debian and the rest. There is no Windows or macOS build yet.
+
+An AppImage needs FUSE 2 to open. Fedora and Linux Mint have it; on Ubuntu 22.04 and later
+install it once with `sudo apt install libfuse2t64` (`libfuse2` on 22.04). Without it, the
+file still runs from a terminal as `./Aura.AppImage --appimage-extract-and-run`.
 
 ## Get it
 
@@ -20,8 +25,16 @@ AURA_DESKTOP_APP=yes sh selfhost/private-app/setup.sh
 
 It builds the installer in a container (a few minutes the first time) and from then on
 rebuilds it whenever these files change. Then, in a browser on the computer, signed in to
-Aura: **Settings > About > Get the desktop app**. Let the downloaded file run (right-click,
-Properties, Permissions) and open it.
+Aura: **Settings > About > Get the desktop app**.
+
+A downloaded file is never allowed to run until you say so, and opening it before that
+offers to write it to a disk instead. So first: right-click it, **Properties**,
+**Permissions**, and tick **Is executable** (on GNOME, **Allow executing file as
+program**). Then double-click it. Or, in a terminal in the folder it was saved to:
+
+```sh
+chmod +x Aura@*.AppImage && ./Aura@*.AppImage
+```
 
 **From this folder.** `sh desktop/build.sh` writes `desktop/dist/Aura-x86_64.AppImage`. It
 needs Docker or Podman and nothing else.
