@@ -165,6 +165,18 @@ test('the login proxy pages reach the network so a lapsed session can sign in ag
   assert.equal(await (await h.get('/', 'navigate')).text(), 'private app');
 });
 
+// Both are navigations: a link with download is one, and so is the browser tab the desktop
+// app opens to be signed in. Answered with the cached shell, the download saved the app's
+// own page under the installer's name, and the sign-in showed the app instead of Continue.
+test('the desktop app\'s download and sign-in pages reach the server, not the cached app', async () => {
+  const h = worker();
+  await h.seed(h.name, '/index.html', 'private app');
+  assert.equal(await h.get('/desktop/download/Aura.AppImage', 'navigate'), undefined);
+  assert.equal(await h.get('/desktop/handoff?port=43210&state=' + 'S'.repeat(43), 'navigate'), undefined);
+  assert.equal(await h.get('/desktop/download/Aura.AppImage'), undefined);
+  assert.equal(await (await h.get('/', 'navigate')).text(), 'private app');
+});
+
 test('a deploy that kept the cache name still reaches the installed shell, all of it together', async () => {
   const h = worker();
   for (const entry of h.shell) { await h.seed(h.name, entry, 'installed'); h.serve(entry, 'installed'); }
