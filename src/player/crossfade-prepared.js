@@ -193,7 +193,8 @@
 
   // A standby element streaming the next song leaves the transition waiting on the
   // network wherever the permitted element restarts the source itself: always on iOS,
-  // and on every engine while the screen is off. Saving the next track into the local
+  // and on every engine but Android's while the screen is off (there the standby itself
+  // takes over, see crossfade-overlap.js). Saving the next track into the local
   // cache while this one plays turns that handoff into a read from the device, and the
   // element attach waits for the copy to settle so the same bytes are never fetched
   // twice. Whatever prevents the copy - a metered connection with Wi-Fi-only downloads,

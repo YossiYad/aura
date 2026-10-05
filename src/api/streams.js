@@ -306,7 +306,13 @@
     // A server that answered with its own error is a broken server, not a missing track.
     // Counting them is what tells the difference at the end.
     let serverFaults = 0;
-    const noteFaults = p => p.catch(e => { if (V.shouldCooldownStream(e)) serverFaults++; throw e; });
+    // A request that never got an answer says nothing about the video at all.
+    let unreached = 0;
+    const noteFaults = p => p.catch(e => {
+      if (V.shouldCooldownStream(e)) serverFaults++;
+      if (/failed to fetch|load failed|networkerror/i.test(String((e && e.message) || e))) unreached++;
+      throw e;
+    });
     const limit = trustedLive.length + pipedLive.length + invLive.length === 1 ? SOLE_SOURCE_TIMEOUT_MS : RACE_TIMEOUT_MS;
     const tasks = trustedLive.map(b => resolveCobaltOne(b, id, remote))
       .concat(pipedLive.map(b => resolvePipedOne(b, id, tier, remote, limit)))
@@ -338,9 +344,13 @@
       // With no signal it is never this video's fault, whatever has played before. Read
       // as one, the first song after the signal dropped went looking for another upload,
       // announced that the servers were down, and tried YouTube before the queue held.
-      const outage = !attempted || navigator.onLine === false || (allBroke && (!servedSomething || brokeStreak > 1));
+      // Nor when not one request reached a server: a locked Android phone whose page lost
+      // its network reported online, every fetch failed within milliseconds, and three
+      // songs in one log were skipped as unplayable uploads before the queue held.
+      const cutOff = attempted > 0 && unreached >= attempted;
+      const outage = !attempted || navigator.onLine === false || cutOff || (allBroke && (!servedSomething || brokeStreak > 1));
       V.log("resolve", id + " no working source (" + (Date.now() - t0) + "ms)" +
-        (!allBroke ? "" : outage ? " - every server it asked answered with an error"
+        (cutOff ? " - no server could be reached" : !allBroke ? "" : outage ? " - every server it asked answered with an error"
           : " - the server errored on this one but has served others, treating it as this video's fault"));
       const err = /** @type {Error & { outage?: boolean }} */ (new Error(!attempted ? "all servers down" : allBroke ? "every server errored" : "no source"));
       if (outage) err.outage = true;

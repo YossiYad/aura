@@ -162,7 +162,7 @@
     if (remaining <= Math.max(fade + 6, 12) && V.prepExpiring(V.xfadePrep) && !V.xfadePrep.repairing) V.discardPrep();
     if (remaining <= Math.max(fade + 6, 12) && !V.xfadePrep && !V.prepBusy) V.prepNextSource();
     if (document.hidden) {
-      if (!V.remotePlaybackActive() && remaining <= 0.75 && V.prepValid()) playPreparedInstantly();
+      if (!V.remotePlaybackActive() && remaining <= V.hiddenHandoffLead() && V.prepValid()) playPreparedInstantly();
       return;
     }
     if (fade > 0 && remaining <= fade && V.prepValid()) startCrossfade(Math.min(fade, Math.max(1, remaining)));
@@ -177,7 +177,7 @@
     // best. Started offline it stalled there, with saved songs waiting behind it.
     if (navigator.onLine === false && !V.xfadePrep.localKind && !V.remotePlaybackActive()) { V.discardPrep(); return false; }
     const prep = V.xfadePrep;
-    const onActive = V.isIOS || document.hidden || V.remotePlaybackActive();
+    const onActive = V.handoffOnActive();
     const target = onActive ? V.audio : (prep.el || V.otherEl());
     if (target.isCast) { target.mediaTrack = V.queue[prep.ni]; target.mediaMime = prep.mime || "audio/mpeg"; }
     const generation = V.playbackGeneration;
@@ -201,6 +201,7 @@
     const failed = e => {
       if (!valid()) { abandon(); return; }
       if (onActive && V.platformBlocksAutoPlay() && V.commitInterruptedPreparedStart("audio interruption")) return;
+      if (!onActive && V.holdRefusedHandoff(attempt, e)) return;
       V.preparedStart = null;
       clearTimeout(attempt.timer);
       if (prep.localKind && V.mediaWasRejected(e, target)) {

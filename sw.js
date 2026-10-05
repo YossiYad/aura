@@ -1,4 +1,4 @@
-const CACHE = "aura-v250";
+const CACHE = "aura-v251";
 const SHELL = [
   "./",
   "./index.html",
@@ -81,6 +81,7 @@ const SHELL = [
   "./src/player/crossfade.js",
   "./src/player/crossfade-prepared.js",
   "./src/player/crossfade-start.js",
+  "./src/player/crossfade-overlap.js",
   "./src/player/elements.js",
   "./src/player/elements-boot.js",
   "./src/player/network.js",
