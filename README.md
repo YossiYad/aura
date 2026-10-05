@@ -118,6 +118,19 @@ invitation page too; until they do, it follows their browser.
 Keyboard users get visible focus rings, and Escape closes dialogs and sheets. Screen
 readers announce toasts and are told which page of the tab bar is showing.
 
+### On a computer
+
+Open Aura on a computer and it lays itself out for one: Home and search in a top bar,
+your library in a column on the left, a "now playing" panel with lyrics on the right, and
+a full player bar with volume along the bottom. Menus open at the pointer, and the right
+mouse button opens a song's or a playlist's menu. Phones and tablets keep the phone
+layout; **Settings > Appearance > Layout** chooses for a device when you want otherwise.
+
+On Linux and Windows there is also a [desktop app](desktop/README.md): a window and a menu
+entry of its own, and a tray icon that keeps the music playing with the window closed. A
+self-hosted installation can offer it from **Settings > About**, and it signs in through
+your browser.
+
 ### Shared listening
 
 On a self-hosted installation, invite guests with a QR code. They can suggest songs
@@ -359,6 +372,7 @@ For service settings, shared queues and optional automatic updates, see the
 | Shared playlists & queues | Collaborate on playlists and invite guests to a listening session. |
 | Push notifications | Receive updates for followed artists and podcasts, subject to browser support. |
 | Nightly mixes | Prepare a daily mix on your server using an AI key you supply. |
+| Desktop app | Build the Linux and Windows [desktop app](desktop/README.md) on your server and offer it from Settings, signed in through the browser. |
 
 Background playback, voice input and casting depend on the browser and device. On
 iPhone and iPad, track transitions use sequential playback instead of overlapping

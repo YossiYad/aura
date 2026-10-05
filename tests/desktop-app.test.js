@@ -86,12 +86,32 @@ test('only an https address, or this computer, is taken for a server', () => {
   }
 });
 
+// The layout is made for about 1600 by 1000 points. A bigger screen with no scaling of its
+// own - a large monitor at 100% - would show it small; one that scales is left alone.
+test('the app is drawn larger on a large screen, and as it is on any other', () => {
+  for (const [w, h] of [[1280, 760], [1366, 728], [1440, 860], [1920, 1040], [1536, 824]]) assert.equal(config.fitZoom(w, h), 1, w + 'x' + h);
+  assert.equal(config.fitZoom(2560, 1400), 1.4);
+  // An ultrawide is as tall as a 1440p screen, and that is what limits it.
+  assert.equal(config.fitZoom(3440, 1400), 1.4);
+  assert.equal(config.fitZoom(3840, 2120), 2.1);
+  assert.equal(config.fitZoom(7680, 4280), config.ZOOM_MAX);
+  const main = read('desktop/main.js');
+  // Set on every page and again on another screen; Ctrl and the wheel change it, and it is kept.
+  assert.match(main, /contents\.on\("did-finish-load", applyZoom\);/);
+  assert.match(main, /win\.on\("moved", applyZoom\);/);
+  assert.match(main, /contents\.on\("zoom-changed"/);
+  assert.match(main, /accelerator: "CmdOrCtrl\+0", click: \(\) => setZoom\(null\)/);
+});
+
 test('the app\'s settings survive a broken file and keep what was saved', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-desktop-'));
   const file = path.join(dir, 'nested', 'settings.json');
   assert.deepEqual(config.load(file), config.DEFAULTS);
-  config.save(file, { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true } });
-  assert.deepEqual(config.load(file), { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true } });
+  config.save(file, { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true }, zoom: 1.4 });
+  assert.deepEqual(config.load(file), { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true }, zoom: 1.4 });
+  // A zoom out of range is not kept, and the app goes back to fitting the screen.
+  fs.writeFileSync(file, JSON.stringify({ zoom: 40 }));
+  assert.equal(config.load(file).zoom, null);
   fs.writeFileSync(file, '{ not json');
   assert.deepEqual(config.load(file), config.DEFAULTS);
   fs.writeFileSync(file, JSON.stringify({ server: 'http://aura.example', bounds: { width: 5, height: 5 } }));
@@ -144,7 +164,11 @@ test('a download says which server it came from, and nothing else passes for tha
   assert.equal(install.serverHint('/home/me/Downloads/Aura@my-box.tail1234.ts.net(1).AppImage'), 'my-box.tail1234.ts.net');
   assert.equal(install.serverHint('/home/me/Downloads/Aura@music.example (2).AppImage'), 'music.example');
   assert.equal(install.serverHint('Aura@music.example.AppImage'), 'music.example');
-  for (const other of ['', '/opt/Aura-x86_64.AppImage', '/home/me/.local/share/aura-desktop/Aura.AppImage', '/tmp/NotAura@music.example.AppImage', '/tmp/Aura@bad host.AppImage', '/tmp/Aura@a/b.AppImage']) {
+  // The Windows installer, as a browser saves it and as the installer writes its own name down.
+  assert.equal(install.serverHint('C:\\Users\\me\\Downloads\\Aura@music.example.exe'), 'music.example');
+  assert.equal(install.serverHint('Aura@music.example (1).exe'), 'music.example');
+  assert.equal(install.serverHint('Aura@music.example.exe\r\n'), 'music.example');
+  for (const other of ['', '/opt/Aura-x86_64.AppImage', 'Aura-Setup-x64.exe', 'Aura@music.example.exe.lnk', '/home/me/.local/share/aura-desktop/Aura.AppImage', '/tmp/NotAura@music.example.AppImage', '/tmp/Aura@bad host.AppImage', '/tmp/Aura@a/b.AppImage']) {
     assert.equal(install.serverHint(other), '', other);
   }
   // What it names is still only offered, as an https address, for the listener to accept.
@@ -159,20 +183,90 @@ test('a server offers the installer only when asked to build it, and only behind
   const block = conf.slice(at, conf.indexOf('\n    }\n', at));
   assert.match(block, /alias \/usr\/share\/nginx\/html\/desktop\/dist\/Aura-x86_64\.AppImage;/);
   assert.match(block, /Content-Disposition 'attachment; filename="Aura@\$host\.AppImage"'/);
-  assert.equal(JSON.parse(read('desktop/package.json')).build.linux.artifactName, 'Aura-${arch}.${ext}');
+  const build = JSON.parse(read('desktop/package.json')).build;
+  assert.equal(build.linux.artifactName, 'Aura-${arch}.${ext}');
+  // Windows: the installer the builder writes, served under a name that carries the server.
+  const win = conf.slice(conf.indexOf('location = /desktop/download/Aura-Setup.exe {'));
+  assert.match(win.slice(0, win.indexOf('\n    }\n')), /alias \/usr\/share\/nginx\/html\/desktop\/dist\/Aura-Setup-x64\.exe;[\s\S]*filename="Aura@\$host\.exe"/);
+  assert.equal(build.nsis.artifactName, 'Aura-Setup-${arch}.${ext}');
+  assert.equal(build.nsis.perMachine, false);
+  // The installer writes down the name it was saved under, which is where main.js looks.
+  assert.match(read('desktop/build/installer.nsh'), /!macro customInstall[\s\S]*FileOpen \$0 "\$INSTDIR\\installed-from\.txt" w[\s\S]*FileWrite \$0 "\$EXEFILE"/);
+  assert.match(read('desktop/main.js'), /path\.join\(path\.dirname\(process\.execPath\), "installed-from\.txt"\)/);
   const skip = read('selfhost/private-app/docker-compose.yml').match(/OAUTH2_PROXY_SKIP_AUTH_ROUTES: "([^"]*)"/)[1];
   assert.doesNotMatch(skip, /desktop/);
   // Off unless the owner asks, remembered once asked, and never in the way of the server.
   const setup = read('selfhost/private-app/setup.sh');
   assert.match(setup, /AURA_DESKTOP_APP="\$\{AURA_DESKTOP_APP:-no\}"/);
   assert.match(setup, /\nAURA_DESKTOP_APP=\$AURA_DESKTOP_APP\n/);
-  assert.match(setup, /if \[ "\$AURA_DESKTOP_APP" = yes \]; then\n  sh "\$REPO_DIR\/desktop\/build\.sh" \|\| echo /);
+  // yes is Linux alone, as it was; all adds Windows, which needs the large image.
+  // Built for this server: its own address goes into the installers.
+  assert.match(setup, /\n  yes\) AURA_DESKTOP_SERVER="https:\/\/\$TS_NAME" sh "\$REPO_DIR\/desktop\/build\.sh" linux \|\| echo /);
+  assert.match(setup, /\n  all\) AURA_DESKTOP_SERVER="https:\/\/\$TS_NAME" sh "\$REPO_DIR\/desktop\/build\.sh" all \|\| echo /);
   assert.ok(setup.indexOf('desktop/build.sh') > setup.indexOf('docker compose'), 'the server comes up first');
   const deploy = read('selfhost/private-app/auto-deploy.sh');
-  assert.match(deploy, /AURA_DESKTOP_APP=[^\n]*= yes \]; then\n  timeout 20m sh "\$REPO_DIR\/desktop\/build\.sh" --if-changed \|\|/);
+  assert.match(deploy, /case "\$DESKTOP_APP" in yes\) DESKTOP_TARGETS=linux ;; all\) DESKTOP_TARGETS=all ;;/);
+  assert.match(deploy, /DESKTOP_HOST=\$\(sed -n 's\/\^PUBLIC_HOST=\/\/p'/);
+  assert.match(deploy, /AURA_DESKTOP_SERVER="\$\{DESKTOP_HOST:\+https:\/\/\$DESKTOP_HOST\}" timeout 30m sh "\$REPO_DIR\/desktop\/build\.sh" --if-changed "\$DESKTOP_TARGETS" \|\|/);
   // A failed build is not tried again every minute.
-  const build = read('desktop/build.sh');
-  assert.ok(build.indexOf('echo "$NOW" > "$STAMP"') < build.indexOf('" run --rm'), 'the attempt is recorded before it is made');
+  const script = read('desktop/build.sh');
+  assert.ok(script.indexOf('echo "$NOW" > "$STAMP"') < script.indexOf('" run --rm'), 'the attempt is recorded before it is made');
+  // Only the large image when Windows is asked for.
+  assert.ok(script.indexOf('electronuserland/builder:wine') > script.indexOf('if [ "$TARGETS" = all ]; then'));
+});
+
+// Gear Lever and AppImageLauncher move a downloaded AppImage into a folder of their own,
+// rename it and give it a menu entry. A second entry from the app would be a second Aura.
+test('an AppImage manager is left to do the installing, and the app takes back its own copy', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-managed-'));
+  const home = path.join(dir, 'home');
+  const icon = path.join(dir, 'icon.png');
+  fs.writeFileSync(icon, 'picture');
+  const at = file => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'the app'); return file; };
+  const download = at(path.join(home, 'Downloads', 'Aura@music.example.AppImage'));
+  const gear = at(path.join(home, 'AppImages', 'aura.appimage'));
+  const launcher = at(path.join(home, 'Applications', 'aura_1a2b.AppImage'));
+  const from = (appImage, env = {}) => ({ appImage, home, env, icon });
+
+  assert.equal(install.managedElsewhere(from(download)), false);
+  assert.equal(install.managedElsewhere(from(gear)), true);
+  assert.equal(install.managedElsewhere(from(launcher)), true);
+  // What the managers set when they launch what they manage, wherever it is kept.
+  assert.equal(install.managedElsewhere(from(download, { DESKTOPINTEGRATION: '1' })), true);
+
+  // The app installed itself first, then a manager took the file over: the app's entry,
+  // icon and copy go, and the manager's entry is the one Aura in the menu.
+  const own = install.install(from(download));
+  const managersEntry = at(path.join(home, '.local/share/applications/aura.desktop'));
+  assert.equal(install.uninstallOwn(from(gear, { DESKTOPINTEGRATION: '1' })), true);
+  for (const file of [own.entry, own.icon, own.target, path.dirname(own.target)]) assert.equal(fs.existsSync(file), false, file);
+  assert.equal(fs.readFileSync(managersEntry, 'utf8'), 'the app');
+  assert.equal(install.uninstallOwn(from(gear)), false);
+
+  // An entry that is not the app's own, or the copy the app is running from, is left alone.
+  fs.mkdirSync(path.dirname(own.entry), { recursive: true });
+  fs.writeFileSync(own.entry, '[Desktop Entry]\nName=Someone else\n');
+  assert.equal(install.uninstallOwn(from(gear)), false);
+  assert.equal(fs.existsSync(own.entry), true);
+  const again = install.install(from(download));
+  assert.equal(install.uninstallOwn(from(again.target)), false);
+  assert.equal(fs.existsSync(again.target), true);
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('an installer built by a server opens that server without asking', () => {
+  const main = read('desktop/main.js');
+  assert.match(main, /readFileSync\(path\.join\(__dirname, "server\.json"\), "utf8"\)\)\.server\)/);
+  assert.match(main, /if \(!settings\.server && built\) remember\(\{ server: built \}\);/);
+  // Inside the package, beside the code, and never in the repository.
+  assert.ok(JSON.parse(read('desktop/package.json')).build.files.includes('server.json'));
+  assert.match(read('.gitignore'), /\n\/desktop\/server\.json\n/);
+  const script = read('desktop/build.sh');
+  assert.match(script, /case "\$SERVER" in ""\|https:\/\/\*\) ;; \*\)/);
+  assert.match(script, /printf '\{ "server": "%s" \}\\n' "\$SERVER" > "\$DIR\/server\.json"/);
+  // A build for no server leaves none behind from an earlier one.
+  assert.match(script, /else rm -f "\$DIR\/server\.json"; fi/);
+  assert.ok(script.indexOf('"$TARGETS $SERVER"') > 0, 'a new address is a new build');
 });
 
 // The server's half of the sign-in: one page behind the login, which hands the session

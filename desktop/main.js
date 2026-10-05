@@ -22,8 +22,10 @@ if (process.env.AURA_DESKTOP_DATA) app.setPath("userData", path.resolve(process.
 // Before anything else, and before the check for a copy already running, so that a newer
 // download replaces the installed one even while that one is open.
 if (process.platform === "linux" && process.env.APPIMAGE) {
+  const from = { appImage: process.env.APPIMAGE, home: app.getPath("home"), env: process.env, icon: path.join(__dirname, "icons", "512x512.png") };
   try {
-    install.install({ appImage: process.env.APPIMAGE, home: app.getPath("home"), env: process.env, icon: path.join(__dirname, "icons", "512x512.png") });
+    if (install.managedElsewhere(from)) install.uninstallOwn(from);
+    else install.install(from);
   } catch (e) {
     console.error("could not add Aura to the applications menu:", e.message);
   }
@@ -31,8 +33,23 @@ if (process.platform === "linux" && process.env.APPIMAGE) {
 // The web app lays itself out for a computer when it sees this name (src/views/desktop.js),
 // whatever the window system says about the pointer.
 app.userAgentFallback = app.userAgentFallback + " AuraDesktop/" + app.getVersion();
-// The server the download came from, offered on the first run (install.js).
-const hinted = config.serverAddress(install.serverHint(process.env.APPIMAGE || ""));
+// The server the download came from, offered on the first run (install.js). On Windows the
+// installer writes down the name it was downloaded under (build/installer.nsh).
+function downloadedAs() {
+  if (process.env.APPIMAGE) return process.env.APPIMAGE;
+  if (process.platform !== "win32") return "";
+  try { return require("node:fs").readFileSync(path.join(path.dirname(process.execPath), "installed-from.txt"), "utf8"); } catch (e) { return ""; }
+}
+const hinted = config.serverAddress(install.serverHint(downloadedAs()));
+// An installer built by an Aura server carries that server's address (desktop/build.sh),
+// which survives the file being renamed - by a browser, or by an AppImage manager.
+function builtFor() {
+  try { return config.serverAddress(JSON.parse(require("node:fs").readFileSync(path.join(__dirname, "server.json"), "utf8")).server); } catch (e) { return ""; }
+}
+const built = builtFor();
+// Windows groups the window, the taskbar button and notifications under this name; it is
+// the one the installer gives the Start menu shortcut.
+if (process.platform === "win32") app.setAppUserModelId("app.aura.desktop");
 
 const PAGES = pathToFileURL(path.join(__dirname, "pages") + path.sep).href;
 const ICON = path.join(__dirname, "icons", "512x512.png");
@@ -190,9 +207,35 @@ function signInAgain() {
 
 // ---------------- The window ----------------
 
+// The size the app is drawn at on the screen the window is on: the listener's choice, or
+// what fits that screen (config.fitZoom).
+function zoomFor(display) {
+  if (settings.zoom) return settings.zoom;
+  const area = (display || screen.getPrimaryDisplay()).workAreaSize;
+  return config.fitZoom(area.width, area.height);
+}
+
+function applyZoom() {
+  if (!win) return;
+  const zoom = zoomFor(screen.getDisplayMatching(win.getBounds()));
+  if (Math.abs(win.webContents.getZoomFactor() - zoom) > 0.001) win.webContents.setZoomFactor(zoom);
+}
+
+/** @param {number | null} next A zoom factor, or null to go back to fitting the screen. */
+function setZoom(next) {
+  remember({ zoom: next === null ? null : config.zoomValue(Math.min(config.ZOOM_MAX, Math.max(config.ZOOM_MIN, next))) });
+  applyZoom();
+}
+const zoomStep = step => () => { if (win) setZoom(win.webContents.getZoomFactor() + step); };
+
 function savedBounds() {
   const b = settings.bounds;
-  if (!b) return { width: 1280, height: 820 };
+  // A first window as big, relative to the screen, as the app is drawn: the same room on
+  // a large monitor as on a laptop, and never more than most of the screen.
+  if (!b) {
+    const area = screen.getPrimaryDisplay().workAreaSize, zoom = zoomFor();
+    return { width: Math.round(Math.min(area.width * 0.9, 1280 * zoom)), height: Math.round(Math.min(area.height * 0.9, 820 * zoom)) };
+  }
   const placed = Number.isFinite(b.x) && Number.isFinite(b.y) && screen.getAllDisplays().some(display => {
     const area = display.workArea;
     return b.x < area.x + area.width - 80 && b.x + b.width > area.x + 80 && b.y >= area.y - 20 && b.y < area.y + area.height - 80;
@@ -216,6 +259,12 @@ function createWindow() {
   if (settings.bounds && settings.bounds.maximized) win.maximize();
 
   const contents = win.webContents;
+  // Chromium keeps a zoom per address; the app keeps one for itself and sets it on every
+  // page, its own and the server's, and again when the window moves to another screen.
+  contents.on("did-finish-load", applyZoom);
+  win.on("moved", applyZoom);
+  // Ctrl and the mouse wheel, the way a browser zooms.
+  contents.on("zoom-changed", (event, direction) => zoomStep(direction === "in" ? 0.1 : -0.1)());
   // The window shows the app's own pages and the Aura server, and nothing else. A link
   // that leads anywhere else opens in the browser; the login proxy's own redirect to
   // Google is the server saying the session is over.
@@ -290,7 +339,8 @@ function trayMenu() {
 
 function createTray() {
   try {
-    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icons", "tray.png")).resize({ width: 22, height: 22 }));
+    const size = process.platform === "win32" ? 16 : 22;
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icons", "tray.png")).resize({ width: size, height: size }));
   } catch (e) {
     // A desktop with no tray: closing the window then closes the app, as it has to.
     tray = null;
@@ -313,7 +363,11 @@ function createMenu() {
     { label: "View", submenu: [
       { role: "reload" }, { role: "forceReload" }, { role: "toggleDevTools" },
       { type: "separator" },
-      { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" },
+      // The app remembers these, and Actual Size goes back to fitting the screen.
+      { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => setZoom(null) },
+      { label: "Zoom In", accelerator: "CmdOrCtrl+Plus", click: zoomStep(0.1) },
+      { label: "Zoom In", accelerator: "CmdOrCtrl+=", visible: false, acceleratorWorksWhenHidden: true, click: zoomStep(0.1) },
+      { label: "Zoom Out", accelerator: "CmdOrCtrl+-", click: zoomStep(-0.1) },
       { type: "separator" },
       { role: "togglefullscreen" }
     ] },
@@ -329,7 +383,7 @@ function fromOwnPage(event) {
   return !!event.senderFrame && isOwnPage(event.senderFrame.url);
 }
 
-ipcMain.handle("aura:state", event => fromOwnPage(event) ? { server: settings.server, hint: hinted, status } : null);
+ipcMain.handle("aura:state", event => fromOwnPage(event) ? { server: settings.server, hint: built || hinted, status } : null);
 ipcMain.handle("aura:save-server", async (event, text) => {
   if (!fromOwnPage(event)) return { ok: false, error: "" };
   const server = config.serverAddress(text);
@@ -368,6 +422,8 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     settings = config.load(configFile());
+    // The installer came from a server: that is the server, and nothing needs asking.
+    if (!settings.server && built) remember({ server: built });
     // A server given on the command line or in the environment is for that run only.
     const given = config.serverAddress(process.env.AURA_SERVER || (process.argv.find(arg => arg.startsWith("--server=")) || "").slice(9));
     if (given) { savedServer = settings.server; settings.server = given; }

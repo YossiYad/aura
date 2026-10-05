@@ -5,6 +5,12 @@
 // itself in the user's own data folder, with an icon and an entry in the applications
 // menu that open that copy. Running a newer download replaces the copy the same way,
 // which is how the app is updated. Nothing outside the user's home is touched.
+//
+// Some systems come with a manager that does this for every AppImage (Gear Lever,
+// AppImageLauncher): it moves the file into a folder of its own, renames it and adds its
+// own menu entry. The app then leaves the installing to it - a second entry would be a
+// second Aura in the menu - and takes back a copy of its own made before the manager
+// came along.
 
 const fs = require("node:fs");
 const path = require("node:path");
@@ -17,12 +23,13 @@ function dataHome(env, home) {
 
 /**
  * The server a download came from. The server names the file it hands out after itself
- * (Aura@music.example.AppImage), so the app can offer that address on its first run
- * instead of asking for it to be typed. A browser saving a second copy adds "(1)".
+ * (Aura@music.example.AppImage, or .exe for Windows), so the app can offer that address
+ * on its first run instead of asking for it to be typed. A browser saving a second copy
+ * adds "(1)".
  * @param {string} file
  */
 function serverHint(file) {
-  const match = /(?:^|[\\/])Aura@([A-Za-z0-9.-]+?)(?:[ _]?\(\d+\))?\.AppImage$/i.exec(String(file || ""));
+  const match = /(?:^|[\\/])Aura@([A-Za-z0-9.-]+?)(?:[ _]?\(\d+\))?\.(?:AppImage|exe)$/i.exec(String(file || "").trim());
   return match ? match[1] : "";
 }
 
@@ -39,6 +46,37 @@ function desktopEntry(target) {
     "StartupWMClass=" + NAME,
     ""
   ].join("\n");
+}
+
+/**
+ * Whether an AppImage manager looks after this copy. The managers launch what they manage
+ * with DESKTOPINTEGRATION set, the convention appimaged began, and keep the files in a
+ * folder of their own: ~/AppImages for Gear Lever, ~/Applications for AppImageLauncher.
+ * @param {{ appImage: string, home: string, env: Record<string, string | undefined> }} from
+ */
+function managedElsewhere(from) {
+  if (from.env.DESKTOPINTEGRATION) return true;
+  const dir = path.dirname(path.resolve(from.appImage));
+  return dir === path.join(from.home, "AppImages") || dir === path.join(from.home, "Applications");
+}
+
+/**
+ * Takes back what install() made, when something else now installs the app. Only what is
+ * recognisably the app's own: the menu entry it wrote, and the copy that entry opens.
+ * @param {{ appImage: string, home: string, env: Record<string, string | undefined> }} from
+ * @returns {boolean} Whether anything was taken back.
+ */
+function uninstallOwn(from) {
+  const share = dataHome(from.env, from.home);
+  const target = path.join(share, NAME, "Aura.AppImage");
+  const entry = path.join(share, "applications", NAME + ".desktop");
+  let written = null;
+  try { written = fs.readFileSync(entry, "utf8"); } catch (e) {}
+  if (written !== desktopEntry(target) || path.resolve(from.appImage) === target) return false;
+  fs.rmSync(entry, { force: true });
+  fs.rmSync(path.join(share, "icons", "hicolor", "512x512", "apps", NAME + ".png"), { force: true });
+  fs.rmSync(path.dirname(target), { recursive: true, force: true });
+  return true;
 }
 
 function writeIfChanged(file, content) {
@@ -84,4 +122,4 @@ function install(from) {
   return { target, entry, icon, copied };
 }
 
-module.exports = { install, serverHint, desktopEntry };
+module.exports = { install, managedElsewhere, uninstallOwn, serverHint, desktopEntry };

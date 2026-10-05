@@ -9,8 +9,9 @@ node_modules/
 .npm/
 .cache/
 
-# The desktop app's packaged builds
+# The desktop app's packaged builds, and the server a machine builds them for
 /desktop/dist/
+/desktop/server.json
 
 # Generated test reports and coverage
 test-results/

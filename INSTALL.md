@@ -149,7 +149,7 @@ earlier run set up.
 | --- | --- |
 | Update to the latest version | `cd /opt/aura && sudo git pull --ff-only && sudo sh selfhost/private-app/setup.sh` |
 | Change who can sign in | Edit `/opt/aura/selfhost/private-app/authenticated-emails.txt`, one address per line, then `sudo sh /opt/aura/selfhost/private-app/setup.sh` |
-| Offer the [desktop app](desktop/README.md) from Settings | `cd /opt/aura && sudo AURA_DESKTOP_APP=yes sh selfhost/private-app/setup.sh` once. It builds the installer in a container, and automatic updates, if you turned them on, keep it current. |
+| Offer the [desktop app](desktop/README.md) from Settings | `cd /opt/aura && sudo AURA_DESKTOP_APP=all sh selfhost/private-app/setup.sh` once (`yes` for Linux only). It builds the installers in containers, and automatic updates, if you turned them on, keep them current. |
 | See whether everything is running | `sudo docker compose -f /opt/aura/selfhost/private-app/docker-compose.yml ps` |
 | Read the app's logs | `sudo docker compose -f /opt/aura/selfhost/private-app/docker-compose.yml logs --tail=50` |
 | Read Invidious's logs | `sudo docker compose -p invidious -f /opt/aura/.local/invidious/docker-compose.yml logs --tail=50` |

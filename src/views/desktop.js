@@ -11,7 +11,7 @@
   Object.defineProperties(V, {
     desktop: { get: () => desktop },
     desktopMode: { get: () => desktopMode },
-    desktopAppOffered: { get: () => desktopAppOffered },
+    desktopDownload: { get: () => desktopDownload },
     desktopParts: { get: () => desktopParts },
     openDesktopAppDialog: { get: () => openDesktopAppDialog },
     setDesktopMode: { get: () => setDesktopMode },
@@ -79,21 +79,39 @@
     return typeof navigator === "object" && !!navigator && /\bAuraDesktop\//.test(String(navigator.userAgent || ""));
   }
 
-  // The installer the server may hold is for a Linux computer, and a browser on one is
-  // where it is offered (Settings > About). Inside the app itself there is nothing to get.
+  // The installers a server may hold, one for each system, and which one this browser's
+  // computer takes (Settings > About). Inside the app itself there is nothing to get.
+  const DESKTOP_DOWNLOADS = {
+    linux: { file: "desktop/download/Aura.AppImage", label: "Download for Linux",
+      steps: "1. Download it, then let the file run: right-click it, Properties, Permissions, and tick Is executable.<br>" +
+        "2. Open it. It adds itself to your applications, and sends this browser to a page that signs it in - press Continue there." },
+    windows: { file: "desktop/download/Aura-Setup.exe", label: "Download for Windows",
+      steps: "1. Download it and open it. Windows may say it protected your PC: choose More info, then Run anyway.<br>" +
+        "2. It installs and opens, and sends this browser to a page that signs it in - press Continue there." }
+  };
+
+  /** @returns {"linux" | "windows" | ""} */
   function desktopAppOffered() {
     const ua = typeof navigator === "object" && navigator ? String(navigator.userAgent || "") : "";
-    return /Linux/.test(ua) && !handheld() && !desktopApp();
+    if (handheld() || desktopApp()) return "";
+    if (/Windows NT/.test(ua)) return "windows";
+    if (/Linux/.test(ua)) return "linux";
+    return "";
+  }
+
+  function desktopDownload() {
+    return DESKTOP_DOWNLOADS[desktopAppOffered()] || null;
   }
 
   function openDesktopAppDialog() {
+    const download = desktopDownload();
+    if (!download) return;
     V.openModal(
       '<div class="modal"><h3>Aura for this computer</h3>' +
       '<p class="import-hint">Aura in a window of its own, with a tray icon that keeps the music playing.</p>' +
-      '<p class="import-hint">1. Download it, then let the file run: right-click it, Properties, Permissions, and allow it to be executed.<br>' +
-      '2. Open it. It adds itself to your applications, and sends this browser to a page that signs it in - press Continue there.</p>' +
+      '<p class="import-hint">' + download.steps + '</p>' +
       '<div class="modal-actions"><button class="btn ghost" id="modal-cancel">Close</button>' +
-      '<a class="btn primary" href="desktop/download/Aura.AppImage" download>Download for Linux</a></div></div>'
+      '<a class="btn primary" href="' + download.file + '" download>' + download.label + '</a></div></div>'
     );
     document.getElementById("modal-cancel").onclick = () => V.dismissViaHistory(() => { V.closeModal(); V.scrimEl.hidden = true; });
   }
@@ -257,53 +275,12 @@
     });
   }
 
-  // A menu opens where it was asked for, the way a desktop's menus do: at the pointer,
-  // pulled back inside the window where it would run off it. One opened from the
-  // keyboard has no such place and opens in the middle. The position is kept on the app
-  // frame, so the copy a closing sheet leaves behind (core-sheets.js) fades where it was.
-  let point = { x: 0, y: 0, at: 0 };
-  /** @type {{ x: number, y: number } | null} */
-  let anchor = null;
-  let sheetOpen = false;
-  let sheetTimer = 0;
-  function placeSheet(app) {
-    const open = !V.sheetEl.hidden;
-    if (!desktop || !open) {
-      sheetOpen = false;
-      clearTimeout(sheetTimer);
-      sheetTimer = window.setTimeout(() => {
-        for (const name of ["--dk-sheet-x", "--dk-sheet-y", "--dk-sheet-shift", "--dk-sheet-w", "--dk-scrim"]) app.style.removeProperty(name);
-      }, desktop ? 260 : 0);
-      return;
-    }
-    clearTimeout(sheetTimer);
-    if (!sheetOpen) anchor = Date.now() - point.at < 800 ? { x: point.x, y: point.y } : null;
-    sheetOpen = true;
-    if (!anchor) return;
-    app.style.setProperty("--dk-sheet-shift", "0 0");
-    app.style.setProperty("--dk-sheet-w", "340px");
-    app.style.setProperty("--dk-scrim", "transparent");
-    const box = app.getBoundingClientRect();
-    const fit = (at, size, room) => Math.max(8, Math.min(at, room - size - 8));
-    app.style.setProperty("--dk-sheet-x", Math.round(fit(anchor.x - box.left, V.sheetEl.offsetWidth, box.width)) + "px");
-    app.style.setProperty("--dk-sheet-y", Math.round(fit(anchor.y - box.top, V.sheetEl.offsetHeight, box.height)) + "px");
-  }
-  function watchSheet(app) {
-    const note = e => { point = { x: e.clientX, y: e.clientY, at: Date.now() }; };
-    document.addEventListener("pointerdown", note, true);
-    document.addEventListener("contextmenu", note, true);
-    if (window.MutationObserver) {
-      new MutationObserver(() => placeSheet(app)).observe(V.sheetEl, { attributes: true, attributeFilter: ["hidden"], childList: true });
-    }
-  }
-
   function mount() {
     if (mounted) return;
     mounted = true;
     const app = /** @type {HTMLElement} */ (document.querySelector(".app"));
     buildTop(app);
     watchRails();
-    watchSheet(app);
     desktopParts.forEach(part => part.mount(app));
   }
 
