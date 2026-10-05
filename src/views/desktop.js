@@ -14,7 +14,10 @@
     syncDesktop: { get: () => syncDesktop }
   });
 
-  const QUERY = "(min-width: 1024px) and (hover: hover) and (pointer: fine)";
+  // Wide enough for the three columns in their narrowest form (src/desktop.css). A browser
+  // zoomed in counts as the narrower window it then is: 1920 screen pixels at 140% on a
+  // scaled display is about 1000 here, which is why this is not set at a round 1024.
+  const QUERY = "(min-width: 800px) and (hover: hover) and (pointer: fine)";
   const wide = typeof matchMedia === "function" ? matchMedia(QUERY) : null;
   let desktop = false;
   let mounted = false;

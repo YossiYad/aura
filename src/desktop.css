@@ -20,12 +20,6 @@ html.desktop {
   --dk-pad: 40px;
   --sc-recently-played-cover: 56px;
 }
-@media (max-width: 1279px) {
-  html.desktop { --dk-pad: 24px; --dk-lib-w: 264px; --dk-now-w: 288px; }
-  /* A narrow library column keeps its title whole and the Create button as its plus. */
-  html.desktop .dk-lib-create { width: 32px; padding: 0; justify-content: center; }
-  html.desktop .dk-lib-create span { display: none; }
-}
 html.desktop, html.desktop body { background: #000; }
 
 /* ----- Frame ----- */
@@ -541,3 +535,27 @@ html.desktop .album-artist-row, html.desktop .album-info-footer { padding-left: 
 html.desktop .category-rail { gap: 24px; padding: 0 var(--dk-pad) 4px; }
 html.desktop .sheet:has(.queue-list) { width: min(420px, calc(100% - 16px)); }
 html.desktop #lib-hits { padding-top: 8px; }
+html.desktop .home-discovery-rail { gap: 24px; padding: 0 var(--dk-pad) 8px; }
+
+/* ----- Narrower windows. Last in the file, so these are the rules that hold. ----- */
+@media (max-width: 1279px) {
+  html.desktop { --dk-pad: 24px; --dk-lib-w: 264px; --dk-now-w: 288px; }
+  /* A narrow library column keeps its title whole and the Create button as its plus. */
+  html.desktop .dk-lib-create { width: 32px; padding: 0; justify-content: center; }
+  html.desktop .dk-lib-create span { display: none; }
+}
+/* Narrower still - a small window, or a browser zoomed in - the library folds down to
+   its covers, the way a desktop player's does, and the page keeps the room. */
+@media (max-width: 1099px) {
+  html.desktop { --dk-pad: 16px; --dk-lib-w: 72px; --dk-now-w: 272px; }
+  html.desktop .dk-lib-head { flex-direction: column; gap: 8px; padding: 12px 0 8px; }
+  html.desktop .dk-lib-title span, html.desktop .dk-lib-chips, html.desktop .dk-lib-search,
+  html.desktop .dk-lib-meta { display: none; }
+  html.desktop .dk-lib-title { padding: 4px; }
+  html.desktop .dk-lib-list { padding: 0 4px 8px; scrollbar-width: none; }
+  html.desktop .dk-lib-list::-webkit-scrollbar { display: none; }
+  html.desktop .dk-lib-row { justify-content: center; padding: 8px 0; }
+  html.desktop .dk-pill span { display: none; }
+  html.desktop .dk-pill { flex: 0 0 32px; width: 32px; padding: 0; justify-content: center; }
+  html.desktop .dk-brand { margin-inline-start: 12px; }
+}

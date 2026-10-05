@@ -16,7 +16,7 @@
   }
 
   function row(data, art, name, sub, round, on) {
-    return '<li><button class="dk-lib-row' + (on ? " on" : "") + '" ' + data + '>' +
+    return '<li><button class="dk-lib-row' + (on ? " on" : "") + '" ' + data + ' title="' + V.esc(name) + '">' +
       '<span class="dk-lib-art' + (round ? " round" : "") + '">' + art + '</span>' +
       '<span class="dk-lib-meta"><span class="dk-lib-name" dir="auto">' + V.esc(name) + '</span>' +
       '<span class="dk-lib-sub" dir="auto">' + V.esc(sub) + '</span></span></button></li>';

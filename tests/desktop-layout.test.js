@@ -75,7 +75,7 @@ test('a phone builds nothing of the desktop layout and is never marked as one', 
   const phone = load(query => { asked.push(query); return { matches: false, addEventListener() {} }; });
   // Width and pointer together: a phone turned sideways is wide enough for neither.
   assert.equal(asked.length, 1);
-  assert.match(asked[0], /min-width: 1024px/);
+  assert.match(asked[0], /min-width: 800px/);
   assert.match(asked[0], /hover: hover/);
   assert.match(asked[0], /pointer: fine/);
   // The switch is thrown once the document is ready; on a phone it finds nothing to do.

@@ -147,7 +147,7 @@ Service workers and offline caching require HTTPS or localhost.
 
 On a computer the same app lays itself out for a wide window: the library in a column on
 the left, Home and the search field in a top bar, the "now playing" panel on the right and
-the player bar along the bottom. It switches by itself, for a window at least 1024 pixels
+the player bar along the bottom. It switches by itself, for a window at least 800 pixels
 wide that is driven by a mouse or a trackpad, and back again when the window is made
 narrow; a phone is never given it.
 
