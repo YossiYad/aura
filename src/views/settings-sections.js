@@ -191,6 +191,7 @@
   function aboutSettingsHtml() {
     return V.setSection("about", "About Aura",
       '<div class="set-note">Open source under AGPL-3.0-only. <a href="https://github.com/YossiYad/aura" target="_blank" rel="noopener noreferrer">Source code</a> · <a href="https://github.com/YossiYad/aura/blob/main/THIRD-PARTY-NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a></div>' +
+      '<div id="set-desktop-app-row" hidden>' + V.settingsLink("set-desktop-app", "Get the desktop app", "Aura in a window of its own on this computer, signed in through this browser", "backup") + '</div>' +
       V.settingsLink("set-refresh", "Refresh app version", "Check for and load the latest available build", "backup") +
       V.settingsLink("set-logs", "Diagnostics", "View technical logs for troubleshooting", "about") +
       '<div class="set-version" id="set-version">Aura ' + V.APP_VERSION + '</div>');

@@ -86,3 +86,9 @@ fi
 if [ -f "$SETUP_PENDING" ]; then
   run_setup
 fi
+# The desktop app's installer follows the app's own files (desktop/), on a server that
+# was asked to build it. A poll that finds them unchanged costs one checksum.
+if [ "$(sed -n 's/^AURA_DESKTOP_APP=//p' "$SCRIPT_DIR/.env" 2>/dev/null | tail -n 1)" = yes ]; then
+  timeout 20m sh "$REPO_DIR/desktop/build.sh" --if-changed ||
+    echo "$(date -Iseconds) the desktop app was not built; it is tried again when desktop/ changes"
+fi

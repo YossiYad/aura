@@ -153,6 +153,9 @@ window is made narrow. A phone or a tablet keeps the phone layout whatever its s
 **Settings > Appearance > Layout** gives a tablet the computer layout, or a computer the
 phone's, and the choice stays on that device.
 
+There is also a desktop app for Linux, with a window, a menu entry and a tray icon of its
+own: see [`desktop/`](desktop/README.md).
+
 ### Configure your instances
 
 Without `config.json`, Aura tries its built-in public instances. Their availability
@@ -428,6 +431,7 @@ folder beside its first file, such as `src/views.js` and `src/views/`; its files
 | `src/main.js`, `src/main/` | Wiring it together |
 | `guest/` | The AuraShare page guests open from the QR code |
 | `guest/i18n.js` | The interface language and its English translations, used by the app and the guest page |
+| `desktop/` | The desktop app: an Electron window around the web app, signed in through the browser |
 | `tv/` | The custom Google Cast receiver |
 | `sw.js` | Service worker: cache-first shell, offline, background wake-ups |
 

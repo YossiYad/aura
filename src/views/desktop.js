@@ -11,7 +11,9 @@
   Object.defineProperties(V, {
     desktop: { get: () => desktop },
     desktopMode: { get: () => desktopMode },
+    desktopAppOffered: { get: () => desktopAppOffered },
     desktopParts: { get: () => desktopParts },
+    openDesktopAppDialog: { get: () => openDesktopAppDialog },
     setDesktopMode: { get: () => setDesktopMode },
     syncDesktop: { get: () => syncDesktop }
   });
@@ -71,12 +73,37 @@
       (/Macintosh/.test(ua) && nav.maxTouchPoints > 1);
   }
 
+  // The desktop app (desktop/ in the repository) is a computer by definition, whatever
+  // its window system reports about the pointer. It names itself in its user agent.
+  function desktopApp() {
+    return typeof navigator === "object" && !!navigator && /\bAuraDesktop\//.test(String(navigator.userAgent || ""));
+  }
+
+  // The installer the server may hold is for a Linux computer, and a browser on one is
+  // where it is offered (Settings > About). Inside the app itself there is nothing to get.
+  function desktopAppOffered() {
+    const ua = typeof navigator === "object" && navigator ? String(navigator.userAgent || "") : "";
+    return /Linux/.test(ua) && !handheld() && !desktopApp();
+  }
+
+  function openDesktopAppDialog() {
+    V.openModal(
+      '<div class="modal"><h3>Aura for this computer</h3>' +
+      '<p class="import-hint">Aura in a window of its own, with a tray icon that keeps the music playing.</p>' +
+      '<p class="import-hint">1. Download it, then let the file run: right-click it, Properties, Permissions, and allow it to be executed.<br>' +
+      '2. Open it. It adds itself to your applications, and sends this browser to a page that signs it in - press Continue there.</p>' +
+      '<div class="modal-actions"><button class="btn ghost" id="modal-cancel">Close</button>' +
+      '<a class="btn primary" href="desktop/download/Aura.AppImage" download>Download for Linux</a></div></div>'
+    );
+    document.getElementById("modal-cancel").onclick = () => V.dismissViaHistory(() => { V.closeModal(); V.scrimEl.hidden = true; });
+  }
+
   // A computer gets the layout by itself: not a handheld system, a mouse or a trackpad
   // for a pointer, and a window wide enough. Any device gets it when its owner chose
   // "Computer" in Settings and there is room, and none does when they chose "Phone".
   function wanted() {
     if (desktopMode === "phone") return false;
-    if (desktopMode === "desktop") return !!(room && room.matches);
+    if (desktopMode === "desktop" || desktopApp()) return !!(room && room.matches);
     return !!(wide && wide.matches) && !handheld();
   }
 

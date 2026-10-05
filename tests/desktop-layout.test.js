@@ -125,6 +125,30 @@ test('a tablet or a phone is not taken for a computer, however wide and whatever
   }
 });
 
+// The desktop app's window can report no mouse at all (a remote session, some Wayland
+// setups), and it is a computer all the same.
+test('the desktop app gets the computer layout wherever its window has room for it', () => {
+  const APP = { userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Aura/0.1.0 Chrome/152.0.0.0 Electron/44.5.1 Safari/537.36 AuraDesktop/0.1.0', maxTouchPoints: 0 };
+  const roomOnly = query => ({ matches: /^\(min-width: 700px\)$/.test(query), addEventListener() {} });
+  assert.deepEqual([...load(roomOnly, { navigator: APP }).classes], ['desktop']);
+  assert.deepEqual([...load(all(false), { navigator: APP }).classes], []);
+  assert.deepEqual([...load(roomOnly, { navigator: APP, layout: 'phone' }).classes], []);
+  // A browser with the same answers and no such name stays as it was, and so does some
+  // other program built the same way.
+  assert.deepEqual([...load(roomOnly, { navigator: LINUX }).classes], []);
+  assert.deepEqual([...load(roomOnly, { navigator: { userAgent: APP.userAgent.replace(' AuraDesktop/0.1.0', ''), maxTouchPoints: 0 } }).classes], []);
+  // The app's own main process is what gives it the name.
+  assert.match(read('desktop/main.js'), /app\.userAgentFallback = app\.userAgentFallback \+ " AuraDesktop\/"/);
+});
+
+test('the desktop app is offered to a browser on a Linux computer and to nothing else', () => {
+  const APP = { userAgent: LINUX.userAgent + ' Electron/44.5.1 AuraDesktop/0.1.0', maxTouchPoints: 0 };
+  const WINDOWS = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0', maxTouchPoints: 0 };
+  const offered = navigator => load(all(true), { navigator }).views.desktopAppOffered();
+  assert.equal(offered(LINUX), true);
+  for (const navigator of [APP, GALAXY_TAB, IPHONE, IPAD, MAC, WINDOWS, undefined]) assert.equal(offered(navigator), false);
+});
+
 test('the layout chosen in Settings is kept for the device and decides over the detection', () => {
   // A tablet whose owner asked for the computer layout gets it wherever there is room.
   const tablet = load(query => ({ matches: /^\(min-width: 700px\)$/.test(query), addEventListener() {} }), { navigator: IPAD, layout: 'desktop' });
