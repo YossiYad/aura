@@ -50,7 +50,7 @@
   });
 
   // The same number as CACHE in sw.js; a test holds the two together.
-  const APP_VERSION = "v247";
+  const APP_VERSION = "v248";
   const view = /** @type {PaintedElement} */ (document.getElementById("view"));
   const sheetEl = document.getElementById("sheet");
   const scrimEl = document.getElementById("scrim");
@@ -146,7 +146,8 @@
     const btn = document.getElementById("btn-private");
     if (!btn) return;
     const on = Store.privateSession();
-    btn.hidden = Store.settings().privateSession === false || currentTab !== "home" || !!subView;
+    // A desktop's top bar is the same on every screen, so the glyph is too.
+    btn.hidden = Store.settings().privateSession === false || (!V.desktop && (currentTab !== "home" || !!subView));
     btn.classList.toggle("on", on);
     btn.setAttribute("aria-pressed", on ? "true" : "false");
     btn.setAttribute("aria-label", on ? "Private session on - tap to stop" : "Start a private session");

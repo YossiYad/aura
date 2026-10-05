@@ -145,6 +145,12 @@ To install Aura on your phone, serve it over **HTTPS**, open it in Safari or Chr
 choose **Add to Home Screen**. On supported desktop browsers, use the install option.
 Service workers and offline caching require HTTPS or localhost.
 
+On a computer the same app lays itself out for a wide window: the library in a column on
+the left, Home and the search field in a top bar, the "now playing" panel on the right and
+the player bar along the bottom. It switches by itself, for a window at least 1024 pixels
+wide that is driven by a mouse or a trackpad, and back again when the window is made
+narrow; a phone is never given it.
+
 ### Configure your instances
 
 Without `config.json`, Aura tries its built-in public instances. Their availability
@@ -408,6 +414,7 @@ folder beside its first file, such as `src/views.js` and `src/views/`; its files
 | `src/voice.js`, `src/voice/` | Continuous dictation and playback request resolution |
 | `src/thinking-orbs/` | The AI's thinking orb: the `<thinking-orb>` element in `orbs.js`, around the thinking-orbs engine in `vendor/` |
 | `src/views.js`, `src/views/` | Every screen |
+| `src/views/desktop*.js`, `src/desktop.css` | The desktop layout: its switch, top bar, library column and player bar |
 | `src/ai.js` | Gemini and Groq, key handling, prompts, voice transcription |
 | `src/sync.js`, `src/sync/` | Talking to a self-hosted `aura-sync` |
 | `src/shared-queue.js` | AuraShare on the host's side: the session, guest approvals and QR invitations |

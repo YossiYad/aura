@@ -25,6 +25,7 @@
     // scroll used to bring it back, so it vanished from a list that was already scrolled.
     V.queueHeroStickyBar();
     V.syncChrome(V.subView ? (V.subView.kind === "settings" ? "Settings" : "") : V.currentTab === "library" ? "Your Library" : V.currentTab === "search" ? "Search" : V.currentTab === "ai" ? "Ask AI" : "Good " + (new Date().getHours() < 12 ? "morning" : new Date().getHours() < 18 ? "afternoon" : "evening"));
+    V.syncDesktop();
     if (V.subView) {
       if (V.subView.kind === "settings") return V.renderSettingsPage();
       if (V.subView.kind === "stats") return V.renderStatsPage();
