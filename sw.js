@@ -1,4 +1,4 @@
-const CACHE = "aura-v248";
+const CACHE = "aura-v249";
 const SHELL = [
   "./",
   "./index.html",
@@ -294,7 +294,10 @@ self.addEventListener("fetch", e => {
   // The login proxy's own pages (sign-in, start, callback) are navigations too; answering
   // them with the cached shell would swallow the sign-in redirect, and a lapsed session
   // could never be re-established while the worker is installed.
+  // The desktop app's pages are the same: the installer download and the page that signs
+  // the app in are both navigations, and both came back as the app's own page instead.
   if (/\/tv(?:\/|$)/.test(url.pathname) ||
+      url.pathname.startsWith("/desktop/") ||
       url.pathname.endsWith("/audio-check.html") ||
       (url.pathname.startsWith("/guest/") && !url.pathname.endsWith("/guest/i18n.js")) ||
       url.pathname.startsWith("/oauth2/") ||
