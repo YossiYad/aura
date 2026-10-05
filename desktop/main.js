@@ -22,8 +22,10 @@ if (process.env.AURA_DESKTOP_DATA) app.setPath("userData", path.resolve(process.
 // Before anything else, and before the check for a copy already running, so that a newer
 // download replaces the installed one even while that one is open.
 if (process.platform === "linux" && process.env.APPIMAGE) {
+  const from = { appImage: process.env.APPIMAGE, home: app.getPath("home"), env: process.env, icon: path.join(__dirname, "icons", "512x512.png") };
   try {
-    install.install({ appImage: process.env.APPIMAGE, home: app.getPath("home"), env: process.env, icon: path.join(__dirname, "icons", "512x512.png") });
+    if (install.managedElsewhere(from)) install.uninstallOwn(from);
+    else install.install(from);
   } catch (e) {
     console.error("could not add Aura to the applications menu:", e.message);
   }
@@ -39,6 +41,12 @@ function downloadedAs() {
   try { return require("node:fs").readFileSync(path.join(path.dirname(process.execPath), "installed-from.txt"), "utf8"); } catch (e) { return ""; }
 }
 const hinted = config.serverAddress(install.serverHint(downloadedAs()));
+// An installer built by an Aura server carries that server's address (desktop/build.sh),
+// which survives the file being renamed - by a browser, or by an AppImage manager.
+function builtFor() {
+  try { return config.serverAddress(JSON.parse(require("node:fs").readFileSync(path.join(__dirname, "server.json"), "utf8")).server); } catch (e) { return ""; }
+}
+const built = builtFor();
 // Windows groups the window, the taskbar button and notifications under this name; it is
 // the one the installer gives the Start menu shortcut.
 if (process.platform === "win32") app.setAppUserModelId("app.aura.desktop");
@@ -339,7 +347,7 @@ function fromOwnPage(event) {
   return !!event.senderFrame && isOwnPage(event.senderFrame.url);
 }
 
-ipcMain.handle("aura:state", event => fromOwnPage(event) ? { server: settings.server, hint: hinted, status } : null);
+ipcMain.handle("aura:state", event => fromOwnPage(event) ? { server: settings.server, hint: built || hinted, status } : null);
 ipcMain.handle("aura:save-server", async (event, text) => {
   if (!fromOwnPage(event)) return { ok: false, error: "" };
   const server = config.serverAddress(text);
@@ -378,6 +386,8 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(() => {
     settings = config.load(configFile());
+    // The installer came from a server: that is the server, and nothing needs asking.
+    if (!settings.server && built) remember({ server: built });
     // A server given on the command line or in the environment is for that run only.
     const given = config.serverAddress(process.env.AURA_SERVER || (process.argv.find(arg => arg.startsWith("--server=")) || "").slice(9));
     if (given) { savedServer = settings.server; settings.server = given; }

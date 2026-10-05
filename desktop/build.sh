@@ -8,6 +8,9 @@
 # nginx.conf, /desktop/download/). With --if-changed it does nothing unless the app's own
 # files have changed since the last attempt, which is how auto-deploy.sh calls it.
 #   sh desktop/build.sh [--if-changed] [linux|all]
+# AURA_DESKTOP_SERVER, when set, is the address of the server the installers are for. It
+# is built into them, so the app opens that server without asking, however the file is
+# renamed on the way. setup.sh and auto-deploy.sh set it to the server's own address.
 set -eu
 
 DIR=$(cd "$(dirname "$0")" && pwd)
@@ -18,7 +21,10 @@ if [ "${1:-}" = "--if-changed" ]; then IF_CHANGED=yes; shift; fi
 TARGETS="${1:-linux}"
 case "$TARGETS" in linux|all) ;; *) echo "desktop/build.sh: build linux or all, not \"$TARGETS\""; exit 1 ;; esac
 
-NOW=$( (cd "$DIR" && cat package.json package-lock.json ./*.js pages/* icons/* build/*; echo "$TARGETS") | sha256sum | cut -d' ' -f1)
+SERVER="${AURA_DESKTOP_SERVER:-}"
+case "$SERVER" in ""|https://*) ;; *) echo "desktop/build.sh: AURA_DESKTOP_SERVER is an https:// address"; exit 1 ;; esac
+
+NOW=$( (cd "$DIR" && cat package.json package-lock.json ./*.js pages/* icons/* build/*; echo "$TARGETS $SERVER") | sha256sum | cut -d' ' -f1)
 if [ "$IF_CHANGED" = yes ] && [ "$(cat "$STAMP" 2>/dev/null || true)" = "$NOW" ]; then exit 0; fi
 
 if command -v docker >/dev/null 2>&1; then RUN=docker
@@ -32,6 +38,10 @@ if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce 2>/dev/null)" = Enfo
 # files change or when this is run by hand, not once a minute for ever.
 mkdir -p "$DIR/dist"
 echo "$NOW" > "$STAMP"
+
+# Git-ignored: it says which server this machine builds for.
+if [ -n "$SERVER" ]; then printf '{ "server": "%s" }\n' "$SERVER" > "$DIR/server.json"
+else rm -f "$DIR/server.json"; fi
 
 echo "Building the Aura desktop app for Linux (downloads Electron the first time, a few minutes)..."
 "$RUN" run --rm -v "$MOUNT" -w /w docker.io/library/node:22-bookworm-slim \

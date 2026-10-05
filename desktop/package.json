@@ -24,6 +24,7 @@
       "config.js",
       "install.js",
       "preload.js",
+      "server.json",
       "pages/**",
       "icons/**"
     ],

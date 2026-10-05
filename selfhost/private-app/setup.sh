@@ -93,8 +93,8 @@ docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d --build --force-recreat
 
 # Last, and never in the way: the server is up whether or not this succeeds.
 case "$AURA_DESKTOP_APP" in
-  yes) sh "$REPO_DIR/desktop/build.sh" linux || echo "The desktop app was not built (see above). Everything else is up." ;;
-  all) sh "$REPO_DIR/desktop/build.sh" all || echo "The desktop app was not built (see above). Everything else is up." ;;
+  yes) AURA_DESKTOP_SERVER="https://$TS_NAME" sh "$REPO_DIR/desktop/build.sh" linux || echo "The desktop app was not built (see above). Everything else is up." ;;
+  all) AURA_DESKTOP_SERVER="https://$TS_NAME" sh "$REPO_DIR/desktop/build.sh" all || echo "The desktop app was not built (see above). Everything else is up." ;;
 esac
 
 echo

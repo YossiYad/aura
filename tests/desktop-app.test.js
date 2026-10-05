@@ -180,17 +180,73 @@ test('a server offers the installer only when asked to build it, and only behind
   assert.match(setup, /AURA_DESKTOP_APP="\$\{AURA_DESKTOP_APP:-no\}"/);
   assert.match(setup, /\nAURA_DESKTOP_APP=\$AURA_DESKTOP_APP\n/);
   // yes is Linux alone, as it was; all adds Windows, which needs the large image.
-  assert.match(setup, /\n  yes\) sh "\$REPO_DIR\/desktop\/build\.sh" linux \|\| echo /);
-  assert.match(setup, /\n  all\) sh "\$REPO_DIR\/desktop\/build\.sh" all \|\| echo /);
+  // Built for this server: its own address goes into the installers.
+  assert.match(setup, /\n  yes\) AURA_DESKTOP_SERVER="https:\/\/\$TS_NAME" sh "\$REPO_DIR\/desktop\/build\.sh" linux \|\| echo /);
+  assert.match(setup, /\n  all\) AURA_DESKTOP_SERVER="https:\/\/\$TS_NAME" sh "\$REPO_DIR\/desktop\/build\.sh" all \|\| echo /);
   assert.ok(setup.indexOf('desktop/build.sh') > setup.indexOf('docker compose'), 'the server comes up first');
   const deploy = read('selfhost/private-app/auto-deploy.sh');
   assert.match(deploy, /case "\$DESKTOP_APP" in yes\) DESKTOP_TARGETS=linux ;; all\) DESKTOP_TARGETS=all ;;/);
-  assert.match(deploy, /timeout 30m sh "\$REPO_DIR\/desktop\/build\.sh" --if-changed "\$DESKTOP_TARGETS" \|\|/);
+  assert.match(deploy, /DESKTOP_HOST=\$\(sed -n 's\/\^PUBLIC_HOST=\/\/p'/);
+  assert.match(deploy, /AURA_DESKTOP_SERVER="\$\{DESKTOP_HOST:\+https:\/\/\$DESKTOP_HOST\}" timeout 30m sh "\$REPO_DIR\/desktop\/build\.sh" --if-changed "\$DESKTOP_TARGETS" \|\|/);
   // A failed build is not tried again every minute.
   const script = read('desktop/build.sh');
   assert.ok(script.indexOf('echo "$NOW" > "$STAMP"') < script.indexOf('" run --rm'), 'the attempt is recorded before it is made');
   // Only the large image when Windows is asked for.
   assert.ok(script.indexOf('electronuserland/builder:wine') > script.indexOf('if [ "$TARGETS" = all ]; then'));
+});
+
+// Gear Lever and AppImageLauncher move a downloaded AppImage into a folder of their own,
+// rename it and give it a menu entry. A second entry from the app would be a second Aura.
+test('an AppImage manager is left to do the installing, and the app takes back its own copy', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-managed-'));
+  const home = path.join(dir, 'home');
+  const icon = path.join(dir, 'icon.png');
+  fs.writeFileSync(icon, 'picture');
+  const at = file => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, 'the app'); return file; };
+  const download = at(path.join(home, 'Downloads', 'Aura@music.example.AppImage'));
+  const gear = at(path.join(home, 'AppImages', 'aura.appimage'));
+  const launcher = at(path.join(home, 'Applications', 'aura_1a2b.AppImage'));
+  const from = (appImage, env = {}) => ({ appImage, home, env, icon });
+
+  assert.equal(install.managedElsewhere(from(download)), false);
+  assert.equal(install.managedElsewhere(from(gear)), true);
+  assert.equal(install.managedElsewhere(from(launcher)), true);
+  // What the managers set when they launch what they manage, wherever it is kept.
+  assert.equal(install.managedElsewhere(from(download, { DESKTOPINTEGRATION: '1' })), true);
+
+  // The app installed itself first, then a manager took the file over: the app's entry,
+  // icon and copy go, and the manager's entry is the one Aura in the menu.
+  const own = install.install(from(download));
+  const managersEntry = at(path.join(home, '.local/share/applications/aura.desktop'));
+  assert.equal(install.uninstallOwn(from(gear, { DESKTOPINTEGRATION: '1' })), true);
+  for (const file of [own.entry, own.icon, own.target, path.dirname(own.target)]) assert.equal(fs.existsSync(file), false, file);
+  assert.equal(fs.readFileSync(managersEntry, 'utf8'), 'the app');
+  assert.equal(install.uninstallOwn(from(gear)), false);
+
+  // An entry that is not the app's own, or the copy the app is running from, is left alone.
+  fs.mkdirSync(path.dirname(own.entry), { recursive: true });
+  fs.writeFileSync(own.entry, '[Desktop Entry]\nName=Someone else\n');
+  assert.equal(install.uninstallOwn(from(gear)), false);
+  assert.equal(fs.existsSync(own.entry), true);
+  const again = install.install(from(download));
+  assert.equal(install.uninstallOwn(from(again.target)), false);
+  assert.equal(fs.existsSync(again.target), true);
+  fs.rmSync(dir, { recursive: true });
+});
+
+test('an installer built by a server opens that server without asking', () => {
+  const main = read('desktop/main.js');
+  assert.match(main, /readFileSync\(path\.join\(__dirname, "server\.json"\), "utf8"\)\)\.server\)/);
+  assert.match(main, /if \(!settings\.server && built\) remember\(\{ server: built \}\);/);
+  // Inside the package, beside the code, and never in the repository.
+  assert.ok(JSON.parse(read('desktop/package.json')).build.files.includes('server.json'));
+  assert.match(read('.gitignore'), /\n\/desktop\/server\.json\n/);
+  const script = read('desktop/build.sh');
+  assert.match(script, /case "\$SERVER" in ""\|https:\/\/\*\) ;; \*\)/);
+  assert.match(script, /printf '\{ "server": "%s" \}\\n' "\$SERVER" > "\$DIR\/server\.json"/);
+  // A build for no server leaves none behind from an earlier one.
+  assert.match(script, /else rm -f "\$DIR\/server\.json"; fi/);
+  assert.ok(script.indexOf('"$TARGETS $SERVER"') > 0, 'a new address is a new build');
 });
 
 // The server's half of the sign-in: one page behind the login, which hands the session

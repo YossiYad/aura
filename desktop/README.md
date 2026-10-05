@@ -38,7 +38,9 @@ so Windows may say it protected your PC: choose **More info**, then **Run anyway
 installs for your user only, adds Aura to the Start menu and the desktop, and opens it.
 Uninstall it from Settings > Apps like any other app.
 
-**On Linux,** a downloaded file is never allowed to run until you say so, and opening it
+**On Linux,** if your system has an AppImage manager such as Gear Lever or
+AppImageLauncher, let it open the file: it adds Aura to your applications itself, and the
+app leaves that to it. Without one, a downloaded file is never allowed to run until you say so, and opening it
 before that offers to write it to a disk instead. So first: right-click it, **Properties**,
 **Permissions**, and tick **Is executable** (on GNOME, **Allow executing file as
 program**). Then double-click it. Or, in a terminal in the folder it was saved to:
@@ -58,8 +60,10 @@ and nothing else.
    (`~/.local/share/applications/aura-desktop.desktop`) and an icon. The downloaded file
    can be deleted. Opening a newer download replaces the copy, which is how the app is
    updated. On Windows the installer does this, and a newer installer updates it.
-2. **It asks where your Aura is,** once. A file downloaded from your server is named after
-   it (`Aura@your-server.AppImage` or `.exe`), so the address is already filled in.
+2. **It knows where your Aura is.** An installer your server built carries the server's
+   address, so the app opens it without asking. Otherwise it asks once, with the address
+   already filled in when the file is still named after the server it came from
+   (`Aura@your-server.AppImage` or `.exe`).
 3. **It signs in through your browser.** Google does not let its sign-in run inside an
    app's own window, and an app should not be where a Google password is typed. So the app
    opens your browser on a page of your server, where you are signed in already or sign in
