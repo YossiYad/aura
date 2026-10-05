@@ -86,12 +86,32 @@ test('only an https address, or this computer, is taken for a server', () => {
   }
 });
 
+// The layout is made for about 1600 by 1000 points. A bigger screen with no scaling of its
+// own - a large monitor at 100% - would show it small; one that scales is left alone.
+test('the app is drawn larger on a large screen, and as it is on any other', () => {
+  for (const [w, h] of [[1280, 760], [1366, 728], [1440, 860], [1920, 1040], [1536, 824]]) assert.equal(config.fitZoom(w, h), 1, w + 'x' + h);
+  assert.equal(config.fitZoom(2560, 1400), 1.4);
+  // An ultrawide is as tall as a 1440p screen, and that is what limits it.
+  assert.equal(config.fitZoom(3440, 1400), 1.4);
+  assert.equal(config.fitZoom(3840, 2120), 2.1);
+  assert.equal(config.fitZoom(7680, 4280), config.ZOOM_MAX);
+  const main = read('desktop/main.js');
+  // Set on every page and again on another screen; Ctrl and the wheel change it, and it is kept.
+  assert.match(main, /contents\.on\("did-finish-load", applyZoom\);/);
+  assert.match(main, /win\.on\("moved", applyZoom\);/);
+  assert.match(main, /contents\.on\("zoom-changed"/);
+  assert.match(main, /accelerator: "CmdOrCtrl\+0", click: \(\) => setZoom\(null\)/);
+});
+
 test('the app\'s settings survive a broken file and keep what was saved', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'aura-desktop-'));
   const file = path.join(dir, 'nested', 'settings.json');
   assert.deepEqual(config.load(file), config.DEFAULTS);
-  config.save(file, { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true } });
-  assert.deepEqual(config.load(file), { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true } });
+  config.save(file, { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true }, zoom: 1.4 });
+  assert.deepEqual(config.load(file), { server: 'https://aura.example/', keepPlaying: false, bounds: { x: 10, y: 20, width: 900, height: 700, maximized: true }, zoom: 1.4 });
+  // A zoom out of range is not kept, and the app goes back to fitting the screen.
+  fs.writeFileSync(file, JSON.stringify({ zoom: 40 }));
+  assert.equal(config.load(file).zoom, null);
   fs.writeFileSync(file, '{ not json');
   assert.deepEqual(config.load(file), config.DEFAULTS);
   fs.writeFileSync(file, JSON.stringify({ server: 'http://aura.example', bounds: { width: 5, height: 5 } }));

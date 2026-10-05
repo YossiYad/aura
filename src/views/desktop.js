@@ -275,53 +275,12 @@
     });
   }
 
-  // A menu opens where it was asked for, the way a desktop's menus do: at the pointer,
-  // pulled back inside the window where it would run off it. One opened from the
-  // keyboard has no such place and opens in the middle. The position is kept on the app
-  // frame, so the copy a closing sheet leaves behind (core-sheets.js) fades where it was.
-  let point = { x: 0, y: 0, at: 0 };
-  /** @type {{ x: number, y: number } | null} */
-  let anchor = null;
-  let sheetOpen = false;
-  let sheetTimer = 0;
-  function placeSheet(app) {
-    const open = !V.sheetEl.hidden;
-    if (!desktop || !open) {
-      sheetOpen = false;
-      clearTimeout(sheetTimer);
-      sheetTimer = window.setTimeout(() => {
-        for (const name of ["--dk-sheet-x", "--dk-sheet-y", "--dk-sheet-shift", "--dk-sheet-w", "--dk-scrim"]) app.style.removeProperty(name);
-      }, desktop ? 260 : 0);
-      return;
-    }
-    clearTimeout(sheetTimer);
-    if (!sheetOpen) anchor = Date.now() - point.at < 800 ? { x: point.x, y: point.y } : null;
-    sheetOpen = true;
-    if (!anchor) return;
-    app.style.setProperty("--dk-sheet-shift", "0 0");
-    app.style.setProperty("--dk-sheet-w", "340px");
-    app.style.setProperty("--dk-scrim", "transparent");
-    const box = app.getBoundingClientRect();
-    const fit = (at, size, room) => Math.max(8, Math.min(at, room - size - 8));
-    app.style.setProperty("--dk-sheet-x", Math.round(fit(anchor.x - box.left, V.sheetEl.offsetWidth, box.width)) + "px");
-    app.style.setProperty("--dk-sheet-y", Math.round(fit(anchor.y - box.top, V.sheetEl.offsetHeight, box.height)) + "px");
-  }
-  function watchSheet(app) {
-    const note = e => { point = { x: e.clientX, y: e.clientY, at: Date.now() }; };
-    document.addEventListener("pointerdown", note, true);
-    document.addEventListener("contextmenu", note, true);
-    if (window.MutationObserver) {
-      new MutationObserver(() => placeSheet(app)).observe(V.sheetEl, { attributes: true, attributeFilter: ["hidden"], childList: true });
-    }
-  }
-
   function mount() {
     if (mounted) return;
     mounted = true;
     const app = /** @type {HTMLElement} */ (document.querySelector(".app"));
     buildTop(app);
     watchRails();
-    watchSheet(app);
     desktopParts.forEach(part => part.mount(app));
   }
 

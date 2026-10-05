@@ -507,6 +507,10 @@ html.desktop .fp-bottom { flex-wrap: wrap; justify-content: flex-start; gap: 8px
 html.desktop .fp-auto { display: inline-flex; }
 html.desktop .fp-content { padding: 16px 0 0; }
 html.desktop .lyrics-card, html.desktop .about-card, html.desktop .credits-card { border-radius: 8px; }
+/* The panel is narrower than a phone: the timing buttons and Expand stay inside it. */
+html.desktop .lyrics-head { gap: 6px; }
+html.desktop .lyrics-head strong { margin-inline-end: auto; }
+html.desktop .lyrics-head button { height: 28px; padding: 0 10px; font-size: 13px; }
 
 /* ----- Sheets open as dialogs ----- */
 html.desktop .scrim { background: var(--dk-scrim, rgba(0,0,0,.7)); }
@@ -546,6 +550,18 @@ html.desktop .home-discovery-rail { gap: 24px; padding: 0 var(--dk-pad) 8px; }
   html.desktop .card .play-fab { opacity: 1; transform: none; }
   html.desktop .dk-volume::-webkit-slider-thumb { opacity: 1; }
 }
+
+/* Pictures appear as they arrive, without the phone's fade. The fade is a compositor
+   animation, and one begun while the window was not on screen - the app loading behind
+   the browser while it signs in, a tab in the background - could stay at its first frame,
+   leaving every cover in the page invisible. */
+html.desktop .art img, html.desktop .dr-thumb img, html.desktop .card-art img,
+html.desktop .cover-grid img, html.desktop .quick-tile .qt-art img { animation: none; }
+
+/* A row being dragged sideways (src/views/desktop.js) moves with the pointer, not smoothly
+   after it, and nothing in it is selected or hovered on the way. */
+html.desktop .dk-dragging { cursor: grabbing; scroll-behavior: auto; scroll-snap-type: none; user-select: none; }
+html.desktop .dk-dragging * { pointer-events: none; }
 
 /* ----- Narrower windows. Last in the file, so these are the rules that hold. ----- */
 @media (max-width: 1279px) {

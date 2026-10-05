@@ -207,9 +207,35 @@ function signInAgain() {
 
 // ---------------- The window ----------------
 
+// The size the app is drawn at on the screen the window is on: the listener's choice, or
+// what fits that screen (config.fitZoom).
+function zoomFor(display) {
+  if (settings.zoom) return settings.zoom;
+  const area = (display || screen.getPrimaryDisplay()).workAreaSize;
+  return config.fitZoom(area.width, area.height);
+}
+
+function applyZoom() {
+  if (!win) return;
+  const zoom = zoomFor(screen.getDisplayMatching(win.getBounds()));
+  if (Math.abs(win.webContents.getZoomFactor() - zoom) > 0.001) win.webContents.setZoomFactor(zoom);
+}
+
+/** @param {number | null} next A zoom factor, or null to go back to fitting the screen. */
+function setZoom(next) {
+  remember({ zoom: next === null ? null : config.zoomValue(Math.min(config.ZOOM_MAX, Math.max(config.ZOOM_MIN, next))) });
+  applyZoom();
+}
+const zoomStep = step => () => { if (win) setZoom(win.webContents.getZoomFactor() + step); };
+
 function savedBounds() {
   const b = settings.bounds;
-  if (!b) return { width: 1280, height: 820 };
+  // A first window as big, relative to the screen, as the app is drawn: the same room on
+  // a large monitor as on a laptop, and never more than most of the screen.
+  if (!b) {
+    const area = screen.getPrimaryDisplay().workAreaSize, zoom = zoomFor();
+    return { width: Math.round(Math.min(area.width * 0.9, 1280 * zoom)), height: Math.round(Math.min(area.height * 0.9, 820 * zoom)) };
+  }
   const placed = Number.isFinite(b.x) && Number.isFinite(b.y) && screen.getAllDisplays().some(display => {
     const area = display.workArea;
     return b.x < area.x + area.width - 80 && b.x + b.width > area.x + 80 && b.y >= area.y - 20 && b.y < area.y + area.height - 80;
@@ -233,6 +259,12 @@ function createWindow() {
   if (settings.bounds && settings.bounds.maximized) win.maximize();
 
   const contents = win.webContents;
+  // Chromium keeps a zoom per address; the app keeps one for itself and sets it on every
+  // page, its own and the server's, and again when the window moves to another screen.
+  contents.on("did-finish-load", applyZoom);
+  win.on("moved", applyZoom);
+  // Ctrl and the mouse wheel, the way a browser zooms.
+  contents.on("zoom-changed", (event, direction) => zoomStep(direction === "in" ? 0.1 : -0.1)());
   // The window shows the app's own pages and the Aura server, and nothing else. A link
   // that leads anywhere else opens in the browser; the login proxy's own redirect to
   // Google is the server saying the session is over.
@@ -331,7 +363,11 @@ function createMenu() {
     { label: "View", submenu: [
       { role: "reload" }, { role: "forceReload" }, { role: "toggleDevTools" },
       { type: "separator" },
-      { role: "resetZoom" }, { role: "zoomIn" }, { role: "zoomOut" },
+      // The app remembers these, and Actual Size goes back to fitting the screen.
+      { label: "Actual Size", accelerator: "CmdOrCtrl+0", click: () => setZoom(null) },
+      { label: "Zoom In", accelerator: "CmdOrCtrl+Plus", click: zoomStep(0.1) },
+      { label: "Zoom In", accelerator: "CmdOrCtrl+=", visible: false, acceleratorWorksWhenHidden: true, click: zoomStep(0.1) },
+      { label: "Zoom Out", accelerator: "CmdOrCtrl+-", click: zoomStep(-0.1) },
       { type: "separator" },
       { role: "togglefullscreen" }
     ] },
