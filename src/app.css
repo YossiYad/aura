@@ -859,6 +859,7 @@ html.keyboard-open .modal-wrap .modal {
 .modal input:focus, .modal textarea:focus, .modal select:focus { border-color: var(--accent); }
 .modal select { margin-top: var(--space-2); appearance: none; }
 .modal-actions { display: flex; justify-content: flex-end; gap: var(--space-2); margin-top: var(--space-4); }
+.modal-actions a.btn { text-decoration: none; }
 .set-row {
   display: flex; align-items: center; gap: var(--space-2);
   font-size: var(--text-sm); margin-bottom: var(--space-4); cursor: pointer;

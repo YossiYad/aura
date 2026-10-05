@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+<title>Aura</title>
+<link rel="stylesheet" href="pages.css">
+</head>
+<body>
+<main>
+  <img class="mark" src="../icons/256x256.png" alt="">
+  <h1>Where is your Aura?</h1>
+  <p>Enter the address of your Aura server, the one you open in a browser.</p>
+  <form id="form">
+    <input id="address" type="text" inputmode="url" autocomplete="off" spellcheck="false"
+      placeholder="your-server.your-tailnet.ts.net" aria-label="Server address" autofocus>
+    <button id="go" type="submit">Continue</button>
+  </form>
+  <div class="note" id="note" role="status"></div>
+</main>
+<script src="setup.js"></script>
+</body>
+</html>

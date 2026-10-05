@@ -1,0 +1,41 @@
+{
+  "name": "aura-desktop",
+  "productName": "Aura",
+  "version": "0.1.0",
+  "description": "Aura as a desktop app: the web app from your own Aura server, in a window of its own",
+  "license": "AGPL-3.0-only",
+  "author": "Yossi Yadgar",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --linux AppImage --x64"
+  },
+  "devDependencies": {
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "app.aura.desktop",
+    "productName": "Aura",
+    "files": [
+      "main.js",
+      "handoff.js",
+      "config.js",
+      "install.js",
+      "preload.js",
+      "pages/**",
+      "icons/**"
+    ],
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Audio",
+      "icon": "icons",
+      "artifactName": "Aura-${arch}.${ext}",
+      "syncDesktopName": true
+    }
+  },
+  "desktopName": "aura-desktop.desktop"
+}

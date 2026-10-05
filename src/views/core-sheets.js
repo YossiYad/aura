@@ -153,6 +153,8 @@
     sheetSuppressClickUntil = 0;
     if (e.touches.length !== 1) { resetSheetDrag(); return; }
     if (V.sheetEl.hidden || V.sheetEl.scrollTop > 1 || e.target.closest("input, textarea, select")) return;
+    // In the desktop layout a sheet is a menu at the pointer, with nothing to drag.
+    if (V.desktop) return;
     // Options scroll normally in both sizes. Only the grab area and header move the
     // sheet, so looking through actions cannot repeatedly expand and collapse it.
     if (e.target !== V.sheetEl && !e.target.closest(sheetDragHandle)) return;

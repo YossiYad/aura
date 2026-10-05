@@ -64,6 +64,14 @@
       }
     };
     document.getElementById("set-logs").onclick = () => V.openLogs();
+    // Shown once the server says it has an installer to give, to a browser that can use it.
+    const appRow = document.getElementById("set-desktop-app-row");
+    if (appRow && V.desktopAppOffered() && typeof fetch === "function") {
+      document.getElementById("set-desktop-app").onclick = V.openDesktopAppDialog;
+      fetch("desktop/download/Aura.AppImage", { method: "HEAD" })
+        .then(reply => { if (reply.ok && appRow.isConnected) appRow.hidden = false; })
+        .catch(() => {});
+    }
   }
 
   function bindSyncStatus() {

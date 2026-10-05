@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'">
+<title>Aura</title>
+<link rel="stylesheet" href="pages.css">
+</head>
+<body>
+<main>
+  <img class="mark" src="../icons/256x256.png" alt="">
+  <h1 id="title">Sign in to Aura</h1>
+  <p id="text">Sign-in opens in your browser, where your Google account already is, and comes back here by itself.</p>
+  <div class="server" id="server"></div>
+  <div class="stack">
+    <button id="go">Sign in with your browser</button>
+    <button id="retry" class="quiet" hidden>Try again</button>
+    <button id="change" class="quiet">Use a different server</button>
+  </div>
+  <div class="note" id="note" role="status"></div>
+</main>
+<script src="signin.js"></script>
+</body>
+</html>

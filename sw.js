@@ -1,4 +1,4 @@
-const CACHE = "aura-v247";
+const CACHE = "aura-v248";
 const SHELL = [
   "./",
   "./index.html",
@@ -9,6 +9,7 @@ const SHELL = [
   "./icon-180.png",
   "./src/app.css",
   "./src/progress.css",
+  "./src/desktop.css",
   "./src/log.js",
   "./src/api.js",
   "./src/api/normalize.js",
@@ -131,6 +132,9 @@ const SHELL = [
   "./src/views/gestures.js",
   "./src/views/swipe.js",
   "./src/views/clicks.js",
+  "./src/views/desktop.js",
+  "./src/views/desktop-library.js",
+  "./src/views/desktop-player.js",
   "./src/views/public.js",
   "./src/progress.js",
   "./src/main.js",

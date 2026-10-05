@@ -9,6 +9,9 @@ node_modules/
 .npm/
 .cache/
 
+# The desktop app's packaged builds
+/desktop/dist/
+
 # Generated test reports and coverage
 test-results/
 playwright-report/

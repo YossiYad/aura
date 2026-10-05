@@ -143,6 +143,8 @@
 
   playerBar.addEventListener("touchstart", e => {
     if (playerBar.hidden || e.touches.length !== 1) return;
+    // The desktop layout's bar is not a card to pull up or throw away.
+    if (document.documentElement.classList.contains("desktop")) return;
     // The scrubber and the controls answer a touch themselves; only the bar's own body
     // starts a swipe, so a finger on Play cannot end the session by sliding off it.
     if (e.target.closest("button, input, #pb-progress")) return;

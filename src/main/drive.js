@@ -136,7 +136,9 @@
   // Back closes the full player like any other screen, instead of leaving the app with
   // it still covering everything.
   Views.addBackLayer({
-    open: () => !V.fullPlayer.hidden && !V.fullPlayer.classList.contains("closing"),
+    // On a desktop it is a panel beside the page and covers nothing: Back goes back.
+    open: () => !V.fullPlayer.hidden && !V.fullPlayer.classList.contains("closing") &&
+      !document.documentElement.classList.contains("desktop"),
     close: V.closeFullPlayer
   });
 })();
