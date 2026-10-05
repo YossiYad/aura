@@ -98,6 +98,8 @@
       V.choiceRow("Accent color", "Highlights, active states and buttons across the app", swatches) +
       V.choiceRow("Song timeline", "How a song's progress is drawn in the players and in driving mode",
         V.segControl("set-progress-style", [["wave", "Wave"], ["line", "Line"]], s.progressStyle === "line" ? "line" : "wave")) +
+      V.choiceRow("Layout", "Automatic uses the computer layout on a computer and the phone layout on phones and tablets. Kept on this device only.",
+        V.segControl("set-layout", [["auto", "Automatic"], ["desktop", "Computer"], ["phone", "Phone"]], V.desktopMode || "auto")) +
       V.toggleRow("set-anims", "Animations", "Turn off for an instant, static interface", !!s.animations) +
       V.toggleRow("set-portrait-lock", "Lock portrait orientation", "Keep the app upright when you turn your phone. Turn off to allow rotation.", s.portraitLock !== false) +
       '<div class="set-note" id="set-orientation-status" role="status">' + V.esc(window.AppOrientation ? AppOrientation.status() : "Orientation control is unavailable in this browser.") + '</div>');

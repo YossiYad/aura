@@ -1,8 +1,9 @@
 /* ============================================================
    Aura - desktop layout
    Every rule here is under html.desktop, the class src/views/desktop.js puts on the
-   document for a wide window driven by a mouse and takes off again when the window is
-   made narrow. A phone never carries it, so nothing in this file reaches a phone.
+   document for a computer (or for a device given this layout in Settings) and takes off
+   again when the window is made narrow. A phone never carries it by itself, so nothing
+   in this file reaches a phone.
 
    The page is laid out the way a desktop music player is: a top bar with Home and the
    search field, the library in a column on the left, the screen in a rounded panel, the
@@ -536,6 +537,15 @@ html.desktop .category-rail { gap: 24px; padding: 0 var(--dk-pad) 4px; }
 html.desktop .sheet:has(.queue-list) { width: min(420px, calc(100% - 16px)); }
 html.desktop #lib-hits { padding-top: 8px; }
 html.desktop .home-discovery-rail { gap: 24px; padding: 0 var(--dk-pad) 8px; }
+
+/* ----- A touch screen that was given this layout in Settings has no pointer to hover
+   with, so what a hover reveals is simply shown. ----- */
+@media (hover: none) {
+  html.desktop .song .kebab, html.desktop .dr .kebab, html.desktop .song .row-dl, html.desktop .dr .row-dl,
+  html.desktop .collection-grid .pl-row .kebab { opacity: 1; }
+  html.desktop .card .play-fab { opacity: 1; transform: none; }
+  html.desktop .dk-volume::-webkit-slider-thumb { opacity: 1; }
+}
 
 /* ----- Narrower windows. Last in the file, so these are the rules that hold. ----- */
 @media (max-width: 1279px) {

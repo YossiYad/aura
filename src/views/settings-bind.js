@@ -247,6 +247,17 @@
         if (after) after();
       };
     };
+    // The layout is this device's own and is kept by the desktop switch, not in Settings.
+    const layout = document.getElementById("set-layout");
+    if (layout) layout.onclick = /** @param {PointerEvent & { target: HTMLElement }} e */ e => {
+      const b = /** @type {HTMLElement} */ (e.target.closest("[data-val]"));
+      if (!b || b.classList.contains("on")) return;
+      layout.querySelectorAll("[data-val]").forEach(x => {
+        x.classList.toggle("on", x === b);
+        x.setAttribute("aria-pressed", String(x === b));
+      });
+      V.setDesktopMode(b.dataset.val);
+    };
     bindSeg("set-quality-seg", "audioQuality");
     bindSeg("set-reopen-seg", "reopenSong");
     bindSeg("set-progress-style", "progressStyle", null, V.applyAppearance);

@@ -46,10 +46,13 @@ test('every rule of the desktop stylesheet is under html.desktop', () => {
   check(top);
 });
 
-function load(matchMedia) {
+// The three desktop files run against a page that records what was done to it. device
+// says what the browser reports: its system, and the layout kept for it in Settings.
+function load(matchMedia, device = {}) {
   const created = [];
   const classes = new Set();
   const listeners = {};
+  const kept = new Map(device.layout ? [['aura.layout', device.layout]] : []);
   const document = {
     readyState: 'loading',
     documentElement: { classList: {
@@ -63,18 +66,26 @@ function load(matchMedia) {
   };
   const views = {};
   const window = { Aura: { views }, addEventListener() {} };
-  const context = { window, document, matchMedia, localStorage: { getItem: () => null, setItem() {} } };
+  const context = { window, document, matchMedia, navigator: device.navigator,
+    localStorage: { getItem: key => kept.has(key) ? kept.get(key) : null, setItem: (key, value) => kept.set(key, value), removeItem: key => kept.delete(key) } };
   for (const file of ['src/views/desktop.js', 'src/views/desktop-library.js', 'src/views/desktop-player.js']) {
     vm.runInNewContext(read(file), context);
   }
-  return { views, classes, created, listeners };
+  return { views, classes, created, listeners, kept };
 }
+
+// A window that answers every media query the same way.
+const all = matches => () => ({ matches, addEventListener() {} });
+const LINUX = { userAgent: 'Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0', maxTouchPoints: 0 };
+const IPAD = { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15', maxTouchPoints: 5 };
+const MAC = { userAgent: IPAD.userAgent, maxTouchPoints: 0 };
+const GALAXY_TAB = { userAgent: 'Mozilla/5.0 (Linux; Android 14; SM-X910) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36', maxTouchPoints: 10 };
+const IPHONE = { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', maxTouchPoints: 5 };
 
 test('a phone builds nothing of the desktop layout and is never marked as one', () => {
   const asked = [];
-  const phone = load(query => { asked.push(query); return { matches: false, addEventListener() {} }; });
-  // Width and pointer together: a phone turned sideways is wide enough for neither.
-  assert.equal(asked.length, 1);
+  const phone = load(query => { asked.push(query); return { matches: false, addEventListener() {} }; }, { navigator: IPHONE });
+  // What a computer is asked for by itself: a mouse for a pointer, and the width.
   assert.match(asked[0], /min-width: 800px/);
   assert.match(asked[0], /hover: hover/);
   assert.match(asked[0], /pointer: fine/);
@@ -93,11 +104,50 @@ test('a phone builds nothing of the desktop layout and is never marked as one', 
   assert.deepEqual(old.created, []);
 });
 
-test('a wide window with a mouse is marked before the first paint', () => {
-  const wide = load(() => ({ matches: true, addEventListener() {} }));
-  assert.deepEqual([...wide.classes], ['desktop']);
-  // The parts are built later, once every file has loaded; nothing yet.
-  assert.deepEqual(wide.created, []);
+test('a computer is marked before the first paint', () => {
+  for (const navigator of [LINUX, MAC, undefined]) {
+    const wide = load(all(true), { navigator });
+    assert.deepEqual([...wide.classes], ['desktop']);
+    // The parts are built later, once every file has loaded; nothing yet.
+    assert.deepEqual(wide.created, []);
+  }
+});
+
+// Size and pointer cannot tell a tablet from a laptop: an iPad or an Android tablet with a
+// keyboard case is wide and has a trackpad. The system it runs is what tells them apart.
+test('a tablet or a phone is not taken for a computer, however wide and whatever its pointer', () => {
+  for (const navigator of [IPAD, GALAXY_TAB, IPHONE, Object.assign({ userAgentData: { mobile: true } }, LINUX)]) {
+    const tablet = load(all(true), { navigator });
+    tablet.listeners.DOMContentLoaded();
+    assert.equal(tablet.views.desktop, false, navigator.userAgent);
+    assert.deepEqual([...tablet.classes], []);
+    assert.deepEqual(tablet.created, []);
+  }
+});
+
+test('the layout chosen in Settings is kept for the device and decides over the detection', () => {
+  // A tablet whose owner asked for the computer layout gets it wherever there is room.
+  const tablet = load(query => ({ matches: /^\(min-width: 700px\)$/.test(query), addEventListener() {} }), { navigator: IPAD, layout: 'desktop' });
+  assert.equal(tablet.views.desktopMode, 'desktop');
+  assert.deepEqual([...tablet.classes], ['desktop']);
+  // Without the room, as on a phone held upright, it stays the phone's.
+  assert.deepEqual([...load(all(false), { navigator: IPHONE, layout: 'desktop' }).classes], []);
+  // A computer whose owner asked for the phone layout keeps it.
+  const computer = load(all(true), { navigator: LINUX, layout: 'phone' });
+  assert.deepEqual([...computer.classes], []);
+  computer.listeners.DOMContentLoaded();
+  assert.equal(computer.views.desktop, false);
+  assert.deepEqual(computer.created, []);
+
+  // The choice is kept under a key of its own, outside the settings a backup carries.
+  const phone = load(all(false), { navigator: IPHONE });
+  assert.equal(phone.views.desktopMode, 'auto');
+  phone.views.setDesktopMode('desktop');
+  assert.equal(phone.kept.get('aura.layout'), 'desktop');
+  assert.equal(phone.views.desktop, false);
+  phone.views.setDesktopMode('auto');
+  assert.equal(phone.kept.has('aura.layout'), false);
+  assert.doesNotMatch(read('src/store.js') + read('src/store/backup.js'), /aura\.layout/);
 });
 
 test('the desktop files are loaded by the page and kept by the service worker', () => {

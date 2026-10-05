@@ -56,6 +56,8 @@
 
   V.fullPlayer.addEventListener("touchstart", e => {
     if (V.fullPlayer.hidden || V.fullPlayer.scrollTop > 0 || e.touches.length !== 1) return;
+    // Beside the page in the desktop layout, it is a panel and not a sheet to drag down.
+    if (document.documentElement.classList.contains("desktop")) return;
     if (e.target.closest("button, input, label, a, .lyrics-lines, .song-progress")) return;
     const touch = e.touches[0];
     V.fpDragStartX = touch.clientX;

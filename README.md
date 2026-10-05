@@ -147,9 +147,11 @@ Service workers and offline caching require HTTPS or localhost.
 
 On a computer the same app lays itself out for a wide window: the library in a column on
 the left, Home and the search field in a top bar, the "now playing" panel on the right and
-the player bar along the bottom. It switches by itself, for a window at least 800 pixels
-wide that is driven by a mouse or a trackpad, and back again when the window is made
-narrow; a phone is never given it.
+the player bar along the bottom. It switches by itself on a computer - a desktop system
+with a mouse or a trackpad and a window at least 800 pixels wide - and back again when the
+window is made narrow. A phone or a tablet keeps the phone layout whatever its size;
+**Settings > Appearance > Layout** gives a tablet the computer layout, or a computer the
+phone's, and the choice stays on that device.
 
 ### Configure your instances
 

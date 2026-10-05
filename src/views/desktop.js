@@ -1,16 +1,18 @@
 (function () {
   const V = window.Aura.views;
-  // The desktop layout: the same app laid out for a wide window driven by a mouse. One
-  // switch decides it - the media query below - and everything that follows hangs off the
-  // "desktop" class it puts on <html>: src/desktop.css only has rules under that class, and
-  // the parts that exist only on a computer (this file's top bar, the library column in
-  // desktop-library.js, the player bar's extra controls in desktop-player.js) are built the
-  // first time the switch turns on. A phone fails the query on both counts, its width and
-  // its pointer, so none of this is ever built there and nothing of it is styled.
+  // The desktop layout: the same app laid out for a computer. One switch decides it -
+  // wanted() below - and everything that follows hangs off the "desktop" class it puts on
+  // <html>: src/desktop.css only has rules under that class, and the parts that exist only
+  // on a computer (this file's top bar, the library column in desktop-library.js, the
+  // player bar's extra controls in desktop-player.js) are built the first time the switch
+  // turns on. A phone or a tablet is never switched by itself, whatever its size, so none
+  // of this is built there and nothing of it is styled.
   // Published on V for the other files of this module; see src/views.js.
   Object.defineProperties(V, {
     desktop: { get: () => desktop },
+    desktopMode: { get: () => desktopMode },
     desktopParts: { get: () => desktopParts },
+    setDesktopMode: { get: () => setDesktopMode },
     syncDesktop: { get: () => syncDesktop }
   });
 
@@ -18,7 +20,20 @@
   // zoomed in counts as the narrower window it then is: 1920 screen pixels at 140% on a
   // scaled display is about 1000 here, which is why this is not set at a round 1024.
   const QUERY = "(min-width: 800px) and (hover: hover) and (pointer: fine)";
+  // For a device whose owner asked for the layout in Settings: room for it is all it needs.
+  const ROOM = "(min-width: 700px)";
   const wide = typeof matchMedia === "function" ? matchMedia(QUERY) : null;
+  const room = typeof matchMedia === "function" ? matchMedia(ROOM) : null;
+  // "auto", or the layout chosen for this device in Settings. Kept beside the settings and
+  // not in them: they travel in a backup, and a phone restoring one made on a computer
+  // must not come up in the computer's layout.
+  const MODE_KEY = "aura.layout";
+  /** @type {"auto" | "desktop" | "phone"} */
+  let desktopMode = "auto";
+  try {
+    const kept = localStorage.getItem(MODE_KEY);
+    if (kept === "desktop" || kept === "phone") desktopMode = kept;
+  } catch (e) {}
   let desktop = false;
   let mounted = false;
   /**
@@ -43,6 +58,37 @@
   // made narrow again finds them back in their own row, in their own order.
   /** @type {{ el: HTMLElement, parent: HTMLElement, next: Node | null }[]} */
   let borrowed = [];
+
+  // A phone or a tablet, by the system it says it runs. Size cannot tell: a tablet is as
+  // wide as a small laptop, and one with a keyboard case has a pointer as well. An iPad
+  // introduces itself as a Mac, and its touch screen is what gives it away.
+  function handheld() {
+    const nav = typeof navigator === "object" && navigator ? navigator : null;
+    if (!nav) return false;
+    const ua = String(nav.userAgent || "");
+    if (/** @type {any} */ (nav).userAgentData && /** @type {any} */ (nav).userAgentData.mobile) return true;
+    return /Android|iPhone|iPad|iPod|Mobile|Tablet|Silk|Kindle/i.test(ua) ||
+      (/Macintosh/.test(ua) && nav.maxTouchPoints > 1);
+  }
+
+  // A computer gets the layout by itself: not a handheld system, a mouse or a trackpad
+  // for a pointer, and a window wide enough. Any device gets it when its owner chose
+  // "Computer" in Settings and there is room, and none does when they chose "Phone".
+  function wanted() {
+    if (desktopMode === "phone") return false;
+    if (desktopMode === "desktop") return !!(room && room.matches);
+    return !!(wide && wide.matches) && !handheld();
+  }
+
+  /** @param {string} next "auto", "desktop" or "phone". */
+  function setDesktopMode(next) {
+    desktopMode = next === "desktop" || next === "phone" ? next : "auto";
+    try {
+      if (desktopMode === "auto") localStorage.removeItem(MODE_KEY);
+      else localStorage.setItem(MODE_KEY, desktopMode);
+    } catch (e) {}
+    apply();
+  }
 
   function onSearchScreen() {
     return V.currentTab === "search" && !V.subView;
@@ -235,7 +281,7 @@
   }
 
   function apply() {
-    const on = !!(wide && wide.matches);
+    const on = wanted();
     if (on === desktop) return;
     desktop = on;
     document.documentElement.classList.toggle("desktop", on);
@@ -263,10 +309,10 @@
 
   // The class goes on at once, before the first paint; the parts are built once every
   // file of the module has loaded, which is by the time the document is ready.
-  if (wide && wide.matches) document.documentElement.classList.add("desktop");
+  if (wanted()) document.documentElement.classList.add("desktop");
   function start() {
     apply();
-    if (wide.addEventListener) wide.addEventListener("change", apply);
+    for (const query of [wide, room]) if (query.addEventListener) query.addEventListener("change", apply);
   }
   if (wide) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
