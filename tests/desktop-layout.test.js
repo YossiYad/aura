@@ -141,12 +141,17 @@ test('the desktop app gets the computer layout wherever its window has room for 
   assert.match(read('desktop/main.js'), /app\.userAgentFallback = app\.userAgentFallback \+ " AuraDesktop\/"/);
 });
 
-test('the desktop app is offered to a browser on a Linux computer and to nothing else', () => {
+test('a computer is offered the installer for its own system, and nothing else is offered one', () => {
   const APP = { userAgent: LINUX.userAgent + ' Electron/44.5.1 AuraDesktop/0.1.0', maxTouchPoints: 0 };
   const WINDOWS = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0', maxTouchPoints: 0 };
-  const offered = navigator => load(all(true), { navigator }).views.desktopAppOffered();
-  assert.equal(offered(LINUX), true);
-  for (const navigator of [APP, GALAXY_TAB, IPHONE, IPAD, MAC, WINDOWS, undefined]) assert.equal(offered(navigator), false);
+  const EDGE = { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36 Edg/140.0.0.0', maxTouchPoints: 10 };
+  const offered = navigator => load(all(true), { navigator }).views.desktopDownload();
+  assert.equal(offered(LINUX).file, 'desktop/download/Aura.AppImage');
+  assert.equal(offered(WINDOWS).file, 'desktop/download/Aura-Setup.exe');
+  // A Windows laptop with a touch screen is a computer all the same.
+  assert.equal(offered(EDGE).file, 'desktop/download/Aura-Setup.exe');
+  assert.match(offered(WINDOWS).steps, /More info, then Run anyway/);
+  for (const navigator of [APP, GALAXY_TAB, IPHONE, IPAD, MAC, undefined]) assert.equal(offered(navigator), null);
 });
 
 test('the layout chosen in Settings is kept for the device and decides over the detection', () => {

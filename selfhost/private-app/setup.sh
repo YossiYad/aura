@@ -7,8 +7,9 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 saved() { if [ -f "$SCRIPT_DIR/.env" ]; then sed -n "s/^$1=//p" "$SCRIPT_DIR/.env" | tail -n 1; fi; }
 OAUTH_PORT="${OAUTH_PORT:-$(saved OAUTH_PORT)}"; OAUTH_PORT="${OAUTH_PORT:-4180}"
 INVIDIOUS_NETWORK="${INVIDIOUS_NETWORK:-$(saved INVIDIOUS_NETWORK)}"; INVIDIOUS_NETWORK="${INVIDIOUS_NETWORK:-invidious_default}"
-# yes builds the desktop app's installer here, so that Settings can offer it to a browser
-# on a computer. Off unless asked for once: it downloads Electron and takes a few minutes.
+# yes builds the desktop app's installer for Linux here, so that Settings can offer it to
+# a browser on a computer; all builds the Windows one as well, which needs a 5 GB image.
+# Off unless asked for once: it downloads Electron and takes a few minutes.
 AURA_DESKTOP_APP="${AURA_DESKTOP_APP:-$(saved AURA_DESKTOP_APP)}"; AURA_DESKTOP_APP="${AURA_DESKTOP_APP:-no}"
 REPO_DIR=$(cd "$SCRIPT_DIR/../.." && pwd)
 
@@ -91,9 +92,10 @@ EOF
 docker compose -f "$SCRIPT_DIR/docker-compose.yml" up -d --build --force-recreate
 
 # Last, and never in the way: the server is up whether or not this succeeds.
-if [ "$AURA_DESKTOP_APP" = yes ]; then
-  sh "$REPO_DIR/desktop/build.sh" || echo "The desktop app was not built (see above). Everything else is up."
-fi
+case "$AURA_DESKTOP_APP" in
+  yes) sh "$REPO_DIR/desktop/build.sh" linux || echo "The desktop app was not built (see above). Everything else is up." ;;
+  all) sh "$REPO_DIR/desktop/build.sh" all || echo "The desktop app was not built (see above). Everything else is up." ;;
+esac
 
 echo
 echo "App services started. Configure your HTTPS reverse proxy on this server:"

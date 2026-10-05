@@ -9,7 +9,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --linux AppImage --x64"
+    "dist": "electron-builder --linux AppImage --win nsis --x64"
   },
   "devDependencies": {
     "electron": "44.5.1",
@@ -35,6 +35,29 @@
       "icon": "icons",
       "artifactName": "Aura-${arch}.${ext}",
       "syncDesktopName": true
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icons/icon.ico",
+      "artifactName": "Aura-Setup-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Aura",
+      "uninstallDisplayName": "Aura",
+      "artifactName": "Aura-Setup-${arch}.${ext}",
+      "include": "build/installer.nsh"
     }
   },
   "desktopName": "aura-desktop.desktop"

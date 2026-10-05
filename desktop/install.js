@@ -17,12 +17,13 @@ function dataHome(env, home) {
 
 /**
  * The server a download came from. The server names the file it hands out after itself
- * (Aura@music.example.AppImage), so the app can offer that address on its first run
- * instead of asking for it to be typed. A browser saving a second copy adds "(1)".
+ * (Aura@music.example.AppImage, or .exe for Windows), so the app can offer that address
+ * on its first run instead of asking for it to be typed. A browser saving a second copy
+ * adds "(1)".
  * @param {string} file
  */
 function serverHint(file) {
-  const match = /(?:^|[\\/])Aura@([A-Za-z0-9.-]+?)(?:[ _]?\(\d+\))?\.AppImage$/i.exec(String(file || ""));
+  const match = /(?:^|[\\/])Aura@([A-Za-z0-9.-]+?)(?:[ _]?\(\d+\))?\.(?:AppImage|exe)$/i.exec(String(file || "").trim());
   return match ? match[1] : "";
 }
 

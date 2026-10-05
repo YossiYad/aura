@@ -217,19 +217,21 @@ addresses here are for it, both behind the Google sign-in like the rest:
   page says what is being asked, and its **Continue** link hands the browser's session to
   that port - `127.0.0.1` only, with a secret made for that one attempt, and never
   without the click.
-- `/desktop/download/Aura.AppImage` is the installer, once this server has built one.
-  **Settings > About > Get the desktop app** appears in a browser on a Linux computer
-  when it is there.
+- `/desktop/download/Aura.AppImage` and `/desktop/download/Aura-Setup.exe` are the Linux
+  and Windows installers, once this server has built them. **Settings > About > Get the
+  desktop app** appears in a browser on a Linux or Windows computer when its installer is
+  there.
 
-To build the installer, run setup once with it switched on:
+To build the installers, run setup once with them switched on:
 
 ```sh
-AURA_DESKTOP_APP=yes sh selfhost/private-app/setup.sh
+AURA_DESKTOP_APP=all sh selfhost/private-app/setup.sh
 ```
 
-It is built in a container (a few minutes and a few hundred megabytes of downloads the
-first time), kept in `desktop/dist/`, and rebuilt by `auto-deploy.sh` when the app's
-files change. A build that fails leaves the server running as it was.
+`yes` builds the Linux one alone. They are built in containers (a few minutes the first
+time; Windows needs a Wine image of about 5 GB), kept in `desktop/dist/`, and rebuilt by
+`auto-deploy.sh` when the app's files change. A build that fails leaves the server running
+as it was.
 
 ## Resource usage
 
@@ -244,7 +246,7 @@ adds one more small Node container, capped at 96 MB, and `aura-mix` another, cap
 | `PUBLIC_HOST` | *(required on first run)* | Public domain without scheme, port or path; saved for updates |
 | `OAUTH_PORT` | `4180` | Loopback port oauth2-proxy listens on before the HTTPS reverse proxy |
 | `INVIDIOUS_NETWORK` | `invidious_default` | Docker network the Invidious container is on |
-| `AURA_DESKTOP_APP` | `no` | `yes` builds the desktop app's installer here and keeps it current. Remembered once set. |
+| `AURA_DESKTOP_APP` | `no` | `yes` builds the desktop app's Linux installer here and keeps it current; `all` adds the Windows one. Remembered once set. |
 
 ## Notes
 

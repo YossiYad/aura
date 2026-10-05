@@ -144,7 +144,11 @@ test('a download says which server it came from, and nothing else passes for tha
   assert.equal(install.serverHint('/home/me/Downloads/Aura@my-box.tail1234.ts.net(1).AppImage'), 'my-box.tail1234.ts.net');
   assert.equal(install.serverHint('/home/me/Downloads/Aura@music.example (2).AppImage'), 'music.example');
   assert.equal(install.serverHint('Aura@music.example.AppImage'), 'music.example');
-  for (const other of ['', '/opt/Aura-x86_64.AppImage', '/home/me/.local/share/aura-desktop/Aura.AppImage', '/tmp/NotAura@music.example.AppImage', '/tmp/Aura@bad host.AppImage', '/tmp/Aura@a/b.AppImage']) {
+  // The Windows installer, as a browser saves it and as the installer writes its own name down.
+  assert.equal(install.serverHint('C:\\Users\\me\\Downloads\\Aura@music.example.exe'), 'music.example');
+  assert.equal(install.serverHint('Aura@music.example (1).exe'), 'music.example');
+  assert.equal(install.serverHint('Aura@music.example.exe\r\n'), 'music.example');
+  for (const other of ['', '/opt/Aura-x86_64.AppImage', 'Aura-Setup-x64.exe', 'Aura@music.example.exe.lnk', '/home/me/.local/share/aura-desktop/Aura.AppImage', '/tmp/NotAura@music.example.AppImage', '/tmp/Aura@bad host.AppImage', '/tmp/Aura@a/b.AppImage']) {
     assert.equal(install.serverHint(other), '', other);
   }
   // What it names is still only offered, as an https address, for the listener to accept.
@@ -159,20 +163,34 @@ test('a server offers the installer only when asked to build it, and only behind
   const block = conf.slice(at, conf.indexOf('\n    }\n', at));
   assert.match(block, /alias \/usr\/share\/nginx\/html\/desktop\/dist\/Aura-x86_64\.AppImage;/);
   assert.match(block, /Content-Disposition 'attachment; filename="Aura@\$host\.AppImage"'/);
-  assert.equal(JSON.parse(read('desktop/package.json')).build.linux.artifactName, 'Aura-${arch}.${ext}');
+  const build = JSON.parse(read('desktop/package.json')).build;
+  assert.equal(build.linux.artifactName, 'Aura-${arch}.${ext}');
+  // Windows: the installer the builder writes, served under a name that carries the server.
+  const win = conf.slice(conf.indexOf('location = /desktop/download/Aura-Setup.exe {'));
+  assert.match(win.slice(0, win.indexOf('\n    }\n')), /alias \/usr\/share\/nginx\/html\/desktop\/dist\/Aura-Setup-x64\.exe;[\s\S]*filename="Aura@\$host\.exe"/);
+  assert.equal(build.nsis.artifactName, 'Aura-Setup-${arch}.${ext}');
+  assert.equal(build.nsis.perMachine, false);
+  // The installer writes down the name it was saved under, which is where main.js looks.
+  assert.match(read('desktop/build/installer.nsh'), /!macro customInstall[\s\S]*FileOpen \$0 "\$INSTDIR\\installed-from\.txt" w[\s\S]*FileWrite \$0 "\$EXEFILE"/);
+  assert.match(read('desktop/main.js'), /path\.join\(path\.dirname\(process\.execPath\), "installed-from\.txt"\)/);
   const skip = read('selfhost/private-app/docker-compose.yml').match(/OAUTH2_PROXY_SKIP_AUTH_ROUTES: "([^"]*)"/)[1];
   assert.doesNotMatch(skip, /desktop/);
   // Off unless the owner asks, remembered once asked, and never in the way of the server.
   const setup = read('selfhost/private-app/setup.sh');
   assert.match(setup, /AURA_DESKTOP_APP="\$\{AURA_DESKTOP_APP:-no\}"/);
   assert.match(setup, /\nAURA_DESKTOP_APP=\$AURA_DESKTOP_APP\n/);
-  assert.match(setup, /if \[ "\$AURA_DESKTOP_APP" = yes \]; then\n  sh "\$REPO_DIR\/desktop\/build\.sh" \|\| echo /);
+  // yes is Linux alone, as it was; all adds Windows, which needs the large image.
+  assert.match(setup, /\n  yes\) sh "\$REPO_DIR\/desktop\/build\.sh" linux \|\| echo /);
+  assert.match(setup, /\n  all\) sh "\$REPO_DIR\/desktop\/build\.sh" all \|\| echo /);
   assert.ok(setup.indexOf('desktop/build.sh') > setup.indexOf('docker compose'), 'the server comes up first');
   const deploy = read('selfhost/private-app/auto-deploy.sh');
-  assert.match(deploy, /AURA_DESKTOP_APP=[^\n]*= yes \]; then\n  timeout 20m sh "\$REPO_DIR\/desktop\/build\.sh" --if-changed \|\|/);
+  assert.match(deploy, /case "\$DESKTOP_APP" in yes\) DESKTOP_TARGETS=linux ;; all\) DESKTOP_TARGETS=all ;;/);
+  assert.match(deploy, /timeout 30m sh "\$REPO_DIR\/desktop\/build\.sh" --if-changed "\$DESKTOP_TARGETS" \|\|/);
   // A failed build is not tried again every minute.
-  const build = read('desktop/build.sh');
-  assert.ok(build.indexOf('echo "$NOW" > "$STAMP"') < build.indexOf('" run --rm'), 'the attempt is recorded before it is made');
+  const script = read('desktop/build.sh');
+  assert.ok(script.indexOf('echo "$NOW" > "$STAMP"') < script.indexOf('" run --rm'), 'the attempt is recorded before it is made');
+  // Only the large image when Windows is asked for.
+  assert.ok(script.indexOf('electronuserland/builder:wine') > script.indexOf('if [ "$TARGETS" = all ]; then'));
 });
 
 // The server's half of the sign-in: one page behind the login, which hands the session

@@ -31,8 +31,17 @@ if (process.platform === "linux" && process.env.APPIMAGE) {
 // The web app lays itself out for a computer when it sees this name (src/views/desktop.js),
 // whatever the window system says about the pointer.
 app.userAgentFallback = app.userAgentFallback + " AuraDesktop/" + app.getVersion();
-// The server the download came from, offered on the first run (install.js).
-const hinted = config.serverAddress(install.serverHint(process.env.APPIMAGE || ""));
+// The server the download came from, offered on the first run (install.js). On Windows the
+// installer writes down the name it was downloaded under (build/installer.nsh).
+function downloadedAs() {
+  if (process.env.APPIMAGE) return process.env.APPIMAGE;
+  if (process.platform !== "win32") return "";
+  try { return require("node:fs").readFileSync(path.join(path.dirname(process.execPath), "installed-from.txt"), "utf8"); } catch (e) { return ""; }
+}
+const hinted = config.serverAddress(install.serverHint(downloadedAs()));
+// Windows groups the window, the taskbar button and notifications under this name; it is
+// the one the installer gives the Start menu shortcut.
+if (process.platform === "win32") app.setAppUserModelId("app.aura.desktop");
 
 const PAGES = pathToFileURL(path.join(__dirname, "pages") + path.sep).href;
 const ICON = path.join(__dirname, "icons", "512x512.png");
@@ -290,7 +299,8 @@ function trayMenu() {
 
 function createTray() {
   try {
-    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icons", "tray.png")).resize({ width: 22, height: 22 }));
+    const size = process.platform === "win32" ? 16 : 22;
+    tray = new Tray(nativeImage.createFromPath(path.join(__dirname, "icons", "tray.png")).resize({ width: size, height: size }));
   } catch (e) {
     // A desktop with no tray: closing the window then closes the app, as it has to.
     tray = null;
