@@ -1,4 +1,4 @@
-const CACHE = "aura-v252";
+const CACHE = "aura-v253";
 const SHELL = [
   "./",
   "./index.html",
@@ -212,7 +212,9 @@ function sameBytes(a, b) {
 function syncShell() {
   if (shellSync) return shellSync;
   const ctl = new AbortController();
-  const timer = setTimeout(() => ctl.abort(), 20000);
+  // The budget grows with the shell: one shared 20 s had every file of a slow connection
+  // give up together, and a deploy that kept the cache name was never picked up there.
+  const timer = setTimeout(() => ctl.abort(), 20000 + SHELL.length * 500);
   shellSync = (async () => {
     const cache = await caches.open(CACHE);
     const revision = await servedRevision(ctl.signal);

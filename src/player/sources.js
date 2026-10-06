@@ -129,7 +129,7 @@
     return error;
   }
 
-  async function playViaYt(track, expectedToken) {
+  async function playViaYt(track, expectedToken, resumeAt) {
     if (V.platformBlocksAutoPlay()) throw focusUnavailableError();
     const p = await V.ensureYT();
     if (expectedToken != null && expectedToken !== V.loadingToken) {
@@ -143,7 +143,8 @@
     V.stopAudio();
     V.backend = "yt";
     V.wantsPlayback = true;
-    p.loadVideoById(track.id);
+    // finishTrackStart seeks the audio element only; the iframe takes its start here.
+    p.loadVideoById(resumeAt > 0 ? { videoId: track.id, startSeconds: resumeAt } : track.id);
     p.setVolume(Math.round(V.volume * 100));
     try { p.setPlaybackRate(V.rate()); } catch (e) {}
     V.startYtClock();

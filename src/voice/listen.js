@@ -131,7 +131,8 @@
       // Some implementations omit onend after stop. Preserve the latest transcript
       // in that case, while giving a final recognition correction time to arrive.
       finishTimer = setTimeout(() => { trace("no end within 1.5s of stop"); complete(); }, 1500);
-      trace(recognition ? "run " + runs + " stop requested" : "finished before recognition started");
+      if (!recognition) { trace("finished before recognition started"); complete(); return; }
+      trace("run " + runs + " stop requested");
       try { recognition.stop(); } catch (e) { complete(); }
     }
     function complete() {

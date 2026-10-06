@@ -211,8 +211,12 @@
             V.log("cache", track.id + " local " + failedKind + " kept, playback was interrupted rather than unreadable");
           } else if (failedKind === "cache") {
             V.rejectedLocalCache.add(track.id);
-            await V.deleteCached(track.id);
-            V.log("cache", track.id + " removed unreadable local cache");
+            try {
+              await V.deleteCached(track.id);
+              V.log("cache", track.id + " removed unreadable local cache");
+            } catch (err) {
+              V.log("cache", track.id + " could not remove unreadable local cache: " + String((err && err.message) || err).slice(0, 60));
+            }
           } else {
             // Recovery is already the fallback path - a delete that fails here must not
             // take the retry down with it.
@@ -343,7 +347,7 @@
           }
           V.log("play", track.id + " falling back to YouTube iframe (ads)");
           V.emit({ type: "fallback-yt", track });
-          await V.playViaYt(track, token);
+          await V.playViaYt(track, token, resumeAt);
         }
       }
       if (token !== V.loadingToken) return;

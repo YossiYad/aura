@@ -63,6 +63,10 @@
     const old = V.queue[i];
     V.queue[i] = track;
     if (!old || old.id === track.id) return;
+    // The entry swapped out is gone: not a "removed" song in the queue sheet, and not
+    // the id the saved queue position points at.
+    V.forgetRadioTrack(old.id);
+    if (i === V.pos) V.noteQueuePosition(track, V.audio.currentTime || 0);
     const at = shuffleOrder.indexOf(old.id);
     if (at === -1) return;
     if (shuffleOrder.indexOf(track.id) === -1) shuffleOrder[at] = track.id;

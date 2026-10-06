@@ -224,6 +224,17 @@
       return;
     }
 
+    // The play button drawn on a playlist, album or artist card plays the collection; the
+    // rest of the card opens it.
+    const fab = e.target.closest(".play-fab");
+    const fabCard = fab && fab.closest("[data-pl], [data-album], [data-artist]");
+    if (fabCard) {
+      const d = fabCard.dataset;
+      const found = d.album ? Store.albums().find(a => a.key === d.album) : d.artist ? Store.artists().find(a => a.name === d.artist) : null;
+      const tracks = d.pl ? Store.playlistTracks(d.pl) : found ? found.tracks : [];
+      if (tracks.length) V.playSelection(tracks, 0, d.pl ? V.playlistPlaybackOptions("pl:" + d.pl) : { shuffle: false });
+      return;
+    }
     const albumCard = e.target.closest("[data-album]");
     if (albumCard) { V.pushSubView({ kind: "album", key: albumCard.dataset.album }); return; }
     const artistCard = e.target.closest("[data-artist]");

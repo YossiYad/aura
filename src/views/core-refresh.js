@@ -24,8 +24,10 @@
 
   function screenCovered() {
     if (document.hidden) return true;
+    // On a desktop the player is a panel beside the page and covers nothing; counting it
+    // repainted Home under the reader every time a play was recorded.
     const fp = document.getElementById("fullplayer");
-    if (fp && !fp.hidden) return true;
+    if (fp && !fp.hidden && !document.documentElement.classList.contains("desktop")) return true;
     // Driving mode covers the screen the same way; marked stale under it, Home kept its
     // old rows after the drive closed, with nothing left to repaint them.
     const drive = document.getElementById("drive");

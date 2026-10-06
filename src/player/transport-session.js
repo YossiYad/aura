@@ -42,8 +42,10 @@
   function primeForPlayback() {
     if (!V.isIOS || V.audio.isCast || V.remotePlaybackActive() || V.backend !== "audio") return;
     // A loaded element already holds permission; never interrupt real playback nor
-    // overwrite a source (its saved position would be lost) merely to prime.
-    if (V.audio.src) { V.playbackPrimed = V.playbackPrimed || !V.audio.paused; return; }
+    // overwrite a source (its saved position would be lost) merely to prime. A source
+    // held for a Play tap is the one exception: it is there because it lacks permission,
+    // and the resume path reloads it from the queue note.
+    if (V.audio.src && !V.pendingPlaybackPermission) { V.playbackPrimed = V.playbackPrimed || !V.audio.paused; return; }
     const previousVolume = V.audio.volume;
     try {
       V.audio.src = V.SILENT_PRIME_CLIP;

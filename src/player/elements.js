@@ -276,7 +276,10 @@
         // rather than deleted, as every other local-failure path already does.
         const rejected = V.mediaWasRejected(null, el);
         V.rejectedLocalCache.add(t.id);
-        const remove = rejected ? (failedKind === "cache" ? V.deleteCached(t.id) : V.deleteDownload(t.id)) : Promise.resolve();
+        // A delete that fails is logged and left behind: the retry below is the recovery,
+        // and its failure must not send the song to the YouTube fallback.
+        const remove = (rejected ? (failedKind === "cache" ? V.deleteCached(t.id) : V.deleteDownload(t.id)) : Promise.resolve())
+          .catch(err => V.log("cache", t.id + " could not remove local " + failedKind + ": " + String((err && err.message) || err).slice(0, 60)));
         remove
           .then(() => {
             if (token !== V.loadingToken) return;

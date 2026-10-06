@@ -4,6 +4,7 @@
   Object.defineProperties(V, {
     cancelRadioExtension: { get: () => cancelRadioExtension },
     extendRadio: { get: () => extendRadio },
+    forgetRadioTrack: { get: () => forgetRadioTrack },
     playFromQueueHistory: { get: () => playFromQueueHistory },
     queueHistory: { get: () => queueHistory },
     queueHistorySession: { get: () => queueHistorySession },
@@ -51,6 +52,12 @@
     radioSessionIds.add(track.id);
     const key = radioSongKey(track);
     if (key) radioSessionSongs.add(key);
+  }
+
+  // An upload swapped out of the queue for one that plays is not a song the listener
+  // removed, so it has no place in the queue sheet's history.
+  function forgetRadioTrack(id) {
+    sessionQueueTracks.delete(id);
   }
 
   function resetRadioSession() {

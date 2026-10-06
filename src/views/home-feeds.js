@@ -81,6 +81,9 @@
           '<div class="status-line"><span class="err">Couldn\'t load this right now</span></div>' +
           '<div class="row-actions"><button class="btn ghost" data-feed-retry="' + sectionIndex + '">Try again</button></div></section>';
       }
+      // A row that loaded with nothing to show (a show no channel dominates, a query whose
+      // hits were all mixes, every song blocked) is dropped whole, not left as a bare heading.
+      if (section.status === "ready" && !V.unblocked(section.tracks).length) return "";
       return '<section class="home-section home-feed"><div class="section-head"><h3 dir="auto">' + V.esc(section.title) + '</h3></div>' +
         (section.status === "loading" ? '<div class="home-feed-skeleton"><i></i><i></i><i></i></div>' :
           '<div class="rail">' + V.unblocked(section.tracks).map((track, trackIndex) => V.gridCard(track.thumb, track.title, track.artist || "", 'data-home-feed-section="' + sectionIndex + '" data-home-feed-track="' + trackIndex + '"', true)).join("") + '</div>') + '</section>';

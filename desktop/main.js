@@ -297,9 +297,10 @@ function createWindow() {
 
   const keepBounds = () => {
     if (!win || win.isMinimized() || win.isFullScreen()) return;
-    const maximized = win.isMaximized();
-    const box = maximized && settings.bounds ? settings.bounds : win.getBounds();
-    remember({ bounds: { x: box.x, y: box.y, width: box.width, height: box.height, maximized } });
+    // The normal bounds, not the whole work area a maximized window reports: the window
+    // comes back maximized, and un-maximizing then gives it back the size it had before.
+    const box = win.getNormalBounds();
+    remember({ bounds: { x: box.x, y: box.y, width: box.width, height: box.height, maximized: win.isMaximized() } });
   };
   win.on("close", event => {
     keepBounds();

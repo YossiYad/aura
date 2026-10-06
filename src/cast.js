@@ -183,7 +183,10 @@
         command("setVolume", request).catch(fail);
       }
     } },
-    muted: { get: () => muted, set: value => { muted = !!value; } },
+    muted: { get: () => muted, set: value => {
+      muted = !!value;
+      if (validMedia()) command("setVolume", new chrome.cast.media.VolumeRequest(new chrome.cast.Volume(desiredVolume, muted))).catch(fail);
+    } },
     playbackRate: { get: () => 1, set: () => {} }
   });
   audio.setAttribute = () => {};

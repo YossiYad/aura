@@ -285,8 +285,9 @@ function createHarness(options = {}) {
             this.state = state;
             config.events.onStateChange({ data: state });
           },
-          loadVideoById() {
+          loadVideoById(request) {
             this.loadCalls++;
+            this.loadRequest = request;
             this.state = 1;
             config.events.onStateChange({ data: 1 });
           },

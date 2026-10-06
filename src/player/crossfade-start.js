@@ -31,6 +31,7 @@
     V.playbackGeneration++;
     V.handledEndGeneration = -1;
     V.stallRecoveries = 0;
+    V.audioRetryId = null;
     V.clearStallCheck();
     V.lastAudioTime = V.audio.currentTime || 0;
     V.lastAudioProgressAt = Date.now();
@@ -70,6 +71,7 @@
     V.playbackGeneration++;
     V.handledEndGeneration = -1;
     V.stallRecoveries = 0;
+    V.audioRetryId = null;
     V.clearStallCheck();
     V.lastAudioTime = 0;
     V.lastAudioProgressAt = Date.now();

@@ -125,11 +125,12 @@
     };
     const candidates = model === V.PROVIDERS.gemini.defaultModel && GEMINI_FALLBACK_MODEL !== model
       ? [model, GEMINI_FALLBACK_MODEL] : [model];
-    let res, data;
+    let res, data, tried = candidates[0];
     try {
       res = await sendWithRetry(candidates[0], candidates.length === 1);
       for (let i = 1; i < candidates.length && (res.status >= 500 || res.status === 404); i++) {
         V.log("ai", "gemini " + candidates[0] + " unavailable (HTTP " + res.status + "), trying " + candidates[i]);
+        tried = candidates[i];
         res = await sendWithRetry(candidates[i], i === candidates.length - 1);
       }
       if (res.ok) data = await readJson(res, "Gemini");
@@ -151,7 +152,7 @@
     if (res.status === 429) {
       throw Object.assign(new Error("Gemini's free quota is used up for now"), { keyBad: true });
     }
-    if (res.status === 404) throw new Error("Gemini couldn't find the model \"" + model + "\" - check the Model field in Settings");
+    if (res.status === 404) throw new Error("Gemini couldn't find the model \"" + tried + "\" - check the Model field in Settings");
     if (!res.ok) {
       if (res.status >= 500) throw new Error("Gemini is overloaded right now (HTTP " + res.status + ") - it usually clears within minutes");
       throw new Error("Gemini error (HTTP " + res.status + ")");
