@@ -76,13 +76,27 @@
     } catch (e) { return true; }
   }
 
+  // serviceWorker.ready never settles while no worker is active - a registration the
+  // browser refused (blocked site data) or a failed install. Waited on bare, it held the
+  // Settings button disabled for good; a short bound turns that into an answer.
+  /**
+   * @returns {Promise<ServiceWorkerRegistration | null>}
+   */
+  function activeWorker() {
+    return new Promise(resolve => {
+      const timer = setTimeout(() => resolve(null), 5000);
+      navigator.serviceWorker.ready.then(reg => { clearTimeout(timer); resolve(reg); }, () => { clearTimeout(timer); resolve(null); });
+    });
+  }
+
   /**
    * @returns {Promise<PushSubscription | null>}
    */
   async function currentSubscription() {
     if (!supported()) return null;
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await activeWorker();
+      if (!reg) return null;
       return await reg.pushManager.getSubscription();
     } catch (e) {
       return null;
@@ -119,7 +133,8 @@
     if (permission !== "granted") throw new Error("Notifications were not allowed");
     const backend = await checkBackend();
     if (!backend) return { permission, subscribed: false };
-    const reg = await navigator.serviceWorker.ready;
+    const reg = await activeWorker();
+    if (!reg) throw new Error("The app's background worker is not running; reload the app and try again");
     let sub = await reg.pushManager.getSubscription();
     if (sub && !sameServerKey(sub)) {
       // Made against an earlier server key: the server would accept the endpoint and the
@@ -179,7 +194,8 @@
   async function notifyLocal(title, body, opts) {
     if (!supported() || Notification.permission !== "granted") return;
     try {
-      const reg = await navigator.serviceWorker.ready;
+      const reg = await activeWorker();
+      if (!reg) return;
       await reg.showNotification(title, {
         body: body || "",
         icon: "icon-180.png",

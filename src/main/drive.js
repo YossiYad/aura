@@ -96,6 +96,7 @@
     if (!V.$("drive-voice-layer").hidden) Views.stopVoice();
     drive.hidden = true;
     releaseScreen();
+    Views.refreshIfStale();
   }
 
   // A request spoken from here is drawn here: a layer over the artwork with the orb and

@@ -301,3 +301,15 @@ test('a redirected answer is never stored as the file that was asked for', async
   h.offline();
   assert.equal((await h.get('/resource?id=first')).type, 'error', 'nothing was kept');
 });
+
+test('a refresh while the login lapsed keeps the installed scripts instead of the sign-in page', async () => {
+  const h = worker();
+  await h.seed(h.name, '/src/views.js', 'installed code');
+  const signIn = new Response('<html>sign in</html>');
+  Object.defineProperty(signIn, 'redirected', { value: true });
+  signIn.clone = () => signIn;
+  h.serve('/src/views.js', signIn);
+  assert.equal(await (await h.get('/src/views.js', 'cors', 'https://test/index.html?refresh=1')).text(), 'installed code');
+  h.offline();
+  assert.equal(await (await h.get('/src/views.js')).text(), 'installed code', 'the sign-in page was never stored');
+});

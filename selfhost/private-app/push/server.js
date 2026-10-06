@@ -216,7 +216,9 @@ async function sendPush(key, payload) {
   let delivered = false;
   for (const sub of subs) {
     try {
-      await webpush.sendNotification(sub, JSON.stringify(payload));
+      // Bounded like fetchJson: one half-open connection to a push service otherwise
+      // held the poll lock for good, and every later cycle returned without a word.
+      await webpush.sendNotification(sub, JSON.stringify(payload), { timeout: 15000 });
       delivered = true;
     } catch (e) {
       const code = e && e.statusCode;

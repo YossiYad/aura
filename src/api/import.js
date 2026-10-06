@@ -51,7 +51,7 @@
     if (!tracks.length) throw new Error("Couldn't read the Spotify playlist - is it public?");
     const nameM = /^Title:\s*(.+)$/m.exec(txt);
     const name = nameM
-      ? nameM[1].replace(/\s*[-|]\s*(playlist\s*)?(by\s+.*)?$/i, "").replace(/\s*\|\s*Spotify\s*$/i, "").trim()
+      ? nameM[1].replace(/\s*\|\s*Spotify\s*$/i, "").replace(/\s*[-|]\s*playlist\s+by\s+.*$/i, "").trim()
       : "Spotify import";
     V.log("import", "read the playlist as text: " + tracks.length + " song(s)");
     return { name: name || "Spotify import", tracks };

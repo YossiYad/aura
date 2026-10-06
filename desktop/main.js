@@ -92,7 +92,7 @@ function setStatus(next) {
 
 function showPage(name) {
   if (!win) return;
-  win.loadFile(path.join(__dirname, "pages", name + ".html"));
+  win.loadFile(path.join(__dirname, "pages", name + ".html")).catch(() => {});
 }
 
 // ---------------- Signed in or not ----------------
@@ -107,6 +107,9 @@ async function probe() {
     // 202 from the proxy. Anything else is a server with no login in front of it.
     return "in";
   } catch (e) {
+    // Electron's session fetch does not surface a redirect in manual mode: the request is
+    // killed with this error instead, so a proxy that redirects to its login is "out".
+    if (/redirect was cancelled/i.test(String((e && e.message) || e))) return "out";
     return "offline";
   }
 }
@@ -139,7 +142,7 @@ async function open() {
   const state = await probe();
   // With no connection the saved copy of the app still opens, and plays what is downloaded.
   if (state === "in" || (state === "offline" && await hasSession())) {
-    win.loadURL(settings.server);
+    win.loadURL(settings.server).catch(() => {});
     return;
   }
   if (state === "offline") { setStatus({ kind: "offline" }); showPage("signin"); return; }
@@ -190,7 +193,7 @@ async function startSignIn() {
     if (!win) return;
     win.show();
     win.focus();
-    win.loadURL(settings.server);
+    win.loadURL(settings.server).catch(() => {});
   } catch (e) {
     if (attempt !== mine) return;
     attempt = null;
@@ -261,14 +264,19 @@ function createWindow() {
   const contents = win.webContents;
   // Chromium keeps a zoom per address; the app keeps one for itself and sets it on every
   // page, its own and the server's, and again when the window moves to another screen.
+  // "move" rather than "moved": the latter never fires on Linux. applyZoom only acts
+  // when the factor changes, so a drag within one screen costs nothing.
   contents.on("did-finish-load", applyZoom);
-  win.on("moved", applyZoom);
+  win.on("move", applyZoom);
   // Ctrl and the mouse wheel, the way a browser zooms.
   contents.on("zoom-changed", (event, direction) => zoomStep(direction === "in" ? 0.1 : -0.1)());
   // The window shows the app's own pages and the Aura server, and nothing else. A link
   // that leads anywhere else opens in the browser; the login proxy's own redirect to
   // Google is the server saying the session is over.
-  const guard = (event, url) => {
+  // will-redirect fires for subframes too (the YouTube embed among them); only the
+  // window's own document is held to the rule.
+  const guard = (event, url, isInPlace, isMainFrame) => {
+    if (isMainFrame === false) return;
     if (isApp(url) || isOwnPage(url)) return;
     event.preventDefault();
     if (/^https:\/\/accounts\.google\.com\//.test(url)) needSignIn();

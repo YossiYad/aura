@@ -1,4 +1,4 @@
-const CACHE = "aura-v251";
+const CACHE = "aura-v252";
 const SHELL = [
   "./",
   "./index.html",
@@ -325,7 +325,9 @@ self.addEventListener("fetch", e => {
         const timer = setTimeout(() => ctl.abort(), 8000);
         try {
           const response = await fetch(e.request, { cache: "reload", signal: ctl.signal });
-          if (response && response.ok) {
+          // A lapsed login answers a script with a redirect to the sign-in page; stored
+          // and served as that script, it left the app with no code to run on launch.
+          if (response && response.ok && response.status === 200 && !response.redirected) {
             const copy = response.clone();
             // Kept under the plain address. Under the refresh one it sat beside the
             // installed document, which is older and is the one a later launch matched.

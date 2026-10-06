@@ -285,11 +285,14 @@
             V.log("cache", t.id + (rejected ? " removed invalid local " : " bypassed local ") + failedKind);
             return Api.resolve(t.id, V.streamOptions(t.id));
           })
-          .then(info => { if (info && token === V.loadingToken) return V.playViaAudio(info.url, info).then(() => {
+          .then(info => { if (info && token === V.loadingToken) {
+            // The stream's own loudness, as loadAndPlay sets it; the local copy's gain stayed on here.
+            V.activeGain = V.gainFor(V.noteStreamLoudness(t.id, info.loudnessDb));
+            return V.playViaAudio(info.url, info).then(() => {
             if (token !== V.loadingToken) return;
             V.seekTo(retryAt);
             V.emit({ type: "state" });
-          }); })
+          }); } })
           .catch(fallYt);
         return;
       }
@@ -297,11 +300,13 @@
       V.audioRetryId = t.id;
       Api.invalidate(t.id, false);
       Api.resolve(t.id, V.streamOptions(t.id))
-        .then(info => { if (token === V.loadingToken) return V.playViaAudio(info.url, info).then(() => {
+        .then(info => { if (token === V.loadingToken) {
+          V.activeGain = V.gainFor(V.noteStreamLoudness(t.id, info.loudnessDb));
+          return V.playViaAudio(info.url, info).then(() => {
             if (token !== V.loadingToken) return;
             V.seekTo(retryAt);
             V.emit({ type: "state" });
-          }); })
+          }); } })
         .catch(fallYt);
     });
   }

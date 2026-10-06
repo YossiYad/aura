@@ -107,7 +107,10 @@
     pullEl.style.transition = "transform .26s var(--ease-standard), opacity .2s linear";
     if (run) {
       setPull(PULL_TRIGGER * 0.6, true);
-      V.forceRefresh().then(() => {
+      V.forceRefresh().catch(e => {
+        // A render that threw used to leave the ring spinning and the list shifted down.
+        if (window.Log) Log.add("home", "refresh failed: " + String((e && e.message) || e).slice(0, 80));
+      }).then(() => {
         setPull(0, false);
         setTimeout(() => { V.view.style.transition = ""; pullEl.style.transition = ""; }, 280);
       });

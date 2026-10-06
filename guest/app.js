@@ -62,16 +62,21 @@
   }
   async function request(action, body, signal) {
     let response, value;
+    // Older phones have no AbortSignal.timeout; a controller and a timer do the same job.
+    const controller = signal ? null : new AbortController();
+    const timeout = controller ? setTimeout(() => controller.abort(), 15000) : null;
     try {
       response = await fetch('/guest/api/' + action, { method: body === undefined ? 'GET' : 'POST',
         headers: { 'X-Queue-Invite': invite, ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
         body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin',
-        cache: 'no-store', redirect: 'error', signal: signal || AbortSignal.timeout(15000) });
+        cache: 'no-store', redirect: 'error', signal: signal || controller.signal });
       value = await response.json();
     } catch (error) {
       // A failed fetch and a gateway's HTML error page both carry a browser's English text.
       if (error && error.name === 'AbortError') throw error;
       throw Error(tr('אין חיבור כרגע. נסו שוב.'));
+    } finally {
+      if (timeout) clearTimeout(timeout);
     }
     if (response.status === 410) close(tr(value.error));
     if (response.status === 401) { room = null; cancelSearch(); closeMenu(); $('menu-toggle').hidden = true; document.body.classList.remove('joined'); $('joined').hidden = true; $('waiting').hidden = true; $('join').hidden = false; }

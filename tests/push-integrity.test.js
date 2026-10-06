@@ -19,7 +19,7 @@ function client(fetch, options = {}) {
   subscribe: async () => { subscription = sub; return sub; }
  } }) } };
  vm.runInNewContext(readModule('push'), {
-  window, navigator, fetch, atob, Uint8Array,
+  window, navigator, fetch, atob, Uint8Array, setTimeout, clearTimeout,
   Notification: { permission: 'granted', requestPermission: async () => 'granted' }
  });
  return { Push: window.Push, removed: () => removed };

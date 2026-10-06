@@ -80,7 +80,8 @@
       return false;
     },
     showTab(tab) {
-      if (!V.subView) V.tabScroll[V.currentTab] = V.view.scrollTop;
+      // Under a sub-screen the tab's own position is the one pushed when it opened.
+      V.tabScroll[V.currentTab] = V.subView ? (V.subViewScrollStack[0] || 0) : V.view.scrollTop;
       V.currentTab = tab;
       // Switching tabs abandons whatever screens were stacked here. Their history
       // entries have to go with them, or Back presses later get eaten one by one and

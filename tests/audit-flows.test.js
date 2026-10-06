@@ -274,7 +274,7 @@ test('a keyless device does not revoke the account key',async()=>{
  await c.syncServerMixKey({ownKey:true});assert.equal(deletes,0);
 });
 test('push registration errors preserve an existing local subscription',async()=>{
- let removed=0;const c=functions('src/push.js',['enable','sameServerKey'],{supported:()=>true,Notification:{requestPermission:async()=> 'granted'},checkBackend:async()=>true,
+ let removed=0;const c=functions('src/push.js',['enable','sameServerKey','activeWorker'],{supported:()=>true,setTimeout,clearTimeout,Notification:{requestPermission:async()=> 'granted'},checkBackend:async()=>true,
  navigator:{serviceWorker:{ready:Promise.resolve({pushManager:{getSubscription:async()=>({toJSON:()=>({}),unsubscribe:async()=>removed++})}})}},SUB_ENDPOINT:'/subscribe',fetch:async()=>({ok:false,status:500}),log(){}});
  await assert.rejects(c.enable(),/register notifications/);assert.equal(removed,0);
 });

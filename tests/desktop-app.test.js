@@ -98,7 +98,7 @@ test('the app is drawn larger on a large screen, and as it is on any other', () 
   const main = read('desktop/main.js');
   // Set on every page and again on another screen; Ctrl and the wheel change it, and it is kept.
   assert.match(main, /contents\.on\("did-finish-load", applyZoom\);/);
-  assert.match(main, /win\.on\("moved", applyZoom\);/);
+  assert.match(main, /win\.on\("move", applyZoom\);/, '"moved" never fires on Linux');
   assert.match(main, /contents\.on\("zoom-changed"/);
   assert.match(main, /accelerator: "CmdOrCtrl\+0", click: \(\) => setZoom\(null\)/);
 });

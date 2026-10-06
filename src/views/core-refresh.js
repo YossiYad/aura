@@ -26,6 +26,10 @@
     if (document.hidden) return true;
     const fp = document.getElementById("fullplayer");
     if (fp && !fp.hidden) return true;
+    // Driving mode covers the screen the same way; marked stale under it, Home kept its
+    // old rows after the drive closed, with nothing left to repaint them.
+    const drive = document.getElementById("drive");
+    if (drive && !drive.hidden) return true;
     return !V.modalEl.hidden || !V.sheetEl.hidden;
   }
 

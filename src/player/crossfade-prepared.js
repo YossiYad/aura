@@ -38,7 +38,8 @@
     if (V.audio.isCast) {
       V.xfadePrep = prep;
       if (!V.sleepAfterTrack) {
-        CastPlayback.setNext(V.queue[prep.ni], prep.src, prep.mime).then(() => prepareCastTail(prep));
+        CastPlayback.setNext(V.queue[prep.ni], prep.src, prep.mime).then(() => prepareCastTail(prep))
+          .catch(e => V.log("remote", "cast queue ahead failed: " + String((e && e.message) || e).slice(0, 60)));
       }
       return;
     }

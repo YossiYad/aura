@@ -319,6 +319,16 @@
         clearTimeout(waitTimer);
         clearTimeout(capTimer);
         capTimer = setTimeout(finish, Math.max(0, 8000 - (Date.now() - startedAt)));
+      }).catch(error => {
+        // A throw inside the level handler itself (a decoder that hands back no audio, a
+        // listener that throws): the meter is treated as broken rather than left waiting.
+        if (closed || finishing || way !== attempt || meterBroken) return;
+        meterBroken = true;
+        trace("level meter failed, " + ((error && error.name) || error) + "; the recording ends at 8s");
+        listening();
+        clearTimeout(waitTimer);
+        clearTimeout(capTimer);
+        capTimer = setTimeout(finish, Math.max(0, 8000 - (Date.now() - startedAt)));
       });
     }
     // No bytes at all, or only exact silence, means the microphone delivers nothing - the
