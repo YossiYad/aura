@@ -11,6 +11,7 @@
     rememberStreamDuration: { get: () => rememberStreamDuration },
     resumePlay: { get: () => resumePlay },
     seekTo: { get: () => seekTo },
+    truncatedRemoteDuration: { get: () => truncatedRemoteDuration },
     toggle: { get: () => toggle }
   });
 
@@ -91,6 +92,8 @@
     const media = V.audio.duration;
     const track = V.current();
     const expected = track && (V.streamDurations.get(track.id) || Number(track.duration));
+    const remoteDuration = truncatedRemoteDuration();
+    if (remoteDuration) return remoteDuration;
     // A malformed container can claim minutes of audio beyond the known upload length.
     // Use fresh source metadata when available, including for prepared tracks. Small
     // encoding/rounding differences and speech keep the media's own endpoint.
@@ -99,6 +102,19 @@
     if (track && Number.isFinite(expected) && expected > 0 && Number.isFinite(media) &&
         media - expected > Math.max(30, expected * 0.25) && !V.isSpokenWord(track)) return expected;
     return Number.isFinite(media) && media > 0 ? media : 0;
+  }
+
+  function truncatedRemoteDuration() {
+    if (V.audio.isCast || !V.remotePlaybackActive()) return 0;
+    const media = V.audio.duration;
+    const track = V.current();
+    const expected = track && (V.streamDurations.get(track.id) || Number(track.duration));
+    // A receiver can replace the full duration with a short fragment (observed as
+    // 9, then 0 seconds). It must not shorten seeking, listen accounting or the
+    // queue's endpoint. Local short sources and unknown/live streams keep their
+    // own duration; small encoding differences are also left alone.
+    return Number.isFinite(expected) && expected > 0 && Number.isFinite(media) && media >= 0 &&
+      expected - media > Math.max(30, expected * 0.5) ? expected : 0;
   }
 
   function logAudioDuration() {

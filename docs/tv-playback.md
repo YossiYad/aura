@@ -37,6 +37,18 @@ they do not repeatedly reconnect the TV or skip through the queue. Pressing Play
 explicitly can request a fresh receiver stream. No iframe fallback takes playback
 away from the TV.
 
+Some native receiver sessions report a full song's duration as 9 seconds, then
+0 seconds, and emit an early end. A receiver duration more than 30 seconds and
+half the known track length short now retains the source metadata duration (or
+catalog duration if the source has none) for the timeline and listen counting.
+An early native end refreshes the same song's receiver URL once, preserving its
+position, before any queue, repeat or sleep-after-track transition. Repeated
+failure holds that song and shows the existing receiver error. Genuine short
+tracks, local playback, Cast SDK playback and unknown/live streams keep their
+normal duration handling. This protects against the observed receiver reports;
+the log alone does not establish why the receiver truncated the stream, and
+audible full-length playback still needs validation on the affected device.
+
 When changing songs on an established AirPlay route, Safari can briefly report
 local output while the receiver loads the new source. Aura keeps the same element
 in receiver mode for up to nine seconds, so this transient signal cannot restart

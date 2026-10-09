@@ -11,6 +11,8 @@
     scheduleStallCheck: { get: () => scheduleStallCheck }
   });
 
+  let prematureRemoteEnd = null;
+
   function clearStallCheck() {
     if (!V.stallTimer) return;
     clearTimeout(V.stallTimer);
@@ -20,6 +22,9 @@
   function noteAudioProgress() {
     V.confirmNativeResumeProgress();
     const now = V.audio.currentTime || 0;
+    // Some receivers clear their clock in the terminal timeupdate. Keep the
+    // last position for recovery instead of mistaking that reset for progress.
+    if (!now && V.audio.ended && V.truncatedRemoteDuration()) return;
     if (Math.abs(now - V.lastAudioTime) < 0.2) return;
     V.lastAudioTime = now;
     V.lastAudioProgressAt = Date.now();
@@ -56,6 +61,25 @@
       V.cancelCrossfade();
     }
     if (el !== V.audio) return false;
+    const expected = V.truncatedRemoteDuration();
+    if (expected && (el.currentTime || 0) < expected - 1) {
+      // All native end paths converge here, before sleep/repeat/prepared-track
+      // handling. Reload the same song once with a fresh receiver URL, carrying
+      // its position and listen accounting across the handoff. Further short
+      // ends hold it for the listener instead of cycling the queue or retrying.
+      if (prematureRemoteEnd && prematureRemoteEnd.token === V.loadingToken) {
+        V.log("remote", "receiver ended the retried stream early; holding the current track");
+        holdRemotePlayback();
+        return true;
+      }
+      V.log("remote", V.current().id + " receiver ended at " + (el.currentTime || 0) +
+        "s of " + expected + "s; refreshing the same track once (" + reason + ")");
+      Api.invalidate(V.current().id, false);
+      V.resumeAfterCastAt = el.currentTime || V.lastAudioTime || 0;
+      V.prepareRemotePlayback();
+      prematureRemoteEnd = { token: V.loadingToken };
+      return true;
+    }
     if (V.sleepAfterTrack) { V.discardPrep(); V.stopForSleep(); return true; }
     if (V.repeat !== "one" && V.playPreparedInstantly()) return true;
     return advanceAfterEnd(reason);
