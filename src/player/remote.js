@@ -80,7 +80,7 @@
   // "allow" asks Safari for AirPlay's video mode even for a song: the TV downloads the
   // stream itself, so it shows the container's own length (YouTube's fragmented m4a
   // reads as double) and the phone's volume buttons do not reach it. On iPhone and iPad
-  // "deny" turns off only that mode. The system route still carries the sound, the way
+  // disable external playback in the media engine. The system route carries sound as
   // a music app does: the phone plays and streams, the TV shows the Media Session's
   // title, artwork and corrected timeline, and the volume buttons control the receiver.
   // To the page this is ordinary local playback, so downloads and crossfade keep working.
@@ -90,6 +90,13 @@
     [V.audioA, V.audioB].forEach(el => {
       el.disableRemotePlayback = el !== V.audio;
       el.setAttribute("x-webkit-airplay", el === V.audio && !airPlayAudioOnly ? "allow" : "deny");
+      // The legacy deny attribute updates WebKit's route availability, but does
+      // not call MediaElementSession::setWirelessVideoPlaybackDisabled. This
+      // attribute does: it sets AVPlayer.allowsExternalPlayback=false and keeps
+      // that restriction when a source change creates a new media engine. Without
+      // it, a system-selected route could still give the fragmented file to a TV
+      // that stopped after its first segment (about ten seconds).
+      if (airPlayAudioOnly) el.setAttribute("x-webkit-wirelessvideoplaybackdisabled", "");
     });
   }
 

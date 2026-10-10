@@ -25,6 +25,9 @@ test('iPhone keeps both elements out of AirPlay video mode', () => {
   const h = setup(true);
   assert.equal(h.audio.getAttribute('x-webkit-airplay'), 'deny');
   assert.equal(h.standby.getAttribute('x-webkit-airplay'), 'deny');
+  // Unlike the legacy deny attribute, this also sets the media engine's
+  // allowsExternalPlayback flag, including when it is created on a later load.
+  for (const el of h.audioElements) assert.equal(el.getAttribute('x-webkit-wirelessvideoplaybackdisabled'), '');
   h.P.dismiss();
 });
 
@@ -32,6 +35,36 @@ test('Safari on a Mac still hands the playing element to the receiver', () => {
   const h = setup(false);
   assert.equal(h.audio.getAttribute('x-webkit-airplay'), 'allow');
   assert.equal(h.standby.getAttribute('x-webkit-airplay'), 'deny');
+  for (const el of h.audioElements) assert.equal(el.getAttribute('x-webkit-wirelessvideoplaybackdisabled'), null);
+  h.P.dismiss();
+});
+
+test('iPad desktop identification still disables external playback in both media engines', () => {
+  const h = createHarness({ withAirPlay: true,
+    navigator: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15)', platform: 'MacIntel', maxTouchPoints: 5 } });
+  for (const el of h.audioElements) assert.equal(el.getAttribute('x-webkit-wirelessvideoplaybackdisabled'), '');
+  h.window.Player.dismiss();
+});
+
+test('the iPhone engine opt-out survives source changes and a new playback session', async () => {
+  const h = setup(true);
+  h.play();
+  await flushMicrotasks(40);
+  h.window.__playerInternals.keepPreparedSource({ ni: 1, id: 'two', src: 'https://test/two.m4a' });
+  h.P.next();
+  await flushMicrotasks(40);
+  for (const el of h.audioElements) {
+    assert.equal(el.getAttribute('x-webkit-wirelessvideoplaybackdisabled'), '');
+    assert.equal(el.getAttribute('x-webkit-airplay'), 'deny');
+  }
+  h.P.dismiss();
+  h.P.playQueue([{ id: 'three', title: 'Three', duration: 180 }]);
+  await flushMicrotasks(40);
+  h.audio.dispatch('playing');
+  h.runImmediateTimers();
+  await flushMicrotasks(40);
+  for (const el of h.audioElements) assert.equal(el.getAttribute('x-webkit-wirelessvideoplaybackdisabled'), '');
+  assert.equal(h.requests.some(r => r.remote), false);
   h.P.dismiss();
 });
 

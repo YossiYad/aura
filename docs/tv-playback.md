@@ -7,7 +7,8 @@ opening it after a network request can be blocked by the browser.
 - **iPhone / iPad:** use Safari or the installed web app and choose an AirPlay receiver,
   from the menu or from the AirPlay control in Control Center. The phone stays the player
   and streams its sound to the receiver, the way a music app does. Aura sets
-  `x-webkit-airplay="deny"` there, which turns off only AirPlay's video mode. In that mode
+  `x-webkit-wirelessvideoplaybackdisabled` and `x-webkit-airplay="deny"` there to
+  disable external file playback in the native media engine. In that mode
   the TV downloaded the stream itself: it showed the container's own length (YouTube's
   fragmented m4a reads as double) and the phone's volume buttons did not reach it. On the
   audio route the TV shows the Media Session title, artwork and corrected timeline, the
@@ -15,6 +16,17 @@ opening it after a network request can be blocked by the browser.
   because the page sees ordinary local playback. The menu opens the system chooser in
   the same tap and prepares nothing. The receiver-stream sections below (handoff,
   source-change grace period, media tickets) now apply to Safari on a Mac and to Cast.
+
+  The engine attribute matters: the legacy `deny` attribute alone updates route
+  availability but does not set AVPlayer's `allowsExternalPlayback` property.
+  WebKit forwards `x-webkit-wirelessvideoplaybackdisabled` through
+  `MediaElementSession::setWirelessVideoPlaybackDisabled` and reapplies the restriction
+  when a source change creates a new engine. Both phone audio elements keep it,
+  including the standby element and iPadOS identifying itself as a Mac. The native
+  picker still opens within the listener's tap. See the
+  [attribute handling](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/HTMLMediaElement.cpp),
+  [engine restriction](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/html/MediaElementSession.cpp),
+  and [AVPlayer integration](https://github.com/WebKit/WebKit/blob/main/Source/WebCore/platform/graphics/avfoundation/objc/MediaPlayerPrivateAVFoundationObjC.mm).
 - **Android / desktop Chrome:** the menu opens the Cast device chooser where supported.
   The menu loads the sender on demand. Ordinary phone playback does not initialize Cast
   or prepare TV streams. Only an explicit connection request or an actual native route
